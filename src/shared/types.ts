@@ -1,6 +1,6 @@
 export type NavigationItem = "today" | "calendar" | "insights" | "leaderboard" | "account";
 
-export type InsightsPeriod = "day" | "week" | "year";
+export type InsightsPeriod = "day" | "week" | "month" | "year";
 export type InsightsTab = "overview" | "breakdown" | "sessions";
 export type TodayTab = "timeline" | "eventLog";
 export type TodayPeriod = "day" | "week" | "month";

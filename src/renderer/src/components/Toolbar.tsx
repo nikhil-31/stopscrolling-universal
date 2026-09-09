@@ -29,7 +29,7 @@ export function Toolbar({ state }: { state: AppSnapshot }) {
       <div className="toolbar-center">
         {state.navigation === "insights" ? (
           <div className="seg" aria-label="Insights period">
-            {(["day", "week", "year"] as const).map((period) => (
+            {(["day", "week", "month", "year"] as const).map((period) => (
               <button
                 key={period}
                 className={state.insightsPeriod === period ? "active" : ""}
@@ -105,6 +105,10 @@ function shiftPeriod(state: AppSnapshot, direction: number) {
   const date = new Date(state.insightsAnchor);
   if (state.insightsPeriod === "day") date.setDate(date.getDate() + direction);
   if (state.insightsPeriod === "week") date.setDate(date.getDate() + direction * 7);
+  if (state.insightsPeriod === "month") {
+    date.setDate(1);
+    date.setMonth(date.getMonth() + direction);
+  }
   if (state.insightsPeriod === "year") date.setFullYear(date.getFullYear() + direction);
   window.stopscrolling.setInsightsAnchor(date.toISOString());
 }

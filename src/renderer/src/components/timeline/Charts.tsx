@@ -3,6 +3,7 @@ import {
   formatDuration,
 } from "@shared/timeline";
 import type {
+  InsightsPeriod,
   ScreenTimeCategoryBreakdown,
   ScreenTimePeriodBucket,
 } from "@shared/types";
@@ -31,7 +32,7 @@ export function PieChart({ categories }: { categories: ScreenTimeCategoryBreakdo
           data-testid="category-pie-chart"
           role="img"
           aria-label={categories
-            .map((item) => `${item.category} ${Math.round(item.percentage * 100)} percent`)
+            .map((item) => `${item.category} ${formatDuration(item.seconds)}, ${Math.round(item.percentage * 100)} percent`)
             .join(", ")}
           style={{ background: `conic-gradient(${slices.join(",")})` }}
         />
@@ -47,7 +48,7 @@ export function PieChart({ categories }: { categories: ScreenTimeCategoryBreakdo
               className="legend-dot"
               style={{ ["--swatch" as string]: colorForCategory(item.category) }}
             />
-            {item.category} · {Math.round(item.percentage * 100)}%
+            {item.category} · {formatDuration(item.seconds)} · {Math.round(item.percentage * 100)}%
           </span>
         ))}
       </div>
@@ -55,16 +56,28 @@ export function PieChart({ categories }: { categories: ScreenTimeCategoryBreakdo
   );
 }
 
-export function BucketBars({ buckets }: { buckets: ScreenTimePeriodBucket[] }) {
+export function BucketBars({
+  buckets,
+  period,
+}: {
+  buckets: ScreenTimePeriodBucket[];
+  period?: InsightsPeriod;
+}) {
   const max = Math.max(0, ...buckets.map((bucket) => bucket.seconds));
-  if (!max) {
+  if (!buckets.length) {
     return <EmptyState title="No trend data" body="Track some activity to reveal your rhythm." icon={BarChart3} />;
   }
 
+  const dense = period === "month";
   return (
-    <div className="bar-chart" role="img" aria-label="Tracked time chart">
+    <div
+      className={`bar-chart ${dense ? "bar-chart-month" : ""}`}
+      role="img"
+      aria-label="Tracked time chart"
+      style={{ ["--bucket-count" as string]: buckets.length }}
+    >
       {buckets.map((bucket) => {
-        const height = Math.max(2, (bucket.seconds / max) * 100);
+        const height = max && bucket.seconds ? Math.max(2, (bucket.seconds / max) * 100) : 0;
         return (
           <div
             className="bar-item"
@@ -82,16 +95,22 @@ export function BucketBars({ buckets }: { buckets: ScreenTimePeriodBucket[] }) {
   );
 }
 
-export function TrendCard({ buckets }: { buckets: ScreenTimePeriodBucket[] }) {
+export function TrendCard({
+  buckets,
+  period,
+}: {
+  buckets: ScreenTimePeriodBucket[];
+  period?: InsightsPeriod;
+}) {
   return (
-    <Card className="chart-card">
+    <Card className={`chart-card ${period === "month" ? "chart-card-month" : ""}`}>
       <div className="data-card-header">
         <div>
           <h3 className="data-card-title">Activity trend</h3>
           <div className="data-card-subtitle">Tracked time across this period</div>
         </div>
       </div>
-      <BucketBars buckets={buckets} />
+      <BucketBars buckets={buckets} period={period} />
     </Card>
   );
 }

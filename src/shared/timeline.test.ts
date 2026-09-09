@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockSegments, entriesToTimelines, periodBounds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
+import { blockSegments, entriesToTimelines, formatPeriod, periodBounds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 
@@ -156,6 +156,52 @@ describe("insights snapshot", () => {
     expect(snapshot.categories[0].category).toBe("Development");
     expect(snapshot.buckets).toHaveLength(24);
   });
+
+  it("counts only overlapping time inside the selected period", () => {
+    const anchor = new Date(2026, 8, 9, 12);
+    const spanning = entry({
+      startTimeUTC: new Date(2026, 8, 8, 22).toISOString(),
+      endTimeUTC: new Date(2026, 8, 9, 2).toISOString(),
+      appName: "Notes",
+    });
+    expect(snapshotFromEntries([spanning], "day", anchor).totalSeconds).toBe(2 * 3600);
+  });
+
+  it("sums tracked time for week, month, and year windows", () => {
+    const anchor = new Date(2026, 8, 9, 12);
+    const entries = [
+      entry({
+        startTimeUTC: new Date(2026, 8, 1, 10).toISOString(),
+        endTimeUTC: new Date(2026, 8, 1, 11).toISOString(),
+        appName: "Mail",
+      }),
+      entry({
+        startTimeUTC: new Date(2026, 8, 9, 10).toISOString(),
+        endTimeUTC: new Date(2026, 8, 9, 12).toISOString(),
+        appName: "Cursor",
+      }),
+      entry({
+        startTimeUTC: new Date(2026, 9, 2, 10).toISOString(),
+        endTimeUTC: new Date(2026, 9, 2, 11).toISOString(),
+        appName: "Safari",
+      }),
+    ];
+    expect(snapshotFromEntries(entries, "day", anchor).totalSeconds).toBe(2 * 3600);
+    expect(snapshotFromEntries(entries, "week", anchor).totalSeconds).toBe(2 * 3600);
+    expect(snapshotFromEntries(entries, "month", anchor).totalSeconds).toBe(3 * 3600);
+    expect(snapshotFromEntries(entries, "year", anchor).totalSeconds).toBe(4 * 3600);
+  });
+
+  it("uses daily totals inside the selected bounds instead of an unscoped server total", () => {
+    const snapshot = snapshotFromEntries([], "day", new Date(2026, 8, 9, 12), {
+      totalSeconds: 99_000,
+      trackedSecondsByDay: {
+        "2026-09-09": 1800,
+        "2026-09-10": 7200,
+      },
+    });
+    expect(snapshot.totalSeconds).toBe(1800);
+  });
 });
 
 describe("today period windows", () => {
@@ -217,5 +263,28 @@ describe("periodBounds", () => {
   it("returns a local calendar day window", () => {
     const { start, end } = periodBounds("day", new Date(2026, 5, 22, 15));
     expect(end.getTime() - start.getTime()).toBe(24 * 60 * 60 * 1000);
+  });
+
+  it("returns and labels a calendar month", () => {
+    const anchor = new Date(2026, 8, 9, 15);
+    expect(periodBounds("month", anchor)).toEqual({
+      start: new Date(2026, 8, 1),
+      end: new Date(2026, 9, 1),
+    });
+    expect(formatPeriod("month", anchor)).toBe("September 2026");
+  });
+
+  it("builds one insights bucket per day of the month", () => {
+    const snapshot = snapshotFromEntries(
+      [],
+      "month",
+      new Date(2026, 8, 9, 15),
+      { trackedSecondsByDay: { "2026-09-01": 3600, "2026-09-30": 1800 } },
+    );
+    expect(snapshot.buckets).toHaveLength(30);
+    expect(snapshot.buckets[0].label).toBe("1");
+    expect(snapshot.buckets[0].seconds).toBe(3600);
+    expect(snapshot.buckets[29].label).toBe("30");
+    expect(snapshot.buckets[29].seconds).toBe(1800);
   });
 });

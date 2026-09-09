@@ -120,6 +120,7 @@ export class AppController {
   calendarEvents: CalendarOverlayEvent[] = [];
   commandPaletteOpen = false;
   serverSummary: PeriodSummaryResponse | null = null;
+  serverSummaryRange: { start: number; end: number } | null = null;
   google = new GoogleCalendarService();
   api = new StopScrollingAPI(this.settings.apiBaseUrl, loadTokens(), (tokens) => {
     if (tokens) saveTokens(tokens);
@@ -152,6 +153,15 @@ export class AppController {
     });
   }
 
+  visibleRange() {
+    if (this.navigation === "calendar") {
+      return { start: startOfMonth(this.calendarMonth), end: endOfMonth(this.calendarMonth) };
+    }
+    if (this.navigation === "today") return todayPeriodBounds(this.todayPeriod, this.todayDay);
+    if (this.navigation === "insights") return periodBounds(this.insightsPeriod, this.insightsAnchor);
+    return periodBounds("day", this.todayDay);
+  }
+
   snapshot(): AppSnapshot {
     const entries = this.tracker.mergedEntries();
     const period = this.navigation === "insights" ? this.insightsPeriod : "day";
@@ -162,7 +172,10 @@ export class AppController {
           ? this.calendarAnchor
           : this.todayDay;
     const todayBounds = todayPeriodBounds(this.todayPeriod, this.todayDay);
-    const serverSummary = this.mappedServerSummary();
+    const snapshotBounds = this.navigation === "today"
+      ? todayBounds
+      : periodBounds(period, anchor);
+    const serverSummary = this.mappedServerSummary(snapshotBounds);
     const snapshot = this.navigation === "today"
       ? snapshotFromRange(entries, todayBounds, serverSummary)
       : snapshotFromEntries(entries, period, anchor, serverSummary);
@@ -259,18 +272,7 @@ export class AppController {
   }
 
   async refreshVisibleRange() {
-    const period = this.navigation === "insights" ? this.insightsPeriod : "day";
-    const anchor =
-      this.navigation === "insights"
-        ? this.insightsAnchor
-        : this.navigation === "calendar"
-          ? this.calendarAnchor
-          : this.todayDay;
-    const bounds = this.navigation === "calendar"
-      ? { start: startOfMonth(this.calendarMonth), end: endOfMonth(this.calendarMonth) }
-      : this.navigation === "today"
-        ? todayPeriodBounds(this.todayPeriod, this.todayDay)
-        : periodBounds(period, anchor);
+    const bounds = this.visibleRange();
     const zone = localTimeZone();
     await this.tracker.loadRange(bounds.start, bounds.end, zone);
     if (this.api.getTokens() && this.settings.syncEnabled) {
@@ -279,14 +281,17 @@ export class AppController {
           start: bounds.start.toISOString(),
           end: bounds.end.toISOString(),
           time_zone: zone,
-          include_daily_totals: this.navigation === "calendar" || this.navigation === "today",
+          include_daily_totals: true,
         });
+        this.serverSummaryRange = { start: bounds.start.getTime(), end: bounds.end.getTime() };
       } catch {
         this.serverSummary = null;
+        this.serverSummaryRange = null;
       }
       await this.tracker.refreshDevices();
     } else {
       this.serverSummary = null;
+      this.serverSummaryRange = null;
     }
     if (this.navigation === "calendar" && this.settings.showGoogleCalendarEvents) {
       try {
@@ -575,12 +580,19 @@ export class AppController {
     return Array.from(byKey.values()).sort((a, b) => Number(b.isOnline) - Number(a.isOnline) || a.deviceName.localeCompare(b.deviceName));
   }
 
-  private mappedServerSummary() {
-    if (!this.serverSummary) return undefined;
+  private mappedServerSummary(bounds: { start: Date; end: Date }) {
+    if (!this.serverSummary || !this.serverSummaryRange) return undefined;
+    if (
+      this.serverSummaryRange.start !== bounds.start.getTime() ||
+      this.serverSummaryRange.end !== bounds.end.getTime()
+    ) {
+      return undefined;
+    }
     return {
       totalSeconds: this.serverSummary.total_seconds,
       sessionCount: this.serverSummary.session_count,
       categories: this.serverSummary.categories,
+      trackedSecondsByDay: this.serverSummary.tracked_seconds_by_day,
       apps: this.serverSummary.apps?.map((app, index) => ({
         key: app.id ?? `${app.app_name ?? "app"}-${index}`,
         label: app.app_name ?? "Unknown",

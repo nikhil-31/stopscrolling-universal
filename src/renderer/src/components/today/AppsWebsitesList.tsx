@@ -1,4 +1,4 @@
-import { formatHourMinute } from "@shared/calendar-workspace";
+import { formatDuration } from "@shared/timeline";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { ScreenTimeAppBreakdown } from "@shared/types";
 import { SquarePen } from "lucide-react";
@@ -43,7 +43,7 @@ export function AppsWebsitesList({
                     <span style={{ width: `${Math.min(100, Math.max(3, percent))}%` }} />
                   </span>
                   <span className="activity-app-name">{displayName(app)}</span>
-                  <span className="activity-app-time">{formatHourMinute(app.seconds)}</span>
+                  <span className="activity-app-time">{formatDuration(app.seconds)}</span>
                 </button>
                 <IconButton
                   label={`Label ${displayName(app)}`}

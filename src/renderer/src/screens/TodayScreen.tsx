@@ -9,6 +9,7 @@ import { EventLog } from "../components/timeline";
 import { ActivityPie } from "../components/today/ActivityPie";
 import { ActivityTimeline } from "../components/today/ActivityTimeline";
 import { AppsWebsitesList } from "../components/today/AppsWebsitesList";
+import { CategoriesList } from "../components/today/CategoriesList";
 import { TodayChrome } from "../components/today/TodayChrome";
 
 export function TodayScreen({ state }: { state: AppSnapshot }) {
@@ -52,6 +53,7 @@ export function TodayScreen({ state }: { state: AppSnapshot }) {
           <ActivityTimeline state={state} />
           <div className="activity-split">
             <ActivityPie state={state} />
+            <CategoriesList state={state} />
             <AppsWebsitesList
               state={state}
               onLabelApp={(app: ScreenTimeAppBreakdown) => setPrompt({

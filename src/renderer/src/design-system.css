@@ -912,7 +912,13 @@ a { color: var(--brand); }
 .today-chrome-slash { color: var(--text-tertiary); font-weight: 400; }
 .today-chrome-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .activity-board { display: grid; gap: 16px; }
-.activity-split { display: grid; grid-template-columns: minmax(220px, 0.42fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.activity-split {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.activity-split > * { min-width: 0; }
 .activity-panel {
   min-height: 220px;
   padding: 14px 16px 16px;
@@ -927,36 +933,7 @@ a { color: var(--brand); }
   font-size: 10px;
   font-weight: 650;
 }
-.activity-pie-wrap { display: grid; place-items: center; min-height: 220px; }
-.activity-pie,
-.activity-pie-dash,
-.activity-pie-center {
-  grid-area: 1 / 1;
-}
-.activity-pie {
-  width: 196px;
-  height: 196px;
-  border-radius: 50%;
-  mask: radial-gradient(circle, transparent 0 62px, black 63px);
-}
-.activity-pie-dash {
-  width: 196px;
-  height: 196px;
-  border-radius: 50%;
-  pointer-events: none;
-  background: repeating-conic-gradient(from var(--labeled-deg, 0deg), var(--brand) 0 6deg, transparent 6deg 12deg);
-  -webkit-mask-image:
-    radial-gradient(circle, transparent 0 62px, #000 63px),
-    conic-gradient(#0000 0 var(--labeled-deg, 0deg), #000 var(--labeled-deg, 0deg) 360deg);
-  -webkit-mask-composite: source-in;
-  mask-image:
-    radial-gradient(circle, transparent 0 62px, #000 63px),
-    conic-gradient(#0000 0 var(--labeled-deg, 0deg), #000 var(--labeled-deg, 0deg) 360deg);
-  mask-composite: intersect;
-  opacity: 0.7;
-}
-.activity-pie-center { display: grid; place-content: center; pointer-events: none; }
-.activity-pie-center strong { font-size: 26px; letter-spacing: -0.05em; }
+.activity-panel .donut-card { min-height: 0; padding: 0; }
 .activity-app-list { display: grid; }
 .activity-app-row {
   display: grid;
@@ -1079,18 +1056,39 @@ button.data-row:hover { background: var(--surface-hover); }
 .legend-item { display: flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: 9px; }
 .legend-dot { width: 6px; height: 6px; background: var(--swatch); border-radius: 50%; }
 
-.chart-card { min-height: 220px; padding: 16px; }
-.bar-chart { display: flex; align-items: stretch; height: 150px; padding: 14px 2px 0; border-bottom: 1px solid var(--line); }
+.chart-card { min-height: 220px; padding: 16px 16px 28px; }
+.chart-card-month { min-height: 248px; }
+.bar-chart {
+  display: flex;
+  align-items: stretch;
+  height: 150px;
+  padding: 14px 2px 0;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+}
+.bar-chart-month {
+  display: grid;
+  grid-template-columns: repeat(var(--bucket-count, 31), minmax(0, 1fr));
+}
 .bar-item { position: relative; display: flex; flex: 1; align-items: flex-end; justify-content: center; min-width: 0; }
+.bar-chart-month .bar-item { flex: none; }
 .bar-column {
   width: min(68%, 30px);
-  min-height: 2px;
+  min-height: 0;
   background: linear-gradient(180deg, var(--violet), var(--brand));
   border-radius: 6px 6px 2px 2px;
   transition: filter 120ms var(--ease), transform 120ms var(--ease);
 }
+.bar-chart-month .bar-column { width: min(84%, 14px); border-radius: 3px 3px 1px 1px; }
 .bar-item:hover .bar-column { filter: brightness(1.1); transform: translateY(-2px); }
 .bar-label { position: absolute; top: calc(100% + 7px); overflow: hidden; width: 100%; color: var(--text-tertiary); font-size: 8px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.bar-chart-month .bar-label {
+  overflow: visible;
+  font-size: 7px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.06em;
+  text-overflow: clip;
+}
 .bar-value { position: absolute; bottom: calc(var(--height) + 5px); color: var(--text-secondary); font-size: 8px; opacity: 0; transition: opacity 120ms; }
 .bar-item:hover .bar-value { opacity: 1; }
 
@@ -1595,7 +1593,10 @@ button.data-row:hover { background: var(--surface-hover); }
   .calendar-layout { grid-template-columns: 235px minmax(0, 1fr); }
   .calendar-day-layout { grid-template-columns: minmax(0, 1fr) 250px; }
   .overview-grid, .leaderboard-grid { grid-template-columns: 1fr; }
-  .activity-split { grid-template-columns: 1fr; }
+  .activity-split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .activity-split > .activity-pie-panel { grid-column: 1 / -1; }
   .account-layout { grid-template-columns: 1fr; }
   .breakdown-layout {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -1614,6 +1615,8 @@ button.data-row:hover { background: var(--surface-hover); }
   .calendar-side { position: static; display: grid; grid-template-columns: minmax(250px, 1fr) minmax(220px, 0.7fr); gap: 12px; }
   .calendar-day-layout { grid-template-columns: 1fr; }
   .calendar-chrome, .today-chrome { flex-direction: column; align-items: flex-start; }
+  .activity-split { grid-template-columns: 1fr; }
+  .activity-split > .activity-pie-panel { grid-column: auto; }
   .breakdown-layout { grid-template-columns: 1fr; }
   .donut-card { min-height: 260px; }
 }

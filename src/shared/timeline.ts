@@ -91,6 +91,9 @@ export function periodBounds(period: InsightsPeriod, anchor: Date) {
     start.setDate(start.getDate() - day);
     return { start, end: new Date(start.getTime() + 7 * dayMs) };
   }
+  if (period === "month") {
+    return { start: startOfMonth(anchor), end: endOfMonth(anchor) };
+  }
   const start = new Date(anchor.getFullYear(), 0, 1);
   return { start, end: new Date(anchor.getFullYear() + 1, 0, 1) };
 }
@@ -185,6 +188,7 @@ export function formatPeriod(period: InsightsPeriod, anchor: Date) {
   if (period === "week") {
     return `${formatDayLabel(bounds.start)} – ${formatDayLabel(new Date(bounds.end.getTime() - dayMs))}`;
   }
+  if (period === "month") return formatMonthLabel(anchor);
   return `${anchor.getFullYear()}`;
 }
 
@@ -505,18 +509,36 @@ export function buildPeriodBuckets(
   segments: ScreenTimeTimelineSegment[],
   period: InsightsPeriod,
   anchor: Date,
+  trackedSecondsByDay?: Record<string, number>,
 ): ScreenTimePeriodBucket[] {
   const bounds = periodBounds(period, anchor);
-  const count = period === "day" ? 24 : period === "week" ? 7 : 12;
+  const count =
+    period === "day"
+      ? 24
+      : period === "week"
+        ? 7
+        : period === "month"
+          ? new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate()
+          : 12;
   const bucketMs = (bounds.end.getTime() - bounds.start.getTime()) / count;
   return Array.from({ length: count }, (_, index) => {
     const start = new Date(bounds.start.getTime() + index * bucketMs);
     const end = new Date(start.getTime() + bucketMs);
-    const seconds = segments.reduce((sum, segment) => {
+    if (period === "month") {
+      start.setTime(bounds.start.getTime());
+      start.setDate(start.getDate() + index);
+      end.setTime(start.getTime());
+      end.setDate(end.getDate() + 1);
+    }
+    const segmentSeconds = segments.reduce((sum, segment) => {
       const overlapStart = Math.max(start.getTime(), new Date(segment.start).getTime());
       const overlapEnd = Math.min(end.getTime(), new Date(segment.end).getTime());
       return sum + Math.max(0, (overlapEnd - overlapStart) / 1000);
     }, 0);
+    const seconds =
+      period === "month"
+        ? trackedSecondsByDay?.[toDateInput(start)] ?? segmentSeconds
+        : segmentSeconds;
     return {
       id: `${period}-${index}`,
       label:
@@ -524,7 +546,9 @@ export function buildPeriodBuckets(
           ? new Intl.DateTimeFormat(undefined, { month: "short" }).format(start)
           : period === "day"
             ? hourLabel(index)
-            : formatDayLabel(start),
+            : period === "month"
+              ? `${start.getDate()}`
+              : formatDayLabel(start),
       start: start.toISOString(),
       end: end.toISOString(),
       seconds,
@@ -532,24 +556,62 @@ export function buildPeriodBuckets(
   });
 }
 
-export function trackedSecondsByDay(entries: ScreenTimeEntry[], month: Date): Record<string, number> {
-  const start = startOfMonth(month).getTime();
-  const end = endOfMonth(month).getTime();
+export function trackedSecondsByDay(
+  entries: ScreenTimeEntry[],
+  range: Date | { start: Date; end: Date },
+): Record<string, number> {
+  const start = range instanceof Date ? startOfMonth(range).getTime() : range.start.getTime();
+  const end = range instanceof Date ? endOfMonth(range).getTime() : range.end.getTime();
   const totals: Record<string, number> = {};
   for (const entry of entries) {
-    const s = new Date(entry.startTimeUTC).getTime();
-    const e = new Date(entry.endTimeUTC).getTime();
-    if (e <= start || s >= end) continue;
-    const day = toDateInput(new Date(Math.max(s, start)));
-    totals[day] = (totals[day] ?? 0) + Math.max(0, (Math.min(e, end) - Math.max(s, start)) / 1000);
+    let slice = Math.max(new Date(entry.startTimeUTC).getTime(), start);
+    const limit = Math.min(new Date(entry.endTimeUTC).getTime(), end);
+    while (slice < limit) {
+      const nextDay = startOfDay(new Date(slice)).getTime() + dayMs;
+      const sliceEnd = Math.min(limit, nextDay);
+      const key = toDateInput(new Date(slice));
+      totals[key] = (totals[key] ?? 0) + (sliceEnd - slice) / 1000;
+      slice = sliceEnd;
+    }
   }
   return totals;
+}
+
+export function sumTrackedSecondsInBounds(
+  totals: Record<string, number>,
+  bounds: { start: Date; end: Date },
+) {
+  let sum = 0;
+  const cursor = startOfDay(bounds.start);
+  while (cursor.getTime() < bounds.end.getTime()) {
+    sum += totals[toDateInput(cursor)] ?? 0;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return sum;
+}
+
+export function clipSegmentsToBounds(
+  segments: ScreenTimeTimelineSegment[],
+  bounds: { start: Date; end: Date },
+): ScreenTimeTimelineSegment[] {
+  return segments.flatMap((segment) => {
+    const start = Math.max(new Date(segment.start).getTime(), bounds.start.getTime());
+    const end = Math.min(new Date(segment.end).getTime(), bounds.end.getTime());
+    if (end <= start) return [];
+    return [{ ...segment, start: new Date(start).toISOString(), end: new Date(end).toISOString() }];
+  });
 }
 
 export function snapshotFromRange(
   entries: ScreenTimeEntry[],
   bounds: { start: Date; end: Date },
-  serverSummary?: { totalSeconds?: number; sessionCount?: number; categories?: ScreenTimeCategoryBreakdown[]; apps?: ScreenTimeAppBreakdown[] },
+  serverSummary?: {
+    totalSeconds?: number;
+    sessionCount?: number;
+    categories?: ScreenTimeCategoryBreakdown[];
+    apps?: ScreenTimeAppBreakdown[];
+    trackedSecondsByDay?: Record<string, number>;
+  },
   bucketSpec?: { period: InsightsPeriod; anchor: Date },
 ): ScreenTimeSnapshot {
   const inRange = entries.filter((entry) => {
@@ -557,7 +619,7 @@ export function snapshotFromRange(
     const end = new Date(entry.endTimeUTC).getTime();
     return end > bounds.start.getTime() && start < bounds.end.getTime();
   });
-  const segments = inRange.map(segmentFromEntry);
+  const segments = clipSegmentsToBounds(inRange.map(segmentFromEntry), bounds);
   const breakdowns = buildBreakdowns(segments);
   const categories = serverSummary?.categories?.length
     ? serverSummary.categories.map((category) => ({
@@ -565,15 +627,26 @@ export function snapshotFromRange(
         percentage: category.percentage > 1 ? category.percentage / 100 : category.percentage,
       }))
     : breakdowns.categories;
+  const dailyTotals = {
+    ...trackedSecondsByDay(inRange, bounds),
+    ...serverSummary?.trackedSecondsByDay,
+  };
+  const dailySum = sumTrackedSecondsInBounds(dailyTotals, bounds);
+  const buckets = bucketSpec
+    ? buildPeriodBuckets(segments, bucketSpec.period, bucketSpec.anchor, dailyTotals)
+    : [];
+  const bucketSum = buckets.reduce((sum, bucket) => sum + bucket.seconds, 0);
   return {
-    totalSeconds: serverSummary?.totalSeconds ?? breakdowns.total,
+    totalSeconds: serverSummary?.trackedSecondsByDay
+      ? dailySum
+      : serverSummary?.totalSeconds ?? Math.max(breakdowns.total, bucketSum),
     sessionCount: serverSummary?.sessionCount ?? segments.length,
     timelineSegments: segments,
     listSegments: segments,
     categories,
     apps: serverSummary?.apps?.length ? serverSummary.apps : breakdowns.apps,
-    buckets: bucketSpec ? buildPeriodBuckets(segments, bucketSpec.period, bucketSpec.anchor) : [],
-    trackedSecondsByDay: trackedSecondsByDay(inRange, bounds.start),
+    buckets,
+    trackedSecondsByDay: dailyTotals,
   };
 }
 
@@ -581,7 +654,13 @@ export function snapshotFromEntries(
   entries: ScreenTimeEntry[],
   period: InsightsPeriod,
   anchor: Date,
-  serverSummary?: { totalSeconds?: number; sessionCount?: number; categories?: ScreenTimeCategoryBreakdown[]; apps?: ScreenTimeAppBreakdown[] },
+  serverSummary?: {
+    totalSeconds?: number;
+    sessionCount?: number;
+    categories?: ScreenTimeCategoryBreakdown[];
+    apps?: ScreenTimeAppBreakdown[];
+    trackedSecondsByDay?: Record<string, number>;
+  },
 ): ScreenTimeSnapshot {
   return snapshotFromRange(entries, periodBounds(period, anchor), serverSummary, { period, anchor });
 }
