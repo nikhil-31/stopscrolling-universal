@@ -54,6 +54,18 @@ function NativeMacTimeline({
   const now = Date.now();
   const nowFraction = now >= dayStart && now < dayEnd ? (now - dayStart) / span : null;
   const ticks = timelineAxisTicks(new Date(timeline.dayStart), new Date(timeline.dayEnd));
+  const usePeriodAxis = compact || span > 26 * 60 * 60 * 1000;
+  const axisTicks = usePeriodAxis ? ticks : [
+    { fraction: 0, label: "12 AM" },
+    { fraction: 0.125, label: "3 AM" },
+    { fraction: 0.25, label: "6 AM" },
+    { fraction: 0.375, label: "9 AM" },
+    { fraction: 0.5, label: "12 PM" },
+    { fraction: 0.625, label: "3 PM" },
+    { fraction: 0.75, label: "6 PM" },
+    { fraction: 0.875, label: "9 PM" },
+    { fraction: 1, label: "12 AM" },
+  ];
   const total = timeline.blocks.reduce((sum, block) => sum + block.durationSeconds, 0);
 
   const onMove = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -90,7 +102,7 @@ function NativeMacTimeline({
         onMouseLeave={() => setHover(null)}
       >
         <div className="native-grid" aria-hidden="true">
-          {(compact ? ticks : Array.from({ length: 9 }, (_, index) => ({ fraction: index * 0.125, label: String(index) }))).map((tick, index) => (
+          {axisTicks.map((tick, index) => (
             <span key={`${tick.label}-${index}`} style={{ left: `${tick.fraction * 100}%` }} />
           ))}
         </div>
@@ -132,23 +144,13 @@ function NativeMacTimeline({
           </>
         ) : null}
       </div>
-      <div className={`native-hour-axis ${compact ? "is-compact" : ""}`} aria-hidden="true">
-        {(compact ? ticks : [
-          { fraction: 0, label: "12 AM" },
-          { fraction: 0.125, label: "3 AM" },
-          { fraction: 0.25, label: "6 AM" },
-          { fraction: 0.375, label: "9 AM" },
-          { fraction: 0.5, label: "12 PM" },
-          { fraction: 0.625, label: "3 PM" },
-          { fraction: 0.75, label: "6 PM" },
-          { fraction: 0.875, label: "9 PM" },
-          { fraction: 1, label: "12 AM" },
-        ]).map((tick, index) => (
+      <div className={`native-hour-axis ${usePeriodAxis ? "is-compact" : ""}`} aria-hidden="true">
+        {axisTicks.map((tick, index) => (
           <span key={`${tick.label}-${index}`} style={{ left: `${tick.fraction * 100}%` }}>{tick.label}</span>
         ))}
       </div>
       {!timeline.blocks.length ? (
-        <div className="native-timeline-empty">No activity recorded for this {compact ? "period" : "day"}.</div>
+        <div className="native-timeline-empty">No activity recorded for this {usePeriodAxis ? "period" : "day"}.</div>
       ) : null}
     </section>
   );

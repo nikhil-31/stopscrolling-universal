@@ -106,47 +106,45 @@ export function BreakdownList({
         </div>
         <PieChart categories={categories} />
       </Card>
-      <div className="stack">
-        <Grouped title="Categories" description="Where your tracked time is concentrated">
-          {categories.length ? categories.map((item) => (
-            <div className="data-row" key={item.category}>
-              <span className="row-main">
-                <span
-                  className="category-swatch"
-                  style={{ ["--swatch" as string]: colorForCategory(item.category) }}
-                />
-                <span className="row-copy">
-                  <span className="row-title">{item.category}</span>
-                  <span className="progress-track">
-                    <span
-                      className="progress-fill"
-                      style={{
-                        ["--progress" as string]: `${Math.min(100, item.percentage * 100)}%`,
-                        ["--swatch" as string]: colorForCategory(item.category),
-                      }}
-                    />
-                  </span>
+      <Grouped title="Categories" description="Where your tracked time is concentrated">
+        {categories.length ? categories.map((item) => (
+          <div className="data-row" key={item.category}>
+            <span className="row-main">
+              <span
+                className="category-swatch"
+                style={{ ["--swatch" as string]: colorForCategory(item.category) }}
+              />
+              <span className="row-copy">
+                <span className="row-title">{item.category}</span>
+                <span className="progress-track">
+                  <span
+                    className="progress-fill"
+                    style={{
+                      ["--progress" as string]: `${Math.min(100, item.percentage * 100)}%`,
+                      ["--swatch" as string]: colorForCategory(item.category),
+                    }}
+                  />
                 </span>
               </span>
-              <span className="row-value">{formatDuration(item.seconds)} · {Math.round(item.percentage * 100)}%</span>
-            </div>
-          )) : <EmptyState title="No categories" body="Category totals will appear here." icon={Shapes} />}
-        </Grouped>
-        <Grouped title="Apps & websites" description="Your most-used destinations">
-          {apps.length ? apps.slice(0, 12).map((item) => (
-            <div className="data-row" key={item.key}>
-              <span className="row-main">
-                <span className="avatar">{item.label.slice(0, 2).toUpperCase()}</span>
-                <span className="row-copy">
-                  <span className="row-title">{item.label}</span>
-                  <span className="row-subtitle">{item.subtitle || item.category}</span>
-                </span>
+            </span>
+            <span className="row-value">{formatDuration(item.seconds)} · {Math.round(item.percentage * 100)}%</span>
+          </div>
+        )) : <EmptyState title="No categories" body="Category totals will appear here." icon={Shapes} />}
+      </Grouped>
+      <Grouped title="Apps & websites" description="Your most-used destinations">
+        {apps.length ? apps.slice(0, 12).map((item) => (
+          <div className="data-row" key={item.key}>
+            <span className="row-main">
+              <span className="avatar">{item.label.slice(0, 2).toUpperCase()}</span>
+              <span className="row-copy">
+                <span className="row-title">{item.label}</span>
+                <span className="row-subtitle">{item.subtitle || item.category}</span>
               </span>
-              <span className="row-value">{formatDuration(item.seconds)}</span>
-            </div>
-          )) : <EmptyState title="No apps yet" body="App totals will appear here." />}
-        </Grouped>
-      </div>
+            </span>
+            <span className="row-value">{formatDuration(item.seconds)}</span>
+          </div>
+        )) : <EmptyState title="No apps yet" body="App totals will appear here." />}
+      </Grouped>
     </div>
   );
 }

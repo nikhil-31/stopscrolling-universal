@@ -13,7 +13,7 @@ import type { CalendarPrompt } from "./types";
 import type { AppSnapshot } from "@shared/snapshot";
 import { endOfDay, startOfDay } from "@shared/platform";
 import { formatClock } from "@shared/timeline";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, type MouseEvent as ReactMouseEvent } from "react";
 
 const HOUR_HEIGHT = 48;
 const HEIGHT = HOUR_HEIGHT * 24;
@@ -36,6 +36,16 @@ export function DayBoard({
   const now = Date.now();
   const isToday = now >= dayStart.getTime() && now < dayEnd.getTime();
   const nowY = ((now - dayStart.getTime()) / (dayEnd.getTime() - dayStart.getTime())) * HEIGHT;
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const firstEntryTop = earliestEntryTop(blocks, dayStart, dayEnd);
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || firstEntryTop == null) return;
+    const header = scroller.querySelector(".day-board-head");
+    const headerHeight = header instanceof HTMLElement ? header.offsetHeight : 0;
+    scroller.scrollTop = Math.max(0, firstEntryTop - headerHeight - 8);
+  }, [state.calendarAnchor, firstEntryTop]);
 
   const onCanvasClick = (column: "labels" | "tasks", event: ReactMouseEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -50,7 +60,7 @@ export function DayBoard({
   };
 
   return (
-    <div className="day-board" data-testid="calendar-day-board">
+    <div className="day-board" data-testid="calendar-day-board" ref={scrollerRef}>
       <div className="day-board-head">
         <span />
         <span>Time Entries</span>
@@ -167,6 +177,18 @@ export function DayBoard({
       </div>
     </div>
   );
+}
+
+function earliestEntryTop(
+  blocks: Array<{ start: string; end: string }>,
+  dayStart: Date,
+  dayEnd: Date,
+) {
+  if (!blocks.length) return null;
+  const first = blocks.reduce((earliest, block) => (
+    new Date(block.start).getTime() < new Date(earliest.start).getTime() ? block : earliest
+  ));
+  return place(first.start, first.end, dayStart, dayEnd).top;
 }
 
 function place(startIso: string, endIso: string, dayStart: Date, dayEnd: Date) {
