@@ -1,6 +1,7 @@
 import { BrowserWindow, Menu, app, ipcMain, shell } from "electron";
 import { IPC } from "@shared/ipc";
-import type { AppSettings, InsightsPeriod, LeaderboardPeriod, NavigationItem, TodayTab, InsightsTab } from "@shared/types";
+import type { AppSettings, InsightsPeriod, LeaderboardPeriod, NavigationItem, TodayPeriod, TodayTab, InsightsTab } from "@shared/types";
+import type { CalendarView } from "@shared/calendar-workspace";
 import type { AppController } from "./app-controller";
 import { refreshTray } from "./tray";
 import { createSettingsWindow } from "./windows";
@@ -34,8 +35,10 @@ export function installIpc(controller: AppController) {
     void controller.refreshVisibleRange();
   });
   ipcMain.on(IPC.setTodayTab, (_event, tab: TodayTab) => {
-    controller.todayTab = tab;
-    broadcast();
+    controller.setTodayTab(tab);
+  });
+  ipcMain.on(IPC.setTodayPeriod, (_event, period: TodayPeriod) => {
+    controller.setTodayPeriod(period);
   });
   ipcMain.on(IPC.setInsightsTab, (_event, tab: InsightsTab) => {
     controller.insightsTab = tab;
@@ -124,6 +127,39 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.googleDisconnect, () => {
     controller.google.disconnect();
     controller.updateSettings({ showGoogleCalendarEvents: false });
+  });
+  ipcMain.on(IPC.setCalendarView, (_event, view: CalendarView) => {
+    controller.setCalendarView(view);
+  });
+  ipcMain.on(IPC.upsertCalendarLabel, (_event, patch) => {
+    controller.upsertCalendarLabel(patch);
+  });
+  ipcMain.on(IPC.deleteCalendarLabel, (_event, id: string) => {
+    controller.deleteCalendarLabel(id);
+  });
+  ipcMain.on(IPC.upsertCalendarTask, (_event, patch) => {
+    controller.upsertCalendarTask(patch);
+  });
+  ipcMain.on(IPC.deleteCalendarTask, (_event, id: string) => {
+    controller.deleteCalendarTask(id);
+  });
+  ipcMain.on(IPC.assignCalendarLabel, (_event, patch) => {
+    controller.assignCalendarLabel(patch);
+  });
+  ipcMain.on(IPC.clearCalendarAssignment, (_event, id: string) => {
+    controller.clearCalendarAssignment(id);
+  });
+  ipcMain.on(IPC.reviewCalendarBlock, (_event, payload) => {
+    controller.reviewCalendarBlock(payload);
+  });
+  ipcMain.on(IPC.skipCalendarBlock, (_event, blockId: string) => {
+    controller.skipCalendarBlock(blockId);
+  });
+  ipcMain.on(IPC.dismissCalendarReview, (_event, unlabeledIds: string[]) => {
+    controller.dismissCalendarReview(unlabeledIds);
+  });
+  ipcMain.on(IPC.assignCalendarLabelToApp, (_event, payload: { appKey: string; labelId: string }) => {
+    controller.assignCalendarLabelToApp(payload);
   });
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockSegments, periodBounds, snapshotFromEntries } from "./timeline";
+import { blockSegments, entriesToTimelines, periodBounds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 
@@ -155,6 +155,61 @@ describe("insights snapshot", () => {
     expect(snapshot.sessionCount).toBe(7);
     expect(snapshot.categories[0].category).toBe("Development");
     expect(snapshot.buckets).toHaveLength(24);
+  });
+});
+
+describe("today period windows", () => {
+  it("uses a calendar month for Today month bounds", () => {
+    const { start, end } = todayPeriodBounds("month", new Date(2026, 8, 9, 15));
+    expect(start).toEqual(new Date(2026, 8, 1));
+    expect(end).toEqual(new Date(2026, 9, 1));
+  });
+
+  it("reuses week bounds and shifts the anchor by period", () => {
+    const anchor = new Date(2026, 8, 9, 12);
+    expect(todayPeriodBounds("week", anchor)).toEqual(periodBounds("week", anchor));
+    expect(shiftTodayAnchor("day", anchor, 1).getDate()).toBe(10);
+    expect(shiftTodayAnchor("week", anchor, -1).getDate()).toBe(2);
+    expect(shiftTodayAnchor("month", anchor, 1).getMonth()).toBe(9);
+  });
+
+  it("windows timelines to the selected Today range", () => {
+    const start = new Date(2026, 8, 7, 0, 0, 0, 0);
+    const end = new Date(2026, 8, 14, 0, 0, 0, 0);
+    const timelines = entriesToTimelines(
+      [
+        entry({
+          startTimeUTC: new Date(2026, 8, 8, 10).toISOString(),
+          endTimeUTC: new Date(2026, 8, 8, 11).toISOString(),
+          appName: "Cursor",
+        }),
+        entry({
+          startTimeUTC: new Date(2026, 8, 20, 10).toISOString(),
+          endTimeUTC: new Date(2026, 8, 20, 11).toISOString(),
+          appName: "Notes",
+        }),
+      ],
+      start,
+      [],
+      { start, end },
+    );
+    expect(timelines[0].dayStart).toBe(start.toISOString());
+    expect(timelines[0].dayEnd).toBe(end.toISOString());
+    expect(timelines[0].segments.map((segment) => segment.appName)).toEqual(["Cursor"]);
+  });
+
+  it("places 3-hour, weekday, and month ticks on the compact axis", () => {
+    const day = new Date(2026, 8, 9);
+    const dayTicks = timelineAxisTicks(day, new Date(day.getTime() + 24 * 60 * 60 * 1000));
+    expect(dayTicks.map((tick) => tick.label)).toEqual(["3:00", "6:00", "9:00", "12:00", "15:00", "18:00", "21:00"]);
+    const weekStart = periodBounds("week", day).start;
+    const weekTicks = timelineAxisTicks(weekStart, new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000));
+    expect(weekTicks).toHaveLength(7);
+    expect(weekTicks[0].fraction).toBeCloseTo(0.5 / 7);
+    const month = todayPeriodBounds("month", day);
+    const monthTicks = timelineAxisTicks(month.start, month.end);
+    expect(monthTicks[0].label).toBe("1");
+    expect(monthTicks.length).toBeGreaterThanOrEqual(4);
   });
 });
 

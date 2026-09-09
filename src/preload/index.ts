@@ -2,6 +2,12 @@ import { contextBridge, ipcRenderer } from "electron";
 import { IPC } from "@shared/ipc";
 import type { AppSnapshot } from "@shared/snapshot";
 import type {
+  CalendarAssignment,
+  CalendarLabel,
+  CalendarTask,
+  CalendarView,
+} from "@shared/calendar-workspace";
+import type {
   AppSettings,
   InsightsPeriod,
   InsightsTab,
@@ -10,6 +16,7 @@ import type {
   ScreenTimeSessionBlock,
   ScreenTimeTimelineSegment,
   TodayTab,
+  TodayPeriod,
 } from "@shared/types";
 
 const api = {
@@ -26,6 +33,7 @@ const api = {
   setInsightsPeriod: (period: InsightsPeriod) => ipcRenderer.send(IPC.setInsightsPeriod, period),
   setInsightsAnchor: (iso: string) => ipcRenderer.send(IPC.setInsightsAnchor, iso),
   setTodayTab: (tab: TodayTab) => ipcRenderer.send(IPC.setTodayTab, tab),
+  setTodayPeriod: (period: TodayPeriod) => ipcRenderer.send(IPC.setTodayPeriod, period),
   setInsightsTab: (tab: InsightsTab) => ipcRenderer.send(IPC.setInsightsTab, tab),
   setLeaderboardPeriod: (period: LeaderboardPeriod) => ipcRenderer.send(IPC.setLeaderboardPeriod, period),
   toggleTracking: () => ipcRenderer.send(IPC.toggleTracking),
@@ -55,6 +63,17 @@ const api = {
   friendsRemove: (id: number) => ipcRenderer.send(IPC.friendsRemove, id),
   googleConnect: () => ipcRenderer.send(IPC.googleConnect),
   googleDisconnect: () => ipcRenderer.send(IPC.googleDisconnect),
+  setCalendarView: (view: CalendarView) => ipcRenderer.send(IPC.setCalendarView, view),
+  upsertCalendarLabel: (patch: Partial<CalendarLabel> & Pick<CalendarLabel, "name">) => ipcRenderer.send(IPC.upsertCalendarLabel, patch),
+  deleteCalendarLabel: (id: string) => ipcRenderer.send(IPC.deleteCalendarLabel, id),
+  upsertCalendarTask: (patch: Partial<CalendarTask> & Pick<CalendarTask, "title" | "start" | "end">) => ipcRenderer.send(IPC.upsertCalendarTask, patch),
+  deleteCalendarTask: (id: string) => ipcRenderer.send(IPC.deleteCalendarTask, id),
+  assignCalendarLabel: (patch: Partial<CalendarAssignment> & Pick<CalendarAssignment, "start" | "end" | "labelId">) => ipcRenderer.send(IPC.assignCalendarLabel, patch),
+  clearCalendarAssignment: (id: string) => ipcRenderer.send(IPC.clearCalendarAssignment, id),
+  reviewCalendarBlock: (payload: { block: Pick<ScreenTimeSessionBlock, "id" | "start" | "end">; labelId: string }) => ipcRenderer.send(IPC.reviewCalendarBlock, payload),
+  skipCalendarBlock: (blockId: string) => ipcRenderer.send(IPC.skipCalendarBlock, blockId),
+  dismissCalendarReview: (unlabeledIds: string[]) => ipcRenderer.send(IPC.dismissCalendarReview, unlabeledIds),
+  assignCalendarLabelToApp: (payload: { appKey: string; labelId: string }) => ipcRenderer.send(IPC.assignCalendarLabelToApp, payload),
 };
 
 export type StopScrollingDesktop = typeof api;

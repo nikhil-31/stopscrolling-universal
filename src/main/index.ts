@@ -4,6 +4,8 @@ import { installApplicationMenu, installIpc } from "./ipc";
 import { installTray, refreshTray } from "./tray";
 import { createMainWindow } from "./windows";
 
+app.setName("StopScrolling");
+
 const controller = new AppController();
 let quitting = false;
 

@@ -30,6 +30,8 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
         <nav className="settings-nav" aria-label="Settings sections">
           <a href="#general">General</a>
           <a href="#appearance">Appearance</a>
+          <a href="#work-hours">Work hours</a>
+          <a href="#labels">Labels</a>
           <a href="#calendars">Calendars</a>
           <a href="#backend">Sync</a>
           <a href="#diagnostics">Diagnostics</a>
@@ -65,6 +67,51 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
                     <Icon size={13} aria-hidden="true" /> {label}
                   </button>
                 ))}
+              </div>
+            </Grouped>
+          </section>
+
+          <section id="work-hours" className="settings-section">
+            <Grouped title="Work hours" description="Daily target used on the Calendar summary">
+              <TextField
+                label="Daily work target (hours)"
+                type="number"
+                min={1}
+                max={16}
+                step={0.5}
+                value={String(Math.round((settings.dailyWorkTargetSeconds / 3600) * 10) / 10)}
+                onChange={(event) => {
+                  const parsed = Number(event.target.value);
+                  if (!Number.isFinite(parsed) || parsed <= 0) return;
+                  window.stopscrolling.updateSettings({ dailyWorkTargetSeconds: Math.round(parsed * 3600) });
+                }}
+              />
+            </Grouped>
+          </section>
+
+          <section id="labels" className="settings-section">
+            <Grouped title="Labels" description="Names and colors applied to reviewed time on Calendar">
+              <div className="calendar-label-picks">
+                {state.calendarWorkspace.labels.map((label) => (
+                  <div key={label.id} className="calendar-label-manage">
+                    <span className="calendar-legend-dot" style={{ background: label.color }} />
+                    <span>{label.name}</span>
+                    <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.deleteCalendarLabel(label.id)}>Delete</Button>
+                  </div>
+                ))}
+              </div>
+              <div className="form-actions">
+                <Button
+                  size="sm"
+                  onClick={() => window.stopscrolling.upsertCalendarLabel({
+                    name: "New label",
+                    color: "#1fb894",
+                    bucket: "other",
+                    countsTowardWork: true,
+                  })}
+                >
+                  Add label
+                </Button>
               </div>
             </Grouped>
           </section>

@@ -8,6 +8,7 @@ export const IPC = {
   setInsightsPeriod: "app:set-insights-period",
   setInsightsAnchor: "app:set-insights-anchor",
   setTodayTab: "app:set-today-tab",
+  setTodayPeriod: "app:set-today-period",
   setInsightsTab: "app:set-insights-tab",
   setLeaderboardPeriod: "app:set-leaderboard-period",
   toggleTracking: "app:toggle-tracking",
@@ -33,6 +34,17 @@ export const IPC = {
   friendsRemove: "app:friends-remove",
   googleConnect: "app:google-connect",
   googleDisconnect: "app:google-disconnect",
+  setCalendarView: "app:set-calendar-view",
+  upsertCalendarLabel: "app:upsert-calendar-label",
+  deleteCalendarLabel: "app:delete-calendar-label",
+  upsertCalendarTask: "app:upsert-calendar-task",
+  deleteCalendarTask: "app:delete-calendar-task",
+  assignCalendarLabel: "app:assign-calendar-label",
+  clearCalendarAssignment: "app:clear-calendar-assignment",
+  reviewCalendarBlock: "app:review-calendar-block",
+  skipCalendarBlock: "app:skip-calendar-block",
+  dismissCalendarReview: "app:dismiss-calendar-review",
+  assignCalendarLabelToApp: "app:assign-calendar-label-to-app",
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

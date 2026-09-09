@@ -46,7 +46,7 @@ export function App() {
             data-testid="content-area"
             aria-label={`${state.navigation} content`}
           >
-            <div className="content-canvas" key={state.navigation}>
+            <div className={`content-canvas ${["today", "calendar"].includes(state.navigation) ? "content-canvas-calendar" : ""}`} key={state.navigation}>
               {state.navigation === "today" && <TodayScreen state={state} />}
               {state.navigation === "calendar" && <CalendarScreen state={state} />}
               {state.navigation === "insights" && <InsightsScreen state={state} />}

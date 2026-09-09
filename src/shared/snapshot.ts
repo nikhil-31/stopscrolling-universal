@@ -1,3 +1,4 @@
+import type { CalendarDayStats, CalendarView, CalendarWorkspace } from "./calendar-workspace";
 import type {
   AppSettings,
   AuthenticatedUser,
@@ -18,6 +19,7 @@ import type {
   ScreenTimeDeviceTimeline,
   ScreenTimeTimelineSegment,
   ThemePreference,
+  TodayPeriod,
   TodayTab,
   TrackingCapabilities,
 } from "./types";
@@ -65,8 +67,13 @@ export interface AppSnapshot {
   settings: AppSettings;
   todayDay: string;
   todayTab: TodayTab;
+  todayPeriod: TodayPeriod;
   calendarAnchor: string;
   calendarMonth: string;
+  calendarView: CalendarView;
+  calendarWorkspace: CalendarWorkspace;
+  calendarDayStats: CalendarDayStats;
+  calendarReviewVisible: boolean;
   insightsPeriod: InsightsPeriod;
   insightsAnchor: string;
   insightsTab: InsightsTab;

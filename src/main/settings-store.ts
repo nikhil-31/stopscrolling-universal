@@ -10,6 +10,7 @@ export const defaultSettings = (): AppSettings => ({
   syncEnabled: true,
   showGoogleCalendarEvents: false,
   googleClientId: "",
+  dailyWorkTargetSeconds: 8 * 60 * 60,
 });
 
 export function loadSettings(): AppSettings {

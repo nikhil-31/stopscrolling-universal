@@ -5,6 +5,7 @@ import {
   formatDuration,
   hourLabel,
   sessionBlockPlacements,
+  timelineAxisTicks,
   VERTICAL_TIMELINE_HOUR_HEIGHT,
   VERTICAL_TIMELINE_HOURS,
 } from "@shared/timeline";
@@ -16,11 +17,22 @@ import type {
 import { AppWindow, Clock3, Globe2, Laptop2, Layers3 } from "lucide-react";
 import { Badge, Card, EmptyState } from "../ui";
 
-export function TimelineGroup({ timelines }: { timelines: ScreenTimeDeviceTimeline[] }) {
+export function TimelineGroup({
+  timelines,
+  compact = false,
+}: {
+  timelines: ScreenTimeDeviceTimeline[];
+  compact?: boolean;
+}) {
   return (
-    <div className="native-timeline-stack">
+    <div className={`native-timeline-stack ${compact ? "is-compact" : ""}`}>
       {(timelines.length ? timelines : [emptyTimeline()]).map((timeline) => (
-        <NativeMacTimeline key={timeline.id} timeline={timeline} showDeviceHeader={timelines.length > 1} />
+        <NativeMacTimeline
+          key={timeline.id}
+          timeline={timeline}
+          showDeviceHeader={!compact && timelines.length > 1}
+          compact={compact}
+        />
       ))}
     </div>
   );
@@ -29,9 +41,11 @@ export function TimelineGroup({ timelines }: { timelines: ScreenTimeDeviceTimeli
 function NativeMacTimeline({
   timeline,
   showDeviceHeader,
+  compact = false,
 }: {
   timeline: ScreenTimeDeviceTimeline;
   showDeviceHeader: boolean;
+  compact?: boolean;
 }) {
   const [hover, setHover] = useState<{ x: number; time: Date; block: ScreenTimeSessionBlock | null } | null>(null);
   const dayStart = new Date(timeline.dayStart).getTime();
@@ -39,6 +53,7 @@ function NativeMacTimeline({
   const span = dayEnd - dayStart || 1;
   const now = Date.now();
   const nowFraction = now >= dayStart && now < dayEnd ? (now - dayStart) / span : null;
+  const ticks = timelineAxisTicks(new Date(timeline.dayStart), new Date(timeline.dayEnd));
   const total = timeline.blocks.reduce((sum, block) => sum + block.durationSeconds, 0);
 
   const onMove = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -68,14 +83,16 @@ function NativeMacTimeline({
         </div>
       ) : null}
       <div
-        className="native-timeline-track"
+        className={`native-timeline-track ${compact ? "is-compact" : ""}`}
         role="img"
         aria-label={`${timeline.deviceName || "Device"} day timeline, ${timeline.blocks.length} blocks, ${formatDuration(total)} tracked`}
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
       >
         <div className="native-grid" aria-hidden="true">
-          {Array.from({ length: 9 }, (_, index) => <span key={index} style={{ left: `${index * 12.5}%` }} />)}
+          {(compact ? ticks : Array.from({ length: 9 }, (_, index) => ({ fraction: index * 0.125, label: String(index) }))).map((tick, index) => (
+            <span key={`${tick.label}-${index}`} style={{ left: `${tick.fraction * 100}%` }} />
+          ))}
         </div>
         {timeline.blocks.map((block) => {
           const start = new Date(block.start).getTime();
@@ -86,11 +103,11 @@ function NativeMacTimeline({
           return (
             <button
               key={block.id}
-              className={`native-timeline-block ${isHovered ? "is-hovered" : ""}`}
+              className={`native-timeline-block ${isHovered ? "is-hovered" : ""} ${compact ? "is-compact" : ""}`}
               style={{
                 left: `${x * 100}%`,
                 width: `${width * 100}%`,
-                ["--block-color" as string]: colorForCategory(block.items[0]?.id || block.category),
+                ["--block-color" as string]: compact ? "var(--brand)" : colorForCategory(block.items[0]?.id || block.category),
               }}
               aria-label={`${block.title}, ${formatClock(block.start)} to ${formatClock(block.end)}, ${formatDuration(block.durationSeconds)}`}
               onClick={() => window.stopscrolling.selectInspector({ kind: "block", block })}
@@ -98,7 +115,7 @@ function NativeMacTimeline({
           );
         })}
         {nowFraction !== null ? (
-          <div className="native-now-line" style={{ left: `${nowFraction * 100}%` }} />
+          <div className={`native-now-line ${compact ? "is-compact" : ""}`} style={{ left: `${nowFraction * 100}%` }} />
         ) : null}
         {hover ? (
           <>
@@ -115,13 +132,23 @@ function NativeMacTimeline({
           </>
         ) : null}
       </div>
-      <div className="native-hour-axis" aria-hidden="true">
-        {["12 AM", "3 AM", "6 AM", "9 AM", "12 PM", "3 PM", "6 PM", "9 PM", "12 AM"].map((label, index) => (
-          <span key={`${label}-${index}`} style={{ left: `${index * 12.5}%` }}>{label}</span>
+      <div className={`native-hour-axis ${compact ? "is-compact" : ""}`} aria-hidden="true">
+        {(compact ? ticks : [
+          { fraction: 0, label: "12 AM" },
+          { fraction: 0.125, label: "3 AM" },
+          { fraction: 0.25, label: "6 AM" },
+          { fraction: 0.375, label: "9 AM" },
+          { fraction: 0.5, label: "12 PM" },
+          { fraction: 0.625, label: "3 PM" },
+          { fraction: 0.75, label: "6 PM" },
+          { fraction: 0.875, label: "9 PM" },
+          { fraction: 1, label: "12 AM" },
+        ]).map((tick, index) => (
+          <span key={`${tick.label}-${index}`} style={{ left: `${tick.fraction * 100}%` }}>{tick.label}</span>
         ))}
       </div>
       {!timeline.blocks.length ? (
-        <div className="native-timeline-empty">No activity recorded for this day.</div>
+        <div className="native-timeline-empty">No activity recorded for this {compact ? "period" : "day"}.</div>
       ) : null}
     </section>
   );

@@ -2,15 +2,39 @@ import { BrowserWindow } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { normalizedEmail, signInError, signUpError } from "@shared/auth-validation";
+import {
+  assignLabel,
+  assignLabelToApp,
+  buildCalendarDayStats,
+  collectDayBlocks,
+  clearAssignment,
+  deleteLabel,
+  deleteTask,
+  reviewBlock,
+  skipBlock,
+  shouldShowReviewBar,
+  type CalendarAssignment,
+  type CalendarLabel,
+  type CalendarTask,
+  type CalendarView,
+  upsertLabel,
+  upsertTask,
+} from "@shared/calendar-workspace";
 import { deviceKey, resolvedDeviceName, withComputedOnline } from "@shared/device";
 import { IPC } from "@shared/ipc";
 import { localTimeZone, toDateInput } from "@shared/platform";
 import type { AppSnapshot, AuthUiState, InspectorState, LeaderboardUiState } from "@shared/snapshot";
 import {
+  endOfMonth,
   entriesToTimelines,
   filterVisibleTimelines,
+  normalizeTodayTab,
   periodBounds,
   snapshotFromEntries,
+  snapshotFromRange,
+  startOfMonth,
+  todayPeriodBounds,
+  trackedSecondsByDay,
 } from "@shared/timeline";
 import type {
   AppSettings,
@@ -22,9 +46,11 @@ import type {
   PeriodSummaryResponse,
   ScreenTimeSessionBlock,
   ScreenTimeTimelineSegment,
+  TodayPeriod,
   TodayTab,
 } from "@shared/types";
 import { isMfa, StopScrollingAPI } from "./api-client";
+import { loadCalendarWorkspace, saveCalendarWorkspace } from "./calendar-workspace-store";
 import { GoogleCalendarService } from "./google-calendar";
 import { logObservability } from "./logger";
 import { hiddenDevicesPath, networkLogPath, observabilityLogPath } from "./paths";
@@ -77,9 +103,13 @@ export class AppController {
   navigation: NavigationItem = "today";
   statusMessage = "Ready";
   todayDay = new Date();
-  todayTab: TodayTab = "overview";
+  todayTab: TodayTab = "timeline";
+  todayPeriod: TodayPeriod = "day";
   calendarAnchor = new Date();
   calendarMonth = new Date();
+  calendarView: CalendarView = "day";
+  calendarWorkspace = loadCalendarWorkspace();
+  reviewBarDismissedIds: string[] = [];
   insightsPeriod: InsightsPeriod = "day";
   insightsAnchor = new Date();
   insightsTab: InsightsTab = "overview";
@@ -131,30 +161,36 @@ export class AppController {
         : this.navigation === "calendar"
           ? this.calendarAnchor
           : this.todayDay;
-    const snapshot = snapshotFromEntries(entries, period, anchor, this.serverSummary
-      ? {
-          totalSeconds: this.serverSummary.total_seconds,
-          sessionCount: this.serverSummary.session_count,
-          categories: this.serverSummary.categories,
-          apps: this.serverSummary.apps?.map((app, index) => ({
-            key: app.id ?? `${app.app_name ?? "app"}-${index}`,
-            label: app.app_name ?? "Unknown",
-            subtitle: app.device_label || app.browser_app || app.category,
-            category: app.category,
-            seconds: app.seconds,
-            percentage: app.percentage > 1 ? app.percentage / 100 : app.percentage,
-            colorIndex: app.color_index ?? index,
-          })),
-        }
-      : undefined);
+    const todayBounds = todayPeriodBounds(this.todayPeriod, this.todayDay);
+    const serverSummary = this.mappedServerSummary();
+    const snapshot = this.navigation === "today"
+      ? snapshotFromRange(entries, todayBounds, serverSummary)
+      : snapshotFromEntries(entries, period, anchor, serverSummary);
     const extraDevices = this.tracker.registeredDevices.map((device) => ({
       platform: device.device_platform,
       name: device.device_name,
       timeZone: device.time_zone,
     }));
     const timelines = filterVisibleTimelines(
-      entriesToTimelines(entries, this.navigation === "calendar" ? this.calendarAnchor : this.todayDay, extraDevices),
+      entriesToTimelines(
+        entries,
+        this.navigation === "calendar" ? this.calendarAnchor : this.todayDay,
+        extraDevices,
+        this.navigation === "today" ? todayBounds : undefined,
+      ),
       this.hiddenDeviceKeys,
+    );
+    const calendarTimelines = this.navigation === "calendar"
+      ? timelines
+      : filterVisibleTimelines(
+          entriesToTimelines(entries, this.calendarAnchor, extraDevices),
+          this.hiddenDeviceKeys,
+        );
+    const calendarDayStats = buildCalendarDayStats(
+      this.calendarWorkspace,
+      collectDayBlocks(calendarTimelines),
+      this.calendarAnchor,
+      this.settings.dailyWorkTargetSeconds || 8 * 60 * 60,
     );
     return {
       navigation: this.navigation,
@@ -168,12 +204,22 @@ export class AppController {
       settings: this.settings,
       todayDay: this.todayDay.toISOString(),
       todayTab: this.todayTab,
+      todayPeriod: this.todayPeriod,
       calendarAnchor: this.calendarAnchor.toISOString(),
       calendarMonth: this.calendarMonth.toISOString(),
+      calendarView: this.calendarView,
+      calendarWorkspace: this.calendarWorkspace,
+      calendarDayStats,
+      calendarReviewVisible: shouldShowReviewBar(
+        calendarDayStats.unlabeledBlocks.map((block) => block.id),
+        this.reviewBarDismissedIds,
+      ),
       insightsPeriod: this.insightsPeriod,
       insightsAnchor: this.insightsAnchor.toISOString(),
       insightsTab: this.insightsTab,
-      snapshot,
+      snapshot: this.navigation === "calendar"
+        ? { ...snapshot, trackedSecondsByDay: trackedSecondsByDay(entries, this.calendarMonth) }
+        : snapshot,
       timelines,
       loadingEntries: this.tracker.loadingEntries,
       entriesUnavailableReason: this.tracker.entriesUnavailableReason,
@@ -220,7 +266,11 @@ export class AppController {
         : this.navigation === "calendar"
           ? this.calendarAnchor
           : this.todayDay;
-    const bounds = periodBounds(period, anchor);
+    const bounds = this.navigation === "calendar"
+      ? { start: startOfMonth(this.calendarMonth), end: endOfMonth(this.calendarMonth) }
+      : this.navigation === "today"
+        ? todayPeriodBounds(this.todayPeriod, this.todayDay)
+        : periodBounds(period, anchor);
     const zone = localTimeZone();
     await this.tracker.loadRange(bounds.start, bounds.end, zone);
     if (this.api.getTokens() && this.settings.syncEnabled) {
@@ -229,7 +279,7 @@ export class AppController {
           start: bounds.start.toISOString(),
           end: bounds.end.toISOString(),
           time_zone: zone,
-          include_daily_totals: this.navigation === "calendar",
+          include_daily_totals: this.navigation === "calendar" || this.navigation === "today",
         });
       } catch {
         this.serverSummary = null;
@@ -378,6 +428,73 @@ export class AppController {
     this.broadcast();
   }
 
+  setCalendarView(view: CalendarView) {
+    this.calendarView = view;
+    void this.refreshVisibleRange();
+  }
+
+  setTodayPeriod(period: TodayPeriod) {
+    this.todayPeriod = period;
+    void this.refreshVisibleRange();
+  }
+
+  setTodayTab(tab: string) {
+    this.todayTab = normalizeTodayTab(tab);
+    this.broadcast();
+  }
+
+  persistWorkspace() {
+    saveCalendarWorkspace(this.calendarWorkspace);
+    this.broadcast();
+  }
+
+  mutateWorkspace(mutate: (workspace: typeof this.calendarWorkspace) => typeof this.calendarWorkspace) {
+    this.calendarWorkspace = mutate(this.calendarWorkspace);
+    this.persistWorkspace();
+  }
+
+  upsertCalendarLabel(patch: Partial<CalendarLabel> & Pick<CalendarLabel, "name">) {
+    this.mutateWorkspace((workspace) => upsertLabel(workspace, patch));
+  }
+
+  deleteCalendarLabel(id: string) {
+    this.mutateWorkspace((workspace) => deleteLabel(workspace, id));
+  }
+
+  upsertCalendarTask(patch: Partial<CalendarTask> & Pick<CalendarTask, "title" | "start" | "end">) {
+    this.mutateWorkspace((workspace) => upsertTask(workspace, patch));
+  }
+
+  deleteCalendarTask(id: string) {
+    this.mutateWorkspace((workspace) => deleteTask(workspace, id));
+  }
+
+  assignCalendarLabel(patch: Partial<CalendarAssignment> & Pick<CalendarAssignment, "start" | "end" | "labelId">) {
+    this.mutateWorkspace((workspace) => assignLabel(workspace, patch));
+  }
+
+  clearCalendarAssignment(id: string) {
+    this.mutateWorkspace((workspace) => clearAssignment(workspace, id));
+  }
+
+  reviewCalendarBlock(payload: { block: Pick<ScreenTimeSessionBlock, "id" | "start" | "end">; labelId: string }) {
+    this.mutateWorkspace((workspace) => reviewBlock(workspace, payload.block, payload.labelId));
+  }
+
+  skipCalendarBlock(blockId: string) {
+    this.mutateWorkspace((workspace) => skipBlock(workspace, blockId));
+  }
+
+  assignCalendarLabelToApp(payload: { appKey: string; labelId: string }) {
+    const segments = this.snapshot().snapshot.listSegments;
+    this.mutateWorkspace((workspace) => assignLabelToApp(workspace, segments, payload.appKey, payload.labelId));
+  }
+
+  dismissCalendarReview(unlabeledIds: string[]) {
+    this.reviewBarDismissedIds = unlabeledIds;
+    this.broadcast();
+  }
+
   setDeviceVisible(key: string, visible: boolean) {
     if (visible) this.hiddenDeviceKeys.delete(key);
     else this.hiddenDeviceKeys.add(key);
@@ -456,5 +573,23 @@ export class AppController {
       );
     }
     return Array.from(byKey.values()).sort((a, b) => Number(b.isOnline) - Number(a.isOnline) || a.deviceName.localeCompare(b.deviceName));
+  }
+
+  private mappedServerSummary() {
+    if (!this.serverSummary) return undefined;
+    return {
+      totalSeconds: this.serverSummary.total_seconds,
+      sessionCount: this.serverSummary.session_count,
+      categories: this.serverSummary.categories,
+      apps: this.serverSummary.apps?.map((app, index) => ({
+        key: app.id ?? `${app.app_name ?? "app"}-${index}`,
+        label: app.app_name ?? "Unknown",
+        subtitle: app.device_label || app.browser_app || app.category,
+        category: app.category,
+        seconds: app.seconds,
+        percentage: app.percentage > 1 ? app.percentage / 100 : app.percentage,
+        colorIndex: app.color_index ?? index,
+      })),
+    };
   }
 }

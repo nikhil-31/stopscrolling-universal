@@ -7,9 +7,9 @@
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
-    "dev": "unset ELECTRON_RUN_AS_NODE && electron-vite dev",
+    "dev": "node scripts/dev.mjs",
     "build": "electron-vite build",
-    "preview": "unset ELECTRON_RUN_AS_NODE && electron-vite preview",
+    "preview": "node scripts/dev.mjs preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "test:ui": "playwright test",

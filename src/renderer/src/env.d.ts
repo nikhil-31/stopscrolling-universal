@@ -10,6 +10,7 @@ interface StopScrollingDesktop {
   setInsightsPeriod: (period: import("@shared/types").InsightsPeriod) => void;
   setInsightsAnchor: (iso: string) => void;
   setTodayTab: (tab: import("@shared/types").TodayTab) => void;
+  setTodayPeriod: (period: import("@shared/types").TodayPeriod) => void;
   setInsightsTab: (tab: import("@shared/types").InsightsTab) => void;
   setLeaderboardPeriod: (period: import("@shared/types").LeaderboardPeriod) => void;
   toggleTracking: () => void;
@@ -39,6 +40,17 @@ interface StopScrollingDesktop {
   friendsRemove: (id: number) => void;
   googleConnect: () => void;
   googleDisconnect: () => void;
+  setCalendarView: (view: import("@shared/calendar-workspace").CalendarView) => void;
+  upsertCalendarLabel: (patch: Partial<import("@shared/calendar-workspace").CalendarLabel> & Pick<import("@shared/calendar-workspace").CalendarLabel, "name">) => void;
+  deleteCalendarLabel: (id: string) => void;
+  upsertCalendarTask: (patch: Partial<import("@shared/calendar-workspace").CalendarTask> & Pick<import("@shared/calendar-workspace").CalendarTask, "title" | "start" | "end">) => void;
+  deleteCalendarTask: (id: string) => void;
+  assignCalendarLabel: (patch: Partial<import("@shared/calendar-workspace").CalendarAssignment> & Pick<import("@shared/calendar-workspace").CalendarAssignment, "start" | "end" | "labelId">) => void;
+  clearCalendarAssignment: (id: string) => void;
+  reviewCalendarBlock: (payload: { block: Pick<import("@shared/types").ScreenTimeSessionBlock, "id" | "start" | "end">; labelId: string }) => void;
+  skipCalendarBlock: (blockId: string) => void;
+  dismissCalendarReview: (unlabeledIds: string[]) => void;
+  assignCalendarLabelToApp: (payload: { appKey: string; labelId: string }) => void;
 }
 
 declare global {

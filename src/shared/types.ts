@@ -2,7 +2,8 @@ export type NavigationItem = "today" | "calendar" | "insights" | "leaderboard" |
 
 export type InsightsPeriod = "day" | "week" | "year";
 export type InsightsTab = "overview" | "breakdown" | "sessions";
-export type TodayTab = "overview" | "blocks" | "eventLog" | "breakdown";
+export type TodayTab = "timeline" | "eventLog";
+export type TodayPeriod = "day" | "week" | "month";
 export type LeaderboardPeriod = "day" | "week";
 export type ThemePreference = "system" | "light" | "dark";
 export type MFAMethod = "totp" | "email_otp" | "sms_otp";
@@ -302,6 +303,7 @@ export interface AppSettings {
   syncEnabled: boolean;
   showGoogleCalendarEvents: boolean;
   googleClientId: string;
+  dailyWorkTargetSeconds: number;
 }
 
 export interface ScreenTimeApiPayload {

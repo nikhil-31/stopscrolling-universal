@@ -1,4 +1,4 @@
-import { formatDayLabel, formatPeriod, localTimeZoneLabel } from "@shared/timeline";
+import { formatPeriod, localTimeZoneLabel } from "@shared/timeline";
 import type { AppSnapshot } from "@shared/snapshot";
 import {
   CalendarClock,
@@ -40,22 +40,6 @@ export function Toolbar({ state }: { state: AppSnapshot }) {
               </button>
             ))}
           </div>
-        ) : null}
-        {state.navigation === "today" ? (
-          <DateNav
-            label={formatDayLabel(new Date(state.todayDay))}
-            onPrev={() => shift(state.todayDay, -1, window.stopscrolling.setTodayDay)}
-            onNext={() => shift(state.todayDay, 1, window.stopscrolling.setTodayDay)}
-            onCurrent={() => window.stopscrolling.setTodayDay(new Date().toISOString())}
-          />
-        ) : null}
-        {state.navigation === "calendar" ? (
-          <DateNav
-            label={formatDayLabel(new Date(state.calendarAnchor))}
-            onPrev={() => shift(state.calendarAnchor, -1, window.stopscrolling.setCalendarAnchor)}
-            onNext={() => shift(state.calendarAnchor, 1, window.stopscrolling.setCalendarAnchor)}
-            onCurrent={() => window.stopscrolling.setCalendarAnchor(new Date().toISOString())}
-          />
         ) : null}
         {state.navigation === "insights" ? (
           <DateNav
@@ -115,12 +99,6 @@ function DateNav({
       </Tooltip>
     </div>
   );
-}
-
-function shift(iso: string, days: number, setter: (next: string) => void) {
-  const date = new Date(iso);
-  date.setDate(date.getDate() + days);
-  setter(date.toISOString());
 }
 
 function shiftPeriod(state: AppSnapshot, direction: number) {

@@ -12,6 +12,7 @@ import type {
   ScreenTimeSnapshot,
   ScreenTimeSyncSession,
   ScreenTimeTimelineSegment,
+  TodayPeriod,
 } from "./types";
 
 export const fiveMinutes = 5 * 60 * 1000;
@@ -92,6 +93,68 @@ export function periodBounds(period: InsightsPeriod, anchor: Date) {
   }
   const start = new Date(anchor.getFullYear(), 0, 1);
   return { start, end: new Date(anchor.getFullYear() + 1, 0, 1) };
+}
+
+export function todayPeriodBounds(period: TodayPeriod, anchor: Date) {
+  if (period === "month") return { start: startOfMonth(anchor), end: endOfMonth(anchor) };
+  return periodBounds(period, anchor);
+}
+
+export function shiftTodayAnchor(period: TodayPeriod, anchor: Date, direction: number) {
+  const next = new Date(anchor);
+  if (period === "week") next.setDate(next.getDate() + direction * 7);
+  else if (period === "month") next.setMonth(next.getMonth() + direction);
+  else next.setDate(next.getDate() + direction);
+  return next;
+}
+
+export function formatTodayPeriod(period: TodayPeriod, anchor: Date) {
+  if (period === "day") {
+    return new Intl.DateTimeFormat(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }).format(anchor);
+  }
+  if (period === "week") return formatPeriod("week", anchor);
+  return formatMonthLabel(anchor);
+}
+
+export function normalizeTodayTab(tab: string): "timeline" | "eventLog" {
+  return tab === "eventLog" ? "eventLog" : "timeline";
+}
+
+export function timelineAxisTicks(start: Date, end: Date) {
+  const span = Math.max(1, end.getTime() - start.getTime());
+  const hours = span / (60 * 60 * 1000);
+  if (hours <= 26) {
+    return [3, 6, 9, 12, 15, 18, 21].map((hour) => ({
+      fraction: hour / 24,
+      label: `${hour}:00`,
+    }));
+  }
+  if (hours <= 8 * 24) {
+    const days = Math.max(1, Math.round(hours / 24));
+    return Array.from({ length: days }, (_, index) => {
+      const date = new Date(start.getTime() + index * dayMs);
+      return {
+        fraction: (index + 0.5) / days,
+        label: date.toLocaleDateString(undefined, { weekday: "short" }),
+      };
+    });
+  }
+  const days = Math.max(1, Math.round(hours / 24));
+  const step = Math.max(1, Math.round(days / 7));
+  const ticks: Array<{ fraction: number; label: string }> = [];
+  for (let index = 0; index < days; index += step) {
+    const date = new Date(start.getTime() + index * dayMs);
+    ticks.push({
+      fraction: (index + 0.5) / days,
+      label: `${date.getDate()}`,
+    });
+  }
+  return ticks;
 }
 
 export function formatDuration(seconds: number) {
@@ -367,12 +430,13 @@ export function entriesToTimelines(
   entries: ScreenTimeEntry[],
   anchor: Date,
   extraDeviceKeys: Array<{ platform: string; name: string; timeZone?: string }> = [],
+  bounds?: { start: Date; end: Date },
 ): ScreenTimeDeviceTimeline[] {
-  const bounds = periodBounds("day", anchor);
+  const window = bounds ?? periodBounds("day", anchor);
   const byKey = new Map<string, ScreenTimeTimelineSegment[]>();
   for (const entry of entries) {
-    if (new Date(entry.endTimeUTC).getTime() <= bounds.start.getTime()) continue;
-    if (new Date(entry.startTimeUTC).getTime() >= bounds.end.getTime()) continue;
+    if (new Date(entry.endTimeUTC).getTime() <= window.start.getTime()) continue;
+    if (new Date(entry.startTimeUTC).getTime() >= window.end.getTime()) continue;
     const key = deviceKey(entry.platform, entry.deviceName);
     const list = byKey.get(key) ?? [];
     list.push(segmentFromEntry(entry));
@@ -389,8 +453,8 @@ export function entriesToTimelines(
       deviceName: name,
       devicePlatform: platform,
       timeZoneIdentifier: segments[0]?.timeZoneIdentifier ?? extraDeviceKeys.find((d) => deviceKey(d.platform, d.name) === key)?.timeZone ?? "",
-      dayStart: bounds.start.toISOString(),
-      dayEnd: bounds.end.toISOString(),
+      dayStart: window.start.toISOString(),
+      dayEnd: window.end.toISOString(),
       segments,
       blocks: blockSegments(segments),
     };
@@ -482,13 +546,12 @@ export function trackedSecondsByDay(entries: ScreenTimeEntry[], month: Date): Re
   return totals;
 }
 
-export function snapshotFromEntries(
+export function snapshotFromRange(
   entries: ScreenTimeEntry[],
-  period: InsightsPeriod,
-  anchor: Date,
+  bounds: { start: Date; end: Date },
   serverSummary?: { totalSeconds?: number; sessionCount?: number; categories?: ScreenTimeCategoryBreakdown[]; apps?: ScreenTimeAppBreakdown[] },
+  bucketSpec?: { period: InsightsPeriod; anchor: Date },
 ): ScreenTimeSnapshot {
-  const bounds = periodBounds(period, anchor);
   const inRange = entries.filter((entry) => {
     const start = new Date(entry.startTimeUTC).getTime();
     const end = new Date(entry.endTimeUTC).getTime();
@@ -509,9 +572,18 @@ export function snapshotFromEntries(
     listSegments: segments,
     categories,
     apps: serverSummary?.apps?.length ? serverSummary.apps : breakdowns.apps,
-    buckets: buildPeriodBuckets(segments, period, anchor),
-    trackedSecondsByDay: trackedSecondsByDay(inRange, anchor),
+    buckets: bucketSpec ? buildPeriodBuckets(segments, bucketSpec.period, bucketSpec.anchor) : [],
+    trackedSecondsByDay: trackedSecondsByDay(inRange, bounds.start),
   };
+}
+
+export function snapshotFromEntries(
+  entries: ScreenTimeEntry[],
+  period: InsightsPeriod,
+  anchor: Date,
+  serverSummary?: { totalSeconds?: number; sessionCount?: number; categories?: ScreenTimeCategoryBreakdown[]; apps?: ScreenTimeAppBreakdown[] },
+): ScreenTimeSnapshot {
+  return snapshotFromRange(entries, periodBounds(period, anchor), serverSummary, { period, anchor });
 }
 
 export { resolvedDeviceName };

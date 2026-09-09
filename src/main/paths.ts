@@ -10,6 +10,10 @@ export function settingsPath() {
   return join(userDataDir(), "app-settings.json");
 }
 
+export function calendarWorkspacePath() {
+  return join(userDataDir(), "calendar-workspace.json");
+}
+
 export function tokensPath() {
   return join(userDataDir(), "auth-tokens.dat");
 }

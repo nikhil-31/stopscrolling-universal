@@ -1,5 +1,5 @@
 appId: com.stopscrolling.desktop
-productName: stopscrolling
+productName: StopScrolling
 directories:
   output: dist
   buildResources: build
