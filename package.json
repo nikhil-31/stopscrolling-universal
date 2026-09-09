@@ -1,0 +1,42 @@
+{
+  "name": "stopscrolling",
+  "version": "0.1.0",
+  "description": "StopScrolling desktop tracker (Electron) — Mac feature parity without blocking",
+  "main": "./out/main/index.js",
+  "author": "StopScrolling",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "dev": "unset ELECTRON_RUN_AS_NODE && electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "unset ELECTRON_RUN_AS_NODE && electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "test:ui": "playwright test",
+    "test:ui:update": "playwright test --update-snapshots",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "lucide-react": "^1.43.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/node": "^22.15.3",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "electron": "^35.2.1",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^3.1.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.4",
+    "vitest": "^3.1.2"
+  }
+}
