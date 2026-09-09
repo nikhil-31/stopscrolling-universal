@@ -82,7 +82,7 @@ export function DayBoard({
             return (
               <button
                 key={block.id}
-                className={`day-block day-block-entry ${unlabeledBlock || live ? "is-hatched" : "is-solid"} ${live ? "is-live" : ""}`}
+                className={`day-block day-block-entry is-solid ${live ? "is-live" : ""}`}
                 style={{ ...style, ["--block-color" as string]: live || unlabeledBlock ? "#9e6bf0" : "#6c5ce7" }}
                 onClick={() => {
                   window.stopscrolling.selectInspector({ kind: "block", block });

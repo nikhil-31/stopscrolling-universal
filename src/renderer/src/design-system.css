@@ -1245,7 +1245,15 @@ button.data-row:hover { background: var(--surface-hover); }
   background: color-mix(in srgb, var(--block-color) 32%, var(--surface-solid));
   border: 1px solid color-mix(in srgb, var(--block-color) 70%, transparent);
 }
-.day-block-entry { border-left-width: 3px; }
+.day-block-entry,
+.day-block-entry.is-solid,
+.day-block-entry.is-hatched {
+  background: var(--block-color);
+  background-image: none;
+  border: 1px solid var(--block-color);
+  color: #fff;
+}
+.day-block-entry span { color: rgba(255, 255, 255, 0.82); }
 .day-block-label { left: 18%; right: 18%; padding: 0; }
 .day-block-task { left: 12%; right: 12%; }
 .day-block-event { border-left: 3px solid var(--block-color); }
