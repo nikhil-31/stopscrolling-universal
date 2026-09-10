@@ -22,6 +22,8 @@ import type {
   TodayPeriod,
   TodayTab,
   TrackingCapabilities,
+  Blocklist,
+  BlockingSchedule,
 } from "./types";
 
 export interface InspectorState {
@@ -51,6 +53,13 @@ export interface LeaderboardUiState {
   entries: LeaderboardEntry[];
   friends: FriendUser[];
   requests: FriendRequest[];
+  statusMessage: string;
+  loading: boolean;
+}
+
+export interface BlockingUiState {
+  schedules: BlockingSchedule[];
+  blocklists: Blocklist[];
   statusMessage: string;
   loading: boolean;
 }
@@ -93,5 +102,6 @@ export interface AppSnapshot {
     observability: string;
   };
   leaderboard: LeaderboardUiState;
+  blocking: BlockingUiState;
   commandPaletteOpen: boolean;
 }

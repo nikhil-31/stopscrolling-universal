@@ -32,6 +32,8 @@ export const IPC = {
   friendsAccept: "app:friends-accept",
   friendsDecline: "app:friends-decline",
   friendsRemove: "app:friends-remove",
+  createBlocklist: "app:create-blocklist",
+  createBlockingSchedule: "app:create-blocking-schedule",
   googleConnect: "app:google-connect",
   googleDisconnect: "app:google-disconnect",
   setCalendarView: "app:set-calendar-view",

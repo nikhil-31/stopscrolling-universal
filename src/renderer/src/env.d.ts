@@ -38,6 +38,8 @@ interface StopScrollingDesktop {
   friendsAccept: (id: number) => void;
   friendsDecline: (id: number) => void;
   friendsRemove: (id: number) => void;
+  createBlocklist: (input: import("@shared/types").BlocklistWritePayload) => void;
+  createBlockingSchedule: (input: import("@shared/types").BlockingScheduleWritePayload) => void;
   googleConnect: () => void;
   googleDisconnect: () => void;
   setCalendarView: (view: import("@shared/calendar-workspace").CalendarView) => void;

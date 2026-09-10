@@ -23,7 +23,7 @@ import {
 import { deviceKey, resolvedDeviceName, withComputedOnline } from "@shared/device";
 import { IPC } from "@shared/ipc";
 import { localTimeZone, toDateInput } from "@shared/platform";
-import type { AppSnapshot, AuthUiState, InspectorState, LeaderboardUiState } from "@shared/snapshot";
+import type { AppSnapshot, AuthUiState, BlockingUiState, InspectorState, LeaderboardUiState } from "@shared/snapshot";
 import {
   endOfMonth,
   entriesToTimelines,
@@ -48,6 +48,8 @@ import type {
   ScreenTimeTimelineSegment,
   TodayPeriod,
   TodayTab,
+  BlocklistWritePayload,
+  BlockingScheduleWritePayload,
 } from "@shared/types";
 import { isMfa, StopScrollingAPI } from "./api-client";
 import { loadCalendarWorkspace, saveCalendarWorkspace } from "./calendar-workspace-store";
@@ -98,6 +100,13 @@ const defaultLeaderboard = (): LeaderboardUiState => ({
   loading: false,
 });
 
+const defaultBlocking = (): BlockingUiState => ({
+  schedules: [],
+  blocklists: [],
+  statusMessage: "",
+  loading: false,
+});
+
 export class AppController {
   settings = loadSettings();
   navigation: NavigationItem = "today";
@@ -117,6 +126,7 @@ export class AppController {
   hiddenDeviceKeys = loadHiddenKeys();
   auth = defaultAuth();
   leaderboard = defaultLeaderboard();
+  blocking = defaultBlocking();
   calendarEvents: CalendarOverlayEvent[] = [];
   commandPaletteOpen = false;
   serverSummary: PeriodSummaryResponse | null = null;
@@ -251,6 +261,7 @@ export class AppController {
         observability: observabilityLogPath(),
       },
       leaderboard: this.leaderboard,
+      blocking: this.blocking,
       commandPaletteOpen: this.commandPaletteOpen,
     };
   }
@@ -268,6 +279,7 @@ export class AppController {
     this.inspector = { kind: "none", segment: null, block: null };
     this.statusMessage = `Showing ${item[0].toUpperCase()}${item.slice(1)}`;
     this.commandPaletteOpen = false;
+    if (item === "blocking") void this.refreshBlocking();
     void this.refreshVisibleRange();
     this.broadcast();
   }
@@ -423,6 +435,7 @@ export class AppController {
   logout() {
     this.api.setTokens(null);
     this.auth = { ...defaultAuth(), email: this.auth.email };
+    this.blocking = defaultBlocking();
     this.statusMessage = "Signed out";
     this.broadcast();
   }
@@ -515,6 +528,71 @@ export class AppController {
       block: payload.block ?? null,
     };
     this.broadcast();
+  }
+
+  async refreshBlocking() {
+    if (!this.auth.user) {
+      this.blocking = {
+        ...defaultBlocking(),
+        statusMessage: "Sign in on the Account screen to manage sessions and blocklists.",
+      };
+      this.broadcast();
+      return;
+    }
+    this.blocking.loading = true;
+    this.broadcast();
+    try {
+      const [blocklists, schedules] = await Promise.all([
+        this.api.blocklists(),
+        this.api.blockingSchedules(),
+      ]);
+      this.blocking.blocklists = blocklists;
+      this.blocking.schedules = schedules;
+      this.blocking.statusMessage = `${schedules.length} sessions · ${blocklists.length} blocklists`;
+      try {
+        this.tracker.registeredDevices = await this.api.devices();
+        this.tracker.deviceStatus = await this.api.deviceStatus();
+      } catch (error) {
+        logObservability(`Blocking device refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    } catch (error) {
+      this.blocking.statusMessage = error instanceof Error ? error.message : "Blocking data unavailable.";
+    } finally {
+      this.blocking.loading = false;
+      this.broadcast();
+    }
+  }
+
+  async createBlocklist(input: BlocklistWritePayload) {
+    if (!this.auth.user) {
+      this.blocking.statusMessage = "Sign in on the Account screen to create blocklists.";
+      this.broadcast();
+      return;
+    }
+    try {
+      await this.api.createBlocklist(input);
+      this.statusMessage = "Blocklist created.";
+      await this.refreshBlocking();
+    } catch (error) {
+      this.blocking.statusMessage = error instanceof Error ? error.message : "Could not create blocklist.";
+      this.broadcast();
+    }
+  }
+
+  async createBlockingSchedule(input: BlockingScheduleWritePayload) {
+    if (!this.auth.user) {
+      this.blocking.statusMessage = "Sign in on the Account screen to create sessions.";
+      this.broadcast();
+      return;
+    }
+    try {
+      await this.api.createBlockingSchedule(input);
+      this.statusMessage = "Session created.";
+      await this.refreshBlocking();
+    } catch (error) {
+      this.blocking.statusMessage = error instanceof Error ? error.message : "Could not create session.";
+      this.broadcast();
+    }
   }
 
   async refreshLeaderboard() {

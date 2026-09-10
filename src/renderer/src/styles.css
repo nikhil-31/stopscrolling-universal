@@ -199,7 +199,7 @@ button { cursor: pointer; }
 .pie { width: 180px; height: 180px; }
 
 .form { display: grid; gap: 10px; max-width: 440px; }
-.form input, .form select {
+.form input:not([type="checkbox"]):not([type="radio"]), .form select {
   width: 100%;
   border: 1px solid var(--border);
   background: var(--bg);

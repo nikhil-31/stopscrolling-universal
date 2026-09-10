@@ -321,3 +321,64 @@ export interface ScreenTimeApiPayload {
   process_name: string;
   time_zone: string;
 }
+
+export interface BlocklistEntry {
+  entry_id: string;
+  entry_type: "app" | "website";
+  identifier: string;
+  label: string;
+  created_at: string;
+}
+
+export interface Blocklist {
+  blocklist_id: string;
+  name: string;
+  entries: BlocklistEntry[];
+  entry_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BlocklistWritePayload {
+  name: string;
+  entries: Array<{ entry_type: "app" | "website"; identifier: string; label?: string }>;
+}
+
+export interface BlockingScheduleBlocklistRef {
+  blocklist_id: string;
+  name: string;
+}
+
+export interface BlockingScheduleDeviceRef {
+  device_id: string;
+  device_platform: string;
+  device_name: string;
+  label: string;
+}
+
+export interface BlockingSchedule {
+  schedule_id: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+  days_of_week: number[];
+  time_zone: string;
+  is_active: boolean;
+  blocklists: BlockingScheduleBlocklistRef[];
+  devices: BlockingScheduleDeviceRef[];
+  blocklist_count: number;
+  device_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BlockingScheduleWritePayload {
+  name: string;
+  start_time: string;
+  end_time: string;
+  days_of_week: number[];
+  time_zone: string;
+  blocklist_ids: string[];
+  device_ids: string[];
+  is_active?: boolean;
+}

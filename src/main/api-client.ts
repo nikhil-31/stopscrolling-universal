@@ -14,6 +14,10 @@ import type {
   ScreenTimeApiPayload,
   ScreenTimeSyncSession,
   SyncDeviceStatus,
+  Blocklist,
+  BlocklistWritePayload,
+  BlockingSchedule,
+  BlockingScheduleWritePayload,
 } from "@shared/types";
 import { logNetwork } from "./logger";
 
@@ -281,6 +285,30 @@ export class StopScrollingAPI {
 
   async declineFriendRequest(requestId: number) {
     return this.request<FriendRequest>(`api/friends/requests/${requestId}/decline/`, { method: "POST" });
+  }
+
+  async blocklists() {
+    return asList(await this.request<{ results?: Blocklist[] } | Blocklist[]>("api/blocklists/"));
+  }
+
+  async createBlocklist(input: BlocklistWritePayload) {
+    return this.request<Blocklist>("api/blocklists/", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  async blockingSchedules() {
+    return asList(
+      await this.request<{ results?: BlockingSchedule[] } | BlockingSchedule[]>("api/blocking-schedules/"),
+    );
+  }
+
+  async createBlockingSchedule(input: BlockingScheduleWritePayload) {
+    return this.request<BlockingSchedule>("api/blocking-schedules/", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   }
 }
 
