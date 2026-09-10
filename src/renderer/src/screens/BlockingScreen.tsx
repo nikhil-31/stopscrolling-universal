@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  blocklistEntriesFromText,
+  CATEGORY_FILTERS,
+  COMMON_FILTERS,
+  collectBlocklistEntries,
   defaultTimeZone,
   formatRemaining,
+  normalizeWebsite,
+  parseWebsiteList,
   remainingUntilEnd,
   scheduleRowKind,
   scheduleWhen,
@@ -11,11 +15,14 @@ import {
 import type { AppSnapshot } from "@shared/snapshot";
 import type { BlockingSchedule, DeviceListEntry } from "@shared/types";
 import {
+  Check,
+  CircleHelp,
   Laptop2,
   MonitorSmartphone,
   Plus,
   Shield,
   ShieldOff,
+  X,
 } from "lucide-react";
 import {
   Badge,
@@ -58,8 +65,12 @@ export function BlockingScreen({ state }: { state: AppSnapshot }) {
   const [selectedBlocklistIds, setSelectedBlocklistIds] = useState<string[]>([]);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
   const [blocklistName, setBlocklistName] = useState("");
-  const [websiteEntries, setWebsiteEntries] = useState("");
-  const [appEntries, setAppEntries] = useState("");
+  const [websiteDraft, setWebsiteDraft] = useState("");
+  const [multipleSitesText, setMultipleSitesText] = useState("");
+  const [showMultipleSites, setShowMultipleSites] = useState(false);
+  const [customWebsites, setCustomWebsites] = useState<string[]>([]);
+  const [selectedCommonIds, setSelectedCommonIds] = useState<string[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
 
   const blocking = state.blocking ?? { schedules: [], blocklists: [], statusMessage: "", loading: false };
   const devices = state.devices ?? [];
@@ -109,19 +120,40 @@ export function BlockingScreen({ state }: { state: AppSnapshot }) {
     setSelected(selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id]);
   }
 
+  function resetBlocklistForm() {
+    setBlocklistName("");
+    setWebsiteDraft("");
+    setMultipleSitesText("");
+    setShowMultipleSites(false);
+    setCustomWebsites([]);
+    setSelectedCommonIds([]);
+    setSelectedCategoryIds([]);
+  }
+
+  function addCustomWebsites(values: string[]) {
+    const next = values.filter(Boolean);
+    if (!next.length) return;
+    setCustomWebsites((current) => [...new Set([...current, ...next])]);
+    setWebsiteDraft("");
+    setMultipleSitesText("");
+    setShowMultipleSites(false);
+  }
+
   function submitBlocklist(event: FormEvent) {
     event.preventDefault();
-    const entries = blocklistEntriesFromText(websiteEntries, appEntries);
+    const entries = collectBlocklistEntries({
+      customWebsites,
+      commonFilterIds: selectedCommonIds,
+      categoryIds: selectedCategoryIds,
+    });
     if (!blocklistName.trim() || !entries.length) {
-      setFormError("Add a name and at least one website or app.");
+      setFormError("Add a name and at least one website or filter.");
       return;
     }
     setFormError(null);
     window.stopscrolling.createBlocklist({ name: blocklistName.trim(), entries });
     setShowCreateBlocklist(false);
-    setBlocklistName("");
-    setWebsiteEntries("");
-    setAppEntries("");
+    resetBlocklistForm();
   }
 
   function submitSchedule(event: FormEvent) {
@@ -324,30 +356,152 @@ export function BlockingScreen({ state }: { state: AppSnapshot }) {
             )}
           >
             {showCreateBlocklist ? (
-              <form className="form blocking-create" onSubmit={submitBlocklist}>
+              <form className="form blocking-create blocking-composer" onSubmit={submitBlocklist}>
                 {formError && showCreateBlocklist ? <p className="muted" role="alert">{formError}</p> : null}
-                <TextField
-                  label="Blocklist name"
-                  value={blocklistName}
-                  onChange={(event) => setBlocklistName(event.target.value)}
-                  placeholder="Social media"
-                  required
-                />
-                <TextField
-                  label="Websites"
-                  hint="Comma-separated domains"
-                  value={websiteEntries}
-                  onChange={(event) => setWebsiteEntries(event.target.value)}
-                  placeholder="twitter.com, reddit.com"
-                />
-                <TextField
-                  label="Apps"
-                  hint="Comma-separated bundle IDs"
-                  value={appEntries}
-                  onChange={(event) => setAppEntries(event.target.value)}
-                  placeholder="com.apple.Safari"
-                />
-                <Button variant="primary" type="submit" disabled={blocking.loading}>
+                <label className="field">
+                  <span className="sr-only">Name your blocklist</span>
+                  <input
+                    value={blocklistName}
+                    onChange={(event) => setBlocklistName(event.target.value)}
+                    placeholder="Name your blocklist"
+                    required
+                  />
+                </label>
+
+                <section className="blocking-composer-panel">
+                  <h3>Your custom websites</h3>
+                  {customWebsites.length ? (
+                    <div className="blocking-site-chips">
+                      {customWebsites.map((website) => (
+                        <button
+                          type="button"
+                          className="blocking-site-chip"
+                          key={website}
+                          onClick={() => setCustomWebsites((current) => current.filter((item) => item !== website))}
+                        >
+                          {website}
+                          <X size={12} aria-hidden="true" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {showMultipleSites ? (
+                    <>
+                      <textarea
+                        value={multipleSitesText}
+                        onChange={(event) => setMultipleSitesText(event.target.value)}
+                        placeholder="cnn.com, reddit.com"
+                        aria-label="Add multiple sites"
+                      />
+                      <div className="form-actions">
+                        <Button
+                          type="button"
+                          variant="primary"
+                          onClick={() => addCustomWebsites(parseWebsiteList(multipleSitesText))}
+                        >
+                          Add sites
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => {
+                            setShowMultipleSites(false);
+                            setMultipleSitesText("");
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="blocking-add-site">
+                        <input
+                          value={websiteDraft}
+                          onChange={(event) => setWebsiteDraft(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter") return;
+                            event.preventDefault();
+                            addCustomWebsites([normalizeWebsite(websiteDraft)]);
+                          }}
+                          placeholder="Add custom website (e.g. cnn.com)"
+                          aria-label="Add custom website"
+                        />
+                        <Button
+                          type="button"
+                          variant="primary"
+                          onClick={() => addCustomWebsites([normalizeWebsite(websiteDraft)])}
+                        >
+                          Add site
+                        </Button>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        icon={Plus}
+                        onClick={() => setShowMultipleSites(true)}
+                      >
+                        Add multiple sites
+                      </Button>
+                    </>
+                  )}
+                </section>
+
+                <section className="blocking-composer-panel">
+                  <h3>
+                    Common filters
+                    <span className="blocking-filter-help" title="Add a well-known site with one click.">
+                      <CircleHelp size={13} aria-hidden="true" />
+                      <span className="sr-only">Add a well-known site with one click.</span>
+                    </span>
+                  </h3>
+                  <div className="blocking-filter-grid">
+                    {COMMON_FILTERS.map((filter) => {
+                      const selected = selectedCommonIds.includes(filter.id);
+                      return (
+                        <button
+                          type="button"
+                          className={`blocking-filter-chip ${selected ? "is-selected" : ""}`}
+                          aria-pressed={selected}
+                          key={filter.id}
+                          onClick={() => toggleId(filter.id, selectedCommonIds, setSelectedCommonIds)}
+                        >
+                          <span className="blocking-filter-add">{selected ? <Check size={11} /> : <Plus size={11} />}</span>
+                          {filter.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="blocking-composer-panel">
+                  <h3>
+                    Category filters
+                    <span className="blocking-filter-help" title="Add a group of related sites.">
+                      <CircleHelp size={13} aria-hidden="true" />
+                      <span className="sr-only">Add a group of related sites.</span>
+                    </span>
+                  </h3>
+                  <div className="blocking-filter-grid">
+                    {CATEGORY_FILTERS.map((category) => {
+                      const selected = selectedCategoryIds.includes(category.id);
+                      return (
+                        <button
+                          type="button"
+                          className={`blocking-filter-chip ${selected ? "is-selected" : ""}`}
+                          aria-pressed={selected}
+                          key={category.id}
+                          onClick={() => toggleId(category.id, selectedCategoryIds, setSelectedCategoryIds)}
+                        >
+                          <span className="blocking-filter-add">{selected ? <Check size={11} /> : <Plus size={11} />}</span>
+                          {category.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <Button className="blocking-composer-submit" variant="primary" type="submit" disabled={blocking.loading}>
                   Create blocklist
                 </Button>
               </form>

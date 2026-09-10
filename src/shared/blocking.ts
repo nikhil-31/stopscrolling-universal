@@ -38,6 +38,97 @@ export function blocklistEntriesFromText(websites: string, apps: string) {
   ];
 }
 
+export function normalizeWebsite(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split(/[/?#]/)[0]
+    ?.trim() ?? "";
+}
+
+export function parseWebsiteList(value: string) {
+  return [...new Set(
+    value
+      .split(/[\s,]+/)
+      .map(normalizeWebsite)
+      .filter(Boolean),
+  )];
+}
+
+export const COMMON_FILTERS = [
+  { id: "amazon", label: "Amazon", identifiers: ["amazon.com"] },
+  { id: "instagram", label: "Instagram", identifiers: ["instagram.com"] },
+  { id: "pinterest", label: "Pinterest", identifiers: ["pinterest.com"] },
+  { id: "tiktok", label: "TikTok", identifiers: ["tiktok.com"] },
+  { id: "apple-news", label: "Apple News", identifiers: ["news.apple.com"] },
+  { id: "linkedin", label: "LinkedIn", identifiers: ["linkedin.com"] },
+  { id: "reddit", label: "Reddit", identifiers: ["reddit.com"] },
+  { id: "tinder", label: "Tinder", identifiers: ["tinder.com"] },
+  { id: "discord", label: "Discord", identifiers: ["discord.com"] },
+  { id: "mastodon", label: "Mastodon", identifiers: ["mastodon.social"] },
+  { id: "slack", label: "Slack", identifiers: ["slack.com"] },
+  { id: "tumblr", label: "Tumblr", identifiers: ["tumblr.com"] },
+  { id: "ebay", label: "eBay", identifiers: ["ebay.com"] },
+  { id: "netflix", label: "Netflix", identifiers: ["netflix.com"] },
+  { id: "snapchat", label: "Snapchat", identifiers: ["snapchat.com"] },
+  { id: "whatsapp", label: "WhatsApp", identifiers: ["whatsapp.com", "web.whatsapp.com"] },
+  { id: "facebook", label: "Facebook", identifiers: ["facebook.com"] },
+  { id: "nytimes", label: "NY Times", identifiers: ["nytimes.com"] },
+  { id: "spotify", label: "Spotify", identifiers: ["spotify.com"] },
+  { id: "x", label: "X", identifiers: ["x.com", "twitter.com"] },
+  { id: "gmail", label: "Gmail", identifiers: ["mail.google.com", "gmail.com"] },
+  { id: "okcupid", label: "OkCupid", identifiers: ["okcupid.com"] },
+  { id: "telegram", label: "Telegram", identifiers: ["telegram.org", "web.telegram.org"] },
+  { id: "youtube", label: "YouTube", identifiers: ["youtube.com"] },
+] as const;
+
+export const CATEGORY_FILTERS = [
+  { id: "social", label: "Social", identifiers: ["facebook.com", "instagram.com", "x.com", "twitter.com", "tiktok.com", "snapchat.com", "reddit.com", "tumblr.com", "pinterest.com", "threads.net"] },
+  { id: "politics", label: "Politics", identifiers: ["cnn.com", "foxnews.com", "politico.com", "thehill.com", "huffpost.com"] },
+  { id: "food-delivery", label: "Food Delivery", identifiers: ["doordash.com", "ubereats.com", "grubhub.com"] },
+  { id: "adult", label: "Adult", identifiers: ["pornhub.com", "xvideos.com", "xhamster.com", "onlyfans.com"] },
+  { id: "meta", label: "Meta", identifiers: ["facebook.com", "instagram.com", "threads.net", "whatsapp.com", "messenger.com", "meta.com"] },
+  { id: "shopping", label: "Shopping", identifiers: ["amazon.com", "ebay.com", "etsy.com", "walmart.com", "target.com"] },
+  { id: "games", label: "Games", identifiers: ["steampowered.com", "roblox.com", "twitch.tv", "epicgames.com"] },
+  { id: "ai", label: "AI", identifiers: ["chatgpt.com", "chat.openai.com", "claude.ai", "gemini.google.com"] },
+  { id: "messaging", label: "Messaging", identifiers: ["discord.com", "slack.com", "telegram.org", "whatsapp.com", "messenger.com"] },
+  { id: "tv-video", label: "TV/Video", identifiers: ["youtube.com", "netflix.com", "hulu.com", "disneyplus.com", "twitch.tv", "max.com"] },
+  { id: "time-wasters", label: "Time Wasters", identifiers: ["reddit.com", "tiktok.com", "youtube.com", "x.com", "instagram.com"] },
+  { id: "search", label: "Search Engines", identifiers: ["google.com", "bing.com", "duckduckgo.com", "yahoo.com"] },
+  { id: "sports", label: "Sports", identifiers: ["espn.com", "bleacherreport.com", "cbssports.com"] },
+  { id: "dating", label: "Dating", identifiers: ["tinder.com", "okcupid.com", "bumble.com", "hinge.co"] },
+  { id: "news", label: "News", identifiers: ["nytimes.com", "cnn.com", "bbc.com", "washingtonpost.com", "reuters.com"] },
+  { id: "blogs", label: "Blogs", identifiers: ["medium.com", "substack.com", "wordpress.com"] },
+  { id: "gambling", label: "Gambling", identifiers: ["draftkings.com", "fanduel.com", "bet365.com"] },
+] as const;
+
+export function collectBlocklistEntries(input: {
+  customWebsites: string[];
+  commonFilterIds: string[];
+  categoryIds: string[];
+}) {
+  const entries = new Map<string, { entry_type: "website"; identifier: string; label: string }>();
+
+  function add(identifier: string, label: string) {
+    const key = normalizeWebsite(identifier);
+    if (!key || entries.has(key)) return;
+    entries.set(key, { entry_type: "website", identifier: key, label });
+  }
+
+  for (const website of input.customWebsites) add(website, website);
+  for (const filter of COMMON_FILTERS) {
+    if (!input.commonFilterIds.includes(filter.id)) continue;
+    for (const identifier of filter.identifiers) add(identifier, filter.label);
+  }
+  for (const category of CATEGORY_FILTERS) {
+    if (!input.categoryIds.includes(category.id)) continue;
+    for (const identifier of category.identifiers) add(identifier, category.label);
+  }
+  return [...entries.values()];
+}
+
 export function clockLabel(time: string) {
   return time.slice(0, 5);
 }

@@ -90,7 +90,7 @@ describe("BlockingScreen", () => {
       />,
     );
     expect(screen.getByRole("status")).toHaveTextContent(/does not enforce blocks yet/i);
-    expect(screen.getByText("Deep work")).toBeVisible();
+    expect(screen.getByText(/Deep work/)).toBeVisible();
     expect(screen.getByText("Social")).toBeVisible();
     expect(screen.getByText("Studio Mac")).toBeVisible();
   });
@@ -118,12 +118,17 @@ describe("BlockingScreen", () => {
     expect(locked).toBeChecked();
 
     await user.click(screen.getByRole("button", { name: "Add Blocklist" }));
-    await user.type(screen.getByLabelText("Blocklist name"), "News");
-    await user.type(screen.getByPlaceholderText("twitter.com, reddit.com"), "nytimes.com");
+    await user.type(screen.getByPlaceholderText("Name your blocklist"), "News");
+    await user.type(screen.getByPlaceholderText("Add custom website (e.g. cnn.com)"), "nytimes.com");
+    await user.click(screen.getByRole("button", { name: "Add site" }));
+    await user.click(screen.getByRole("button", { name: "Instagram" }));
     await user.click(screen.getByRole("button", { name: "Create blocklist" }));
     expect(desktop.createBlocklist).toHaveBeenCalledWith({
       name: "News",
-      entries: [{ entry_type: "website", identifier: "nytimes.com" }],
+      entries: [
+        { entry_type: "website", identifier: "nytimes.com", label: "nytimes.com" },
+        { entry_type: "website", identifier: "instagram.com", label: "Instagram" },
+      ],
     });
 
     await user.click(screen.getByRole("button", { name: "Add Session" }));
@@ -160,9 +165,9 @@ describe("BlockingScreen", () => {
         })}
       />,
     );
-    expect(screen.getByText("Deep work")).toBeVisible();
+    expect(screen.getByText(/Deep work/)).toBeVisible();
     await user.click(screen.getByRole("tab", { name: "Session History" }));
-    expect(screen.queryByText("Deep work")).toBeNull();
+    expect(screen.queryByText(/Deep work/)).toBeNull();
     expect(screen.getByText("Completed sessions aren’t stored yet.")).toBeVisible();
   });
 });

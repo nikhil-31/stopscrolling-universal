@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   blocklistEntriesFromText,
+  collectBlocklistEntries,
   formatRemaining,
   isAlwaysActive,
   isScheduleRunningNow,
+  normalizeWebsite,
+  parseWebsiteList,
   remainingUntilEnd,
   scheduleRowKind,
 } from "./blocking";
@@ -34,6 +37,28 @@ describe("blocking helpers", () => {
       { entry_type: "website", identifier: "twitter.com" },
       { entry_type: "website", identifier: "reddit.com" },
       { entry_type: "app", identifier: "com.apple.Safari" },
+    ]);
+  });
+
+  it("collects custom sites, common filters, and categories without duplicates", () => {
+    expect(normalizeWebsite("https://www.CNN.com/world")).toBe("cnn.com");
+    expect(parseWebsiteList("cnn.com\nreddit.com, bbc.com")).toEqual(["cnn.com", "reddit.com", "bbc.com"]);
+    expect(collectBlocklistEntries({
+      customWebsites: ["cnn.com"],
+      commonFilterIds: ["instagram", "x"],
+      categoryIds: ["social"],
+    })).toEqual([
+      { entry_type: "website", identifier: "cnn.com", label: "cnn.com" },
+      { entry_type: "website", identifier: "instagram.com", label: "Instagram" },
+      { entry_type: "website", identifier: "x.com", label: "X" },
+      { entry_type: "website", identifier: "twitter.com", label: "X" },
+      { entry_type: "website", identifier: "facebook.com", label: "Social" },
+      { entry_type: "website", identifier: "tiktok.com", label: "Social" },
+      { entry_type: "website", identifier: "snapchat.com", label: "Social" },
+      { entry_type: "website", identifier: "reddit.com", label: "Social" },
+      { entry_type: "website", identifier: "tumblr.com", label: "Social" },
+      { entry_type: "website", identifier: "pinterest.com", label: "Social" },
+      { entry_type: "website", identifier: "threads.net", label: "Social" },
     ]);
   });
 
