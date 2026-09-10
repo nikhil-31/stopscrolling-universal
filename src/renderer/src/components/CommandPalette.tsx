@@ -11,7 +11,6 @@ import {
   Settings,
   Square,
   SunMedium,
-  Trophy,
   type LucideIcon,
 } from "lucide-react";
 import { EmptyState } from "./ui";
@@ -32,7 +31,6 @@ export function CommandPalette({ state }: { state: AppSnapshot }) {
       { title: "Go to Today", hint: "⌘1", group: "Navigate", icon: SunMedium, run: () => window.stopscrolling.navigate("today") },
       { title: "Go to Calendar", hint: "⌘2", group: "Navigate", icon: CalendarDays, run: () => window.stopscrolling.navigate("calendar") },
       { title: "Go to Insights", hint: "⌘3", group: "Navigate", icon: BarChart3, run: () => window.stopscrolling.navigate("insights") },
-      { title: "Go to Leaderboard", hint: "⌘6", group: "Navigate", icon: Trophy, run: () => window.stopscrolling.navigate("leaderboard") },
       { title: "Go to Account", hint: "⌘4", group: "Navigate", icon: CircleUserRound, run: () => window.stopscrolling.navigate("account") },
       {
         title: state.isTracking ? "Stop tracking" : "Start tracking",

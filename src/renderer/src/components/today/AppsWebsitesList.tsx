@@ -64,11 +64,11 @@ export function AppsWebsitesList({
 function displayName(app: ScreenTimeAppBreakdown) {
   const source = app.subtitle || app.label;
   try {
-    if (source.startsWith("http://") || source.startsWith("https://")) {
+    if (/^https?:\/\//i.test(source)) {
       return new URL(source).hostname.replace(/^www\./, "");
     }
   } catch {
-    return app.label;
+    /* fall through to the raw label */
   }
-  return app.label;
+  return source;
 }

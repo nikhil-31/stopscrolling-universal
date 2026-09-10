@@ -7,7 +7,6 @@ import {
   CircleUserRound,
   Sparkles,
   SunMedium,
-  Trophy,
   type LucideIcon,
 } from "lucide-react";
 import { StatusPill, Tooltip } from "./ui";
@@ -16,7 +15,6 @@ const icons: Record<string, LucideIcon> = {
   today: SunMedium,
   calendar: CalendarDays,
   insights: BarChart3,
-  leaderboard: Trophy,
   account: CircleUserRound,
 };
 

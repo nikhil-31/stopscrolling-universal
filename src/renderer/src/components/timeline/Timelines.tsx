@@ -119,7 +119,7 @@ function NativeMacTimeline({
               style={{
                 left: `${x * 100}%`,
                 width: `${width * 100}%`,
-                ["--block-color" as string]: compact ? "var(--brand)" : colorForCategory(block.items[0]?.id || block.category),
+                ["--block-color" as string]: "var(--brand)",
               }}
               aria-label={`${block.title}, ${formatClock(block.start)} to ${formatClock(block.end)}, ${formatDuration(block.durationSeconds)}`}
               onClick={() => window.stopscrolling.selectInspector({ kind: "block", block })}

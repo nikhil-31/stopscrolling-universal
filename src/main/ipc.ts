@@ -189,7 +189,6 @@ export function installApplicationMenu(controller: AppController) {
         { label: "Calendar", accelerator: "CmdOrCtrl+2", click: () => controller.selectNavigation("calendar") },
         { label: "Insights", accelerator: "CmdOrCtrl+3", click: () => controller.selectNavigation("insights") },
         { label: "Account", accelerator: "CmdOrCtrl+4", click: () => controller.selectNavigation("account") },
-        { label: "Leaderboard", accelerator: "CmdOrCtrl+6", click: () => controller.selectNavigation("leaderboard") },
         { type: "separator" },
         {
           label: "Command Palette…",

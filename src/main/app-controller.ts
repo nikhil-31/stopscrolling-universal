@@ -163,6 +163,7 @@ export class AppController {
   }
 
   snapshot(): AppSnapshot {
+    if (this.navigation === "leaderboard") this.navigation = "today";
     const entries = this.tracker.mergedEntries();
     const period = this.navigation === "insights" ? this.insightsPeriod : "day";
     const anchor =
@@ -262,12 +263,12 @@ export class AppController {
   }
 
   selectNavigation(item: NavigationItem) {
+    if (item === "leaderboard") item = "today";
     this.navigation = item;
     this.inspector = { kind: "none", segment: null, block: null };
     this.statusMessage = `Showing ${item[0].toUpperCase()}${item.slice(1)}`;
     this.commandPaletteOpen = false;
     void this.refreshVisibleRange();
-    if (item === "leaderboard") void this.refreshLeaderboard();
     this.broadcast();
   }
 

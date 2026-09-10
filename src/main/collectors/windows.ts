@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { looksLikeBrowser } from "@shared/browser";
+import { extractUrlFromText, looksLikeBrowser } from "@shared/browser";
 import type { ActivityCollector, ActivitySnapshot } from "./types";
 
 const execFileAsync = promisify(execFile);
@@ -39,7 +39,7 @@ export class WindowsCollector implements ActivityCollector {
       platform: "windows" as const,
       accessibilityGranted: true,
       urlCaptureSupported: false,
-      urlCaptureNote: "Window titles are captured. Address-bar URLs are best-effort on Windows.",
+      urlCaptureNote: "Window titles are captured, including URLs when the title includes them.",
       waylandLimited: false,
     };
   }
@@ -57,7 +57,7 @@ export class WindowsCollector implements ActivityCollector {
         appName: appName || "Unknown",
         bundleID,
         title: title || appName || "",
-        url: looksLikeBrowser(appName) ? "" : "",
+        url: looksLikeBrowser(appName) || looksLikeBrowser(bundleID) ? extractUrlFromText(title) : "",
       };
     } catch {
       return null;

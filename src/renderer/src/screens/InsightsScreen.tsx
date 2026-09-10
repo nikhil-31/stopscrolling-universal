@@ -64,7 +64,7 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
       {state.insightsTab === "overview" ? (
         <div className="stack">
           <TrendCard buckets={state.snapshot.buckets} period={state.insightsPeriod} />
-          <TimelineCard timelines={state.timelines} />
+          {state.insightsPeriod === "day" ? <TimelineCard timelines={state.timelines} /> : null}
         </div>
       ) : null}
       {state.insightsTab === "breakdown" ? (
