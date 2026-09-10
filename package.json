@@ -1,9 +1,9 @@
 {
   "name": "stopscrolling",
   "version": "0.1.0",
-  "description": "StopScrolling desktop tracker (Electron) — Mac feature parity without blocking",
+  "description": "Stop Scrolling desktop tracker (Electron) — Mac feature parity without blocking",
   "main": "./out/main/index.js",
-  "author": "StopScrolling",
+  "author": "Stop Scrolling",
   "license": "UNLICENSED",
   "private": true,
   "scripts": {

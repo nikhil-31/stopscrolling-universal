@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 
 const require = createRequire(import.meta.url);
 const APP_NAME = "StopScrolling";
+const DISPLAY_NAME = "Stop Scrolling";
 const BUNDLE_ID = "com.stopscrolling.desktop";
 
 function readPlist(plistPath) {
@@ -48,12 +49,21 @@ export function ensureMacosDevApp() {
     mkdirSync(dirname(destApp), { recursive: true });
     execFileSync("ditto", [sourceApp, destApp]);
     const plist = readPlist(destPlistPath);
-    plist.CFBundleName = APP_NAME;
-    plist.CFBundleDisplayName = APP_NAME;
+    plist.CFBundleName = DISPLAY_NAME;
+    plist.CFBundleDisplayName = DISPLAY_NAME;
     plist.CFBundleIdentifier = BUNDLE_ID;
     plist.NSAppleEventsUsageDescription =
-      "StopScrolling reads the frontmost app and browser tab so it can record screen time.";
+      "Stop Scrolling reads the frontmost app and browser tab so it can record screen time.";
     writePlist(destPlistPath, plist);
+  } else {
+    const plist = readPlist(destPlistPath);
+    if (plist.CFBundleName !== DISPLAY_NAME || plist.CFBundleDisplayName !== DISPLAY_NAME) {
+      plist.CFBundleName = DISPLAY_NAME;
+      plist.CFBundleDisplayName = DISPLAY_NAME;
+      plist.NSAppleEventsUsageDescription =
+        "Stop Scrolling reads the frontmost app and browser tab so it can record screen time.";
+      writePlist(destPlistPath, plist);
+    }
   }
   execFileSync("codesign", ["--force", "--sign", "-", "--identifier", BUNDLE_ID, destApp], {
     stdio: "ignore",

@@ -102,7 +102,7 @@ export class MacCollector implements ActivityCollector {
       urlCaptureSupported: true,
       urlCaptureNote: granted
         ? "Browser tab titles and URLs are read from the frontmost window."
-        : "Grant Accessibility so StopScrolling can record browser tabs and window titles. Approve Automation when macOS asks for Chrome, Safari, or Edge.",
+        : "Grant Accessibility so Stop Scrolling can record browser tabs and window titles. Approve Automation when macOS asks for Chrome, Safari, or Edge.",
       waylandLimited: false,
     };
   }

@@ -32,7 +32,7 @@ test("main screens and settings render in light and dark themes", async ({}, tes
 
     await capture(page, "today-light-desktop", testInfo);
 
-    for (const screen of ["calendar", "insights", "account"] as const) {
+    for (const screen of ["calendar", "insights", "blocking", "account"] as const) {
       await page.getByTestId(`sidebar-${screen}-item`).click();
       await expect(page.getByTestId(`sidebar-${screen}-item`)).toHaveAttribute("aria-current", "page");
       await capture(page, `${screen}-light`, testInfo);

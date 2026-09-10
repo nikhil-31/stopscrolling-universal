@@ -84,6 +84,8 @@ describe("application chrome", () => {
     expect(screen.getByRole("button", { name: /Today/ })).toHaveAttribute("aria-current", "page");
     await user.click(screen.getByRole("button", { name: /Calendar/ }));
     expect(desktop.navigate).toHaveBeenCalledWith("calendar");
+    await user.click(screen.getByRole("button", { name: /Blocking/ }));
+    expect(desktop.navigate).toHaveBeenCalledWith("blocking");
   });
 
   it("supports command keyboard selection and escape", async () => {
@@ -147,7 +149,7 @@ describe("account states", () => {
 
   it("renders labeled sign-in controls", () => {
     render(<AccountScreen state={snapshot({ auth } as Partial<AppSnapshot>)} />);
-    expect(screen.getByRole("heading", { name: "Welcome to stopscrolling" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Welcome to Stop Scrolling" })).toBeVisible();
     expect(screen.getByLabelText("Email address")).toBeVisible();
     expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
   });

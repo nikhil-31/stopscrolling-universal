@@ -98,7 +98,7 @@ export function LeaderboardScreen({ state }: { state: AppSnapshot }) {
         </div>
 
         <div className="stack">
-          <Grouped title="Invite a friend" description="Add someone by their StopScrolling email">
+          <Grouped title="Invite a friend" description="Add someone by their Stop Scrolling email">
             <form
               className="form"
               onSubmit={(event) => {

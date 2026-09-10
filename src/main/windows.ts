@@ -19,7 +19,7 @@ export function createMainWindow(controller: AppController) {
     height: 800,
     minWidth: 960,
     minHeight: 640,
-    title: "StopScrolling",
+    title: "Stop Scrolling",
     show: false,
     webPreferences: {
       preload: preloadPath(),

@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  Shield,
   Square,
   SunMedium,
   type LucideIcon,
@@ -31,7 +32,8 @@ export function CommandPalette({ state }: { state: AppSnapshot }) {
       { title: "Go to Today", hint: "⌘1", group: "Navigate", icon: SunMedium, run: () => window.stopscrolling.navigate("today") },
       { title: "Go to Calendar", hint: "⌘2", group: "Navigate", icon: CalendarDays, run: () => window.stopscrolling.navigate("calendar") },
       { title: "Go to Insights", hint: "⌘3", group: "Navigate", icon: BarChart3, run: () => window.stopscrolling.navigate("insights") },
-      { title: "Go to Account", hint: "⌘4", group: "Navigate", icon: CircleUserRound, run: () => window.stopscrolling.navigate("account") },
+      { title: "Go to Blocking", hint: "⌘4", group: "Navigate", icon: Shield, run: () => window.stopscrolling.navigate("blocking") },
+      { title: "Go to Account", hint: "⌘5", group: "Navigate", icon: CircleUserRound, run: () => window.stopscrolling.navigate("account") },
       {
         title: state.isTracking ? "Stop tracking" : "Start tracking",
         hint: "⇧⌘R",

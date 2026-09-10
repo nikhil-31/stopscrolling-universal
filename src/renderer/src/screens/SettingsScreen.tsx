@@ -24,7 +24,7 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
     <div className="settings-page">
       <header className="settings-header">
         <h1>Settings</h1>
-        <p>Personalize how StopScrolling tracks, looks, and connects.</p>
+        <p>Personalize how Stop Scrolling tracks, looks, and connects.</p>
       </header>
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Settings sections">
@@ -41,7 +41,7 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
             <Grouped title="General" description="Control the tracking lifecycle">
               <Toggle
                 label="Record screen time on launch"
-                description="Begin a private local session whenever StopScrolling opens."
+                description="Begin a private local session whenever Stop Scrolling opens."
                 checked={settings.startScreenTimeOnLaunch}
                 onChange={(startScreenTimeOnLaunch) => window.stopscrolling.updateSettings({ startScreenTimeOnLaunch })}
                 testId="settings-start-screen-time-on-launch"

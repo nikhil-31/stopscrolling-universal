@@ -1,5 +1,5 @@
 appId: com.stopscrolling.desktop
-productName: StopScrolling
+productName: Stop Scrolling
 directories:
   output: dist
   buildResources: build
@@ -16,8 +16,9 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    CFBundleDisplayName: StopScrolling
-    NSAppleEventsUsageDescription: StopScrolling reads the frontmost app and browser tab so it can record screen time.
+    CFBundleName: Stop Scrolling
+    CFBundleDisplayName: Stop Scrolling
+    NSAppleEventsUsageDescription: Stop Scrolling reads the frontmost app and browser tab so it can record screen time.
 win:
   target:
     - nsis

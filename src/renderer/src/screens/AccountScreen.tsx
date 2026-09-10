@@ -33,7 +33,7 @@ export function AccountScreen({ state }: { state: AppSnapshot }) {
           <div className="auth-brand">
             <span className="brand-mark"><Sparkles size={20} aria-hidden="true" /></span>
             <div>
-              <h2>{auth.mfaChallenge ? "Verify it’s you" : "Welcome to stopscrolling"}</h2>
+              <h2>{auth.mfaChallenge ? "Verify it’s you" : "Welcome to Stop Scrolling"}</h2>
               <p>{auth.mfaChallenge ? "One more step keeps your timeline secure." : "Your screen time, made intentional."}</p>
             </div>
           </div>

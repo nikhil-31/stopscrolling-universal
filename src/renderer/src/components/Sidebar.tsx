@@ -5,6 +5,7 @@ import {
   BarChart3,
   CalendarDays,
   CircleUserRound,
+  Shield,
   Sparkles,
   SunMedium,
   type LucideIcon,
@@ -15,6 +16,7 @@ const icons: Record<string, LucideIcon> = {
   today: SunMedium,
   calendar: CalendarDays,
   insights: BarChart3,
+  blocking: Shield,
   account: CircleUserRound,
 };
 
@@ -23,7 +25,7 @@ export function Sidebar({ state }: { state: AppSnapshot }) {
     <aside className="sidebar" data-testid="sidebar" aria-label="Primary navigation">
       <div className="brand">
         <span className="brand-mark"><Sparkles size={17} aria-hidden="true" /></span>
-        <span>stopscrolling</span>
+        <span>Stop Scrolling</span>
       </div>
       <div className="nav-section">Tracking</div>
       <nav>
@@ -50,7 +52,7 @@ export function Sidebar({ state }: { state: AppSnapshot }) {
       </nav>
       <div className="nav-section">Account</div>
       <nav>
-        <Tooltip label="Account · ⌘4">
+        <Tooltip label="Account · ⌘5">
           <button
             className={`nav-item ${state.navigation === "account" ? "active" : ""}`}
             data-testid="sidebar-account-item"
@@ -62,7 +64,7 @@ export function Sidebar({ state }: { state: AppSnapshot }) {
               <span className="nav-label">Account</span>
               <small className="nav-subtitle">Sign in & sync</small>
             </span>
-            <span className="nav-shortcut">⌘4</span>
+            <span className="nav-shortcut">⌘5</span>
           </button>
         </Tooltip>
       </nav>

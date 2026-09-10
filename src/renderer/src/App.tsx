@@ -6,6 +6,7 @@ import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { useAppState } from "./hooks/useAppState";
 import { AccountScreen } from "./screens/AccountScreen";
+import { BlockingScreen } from "./screens/BlockingScreen";
 import { CalendarScreen } from "./screens/CalendarScreen";
 import { InsightsScreen } from "./screens/InsightsScreen";
 import { LeaderboardScreen } from "./screens/LeaderboardScreen";
@@ -33,7 +34,7 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!state) return <div className="loading-page">Loading stopscrolling…</div>;
+  if (!state) return <div className="loading-page">Loading Stop Scrolling…</div>;
 
   return (
     <div className="app-shell" data-testid="app-root">
@@ -50,6 +51,7 @@ export function App() {
               {state.navigation === "today" && <TodayScreen state={state} />}
               {state.navigation === "calendar" && <CalendarScreen state={state} />}
               {state.navigation === "insights" && <InsightsScreen state={state} />}
+              {state.navigation === "blocking" && <BlockingScreen state={state} />}
               {state.navigation === "leaderboard" && <LeaderboardScreen state={state} />}
               {state.navigation === "account" && <AccountScreen state={state} />}
             </div>

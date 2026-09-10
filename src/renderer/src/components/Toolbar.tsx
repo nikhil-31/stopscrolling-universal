@@ -14,6 +14,7 @@ const subtitles: Record<AppSnapshot["navigation"], string> = {
   today: "Your activity, one intentional day at a time",
   calendar: "See where your time went",
   insights: "Patterns across your digital life",
+  blocking: "Sessions, schedules, and lists",
   leaderboard: "A little friendly accountability",
   account: "Profile, sync, and connected devices",
 };

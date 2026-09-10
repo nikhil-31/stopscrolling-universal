@@ -31,7 +31,7 @@ export function installTray(controller: AppController) {
 export function refreshTray(controller: AppController) {
   if (!tray) return;
   const tracking = controller.tracker.isTracking;
-  tray.setToolTip(tracking ? "stopscrolling: recording screen time" : "stopscrolling: screen time paused");
+  tray.setToolTip(tracking ? "Stop Scrolling: recording screen time" : "Stop Scrolling: screen time paused");
   const context = controller.tracker.currentContext;
   const email = controller.auth.user?.email;
   const pending = controller.tracker.pendingUploadCount;
@@ -78,7 +78,7 @@ export function refreshTray(controller: AppController) {
         },
     { type: "separator" },
     {
-      label: "Quit stopscrolling",
+      label: "Quit Stop Scrolling",
       click: () => {
         void controller.tracker.shutdown().then(() => app.quit());
       },
