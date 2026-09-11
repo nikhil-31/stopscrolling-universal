@@ -21,6 +21,7 @@ const icons: Record<string, LucideIcon> = {
 };
 
 export function Sidebar({ state }: { state: AppSnapshot }) {
+  const accountItem = navigationItems.find((item) => item.id === "account");
   return (
     <aside className="sidebar" data-testid="sidebar" aria-label="Primary navigation">
       <div className="brand">
@@ -52,7 +53,7 @@ export function Sidebar({ state }: { state: AppSnapshot }) {
       </nav>
       <div className="nav-section">Account</div>
       <nav>
-        <Tooltip label="Account · ⌘5">
+        <Tooltip label={`${accountItem?.label ?? "Account"} · ⌘${accountItem?.shortcutDigit ?? 5}`}>
           <button
             className={`nav-item ${state.navigation === "account" ? "active" : ""}`}
             data-testid="sidebar-account-item"
@@ -61,10 +62,10 @@ export function Sidebar({ state }: { state: AppSnapshot }) {
           >
             <span className="nav-icon"><CircleUserRound size={15} aria-hidden="true" /></span>
             <span className="nav-copy">
-              <span className="nav-label">Account</span>
-              <small className="nav-subtitle">Sign in & sync</small>
+              <span className="nav-label">{accountItem?.label ?? "Account"}</span>
+              <small className="nav-subtitle">{accountItem?.subtitle ?? "Sign in & sync"}</small>
             </span>
-            <span className="nav-shortcut">⌘5</span>
+            <span className="nav-shortcut">⌘{accountItem?.shortcutDigit ?? 5}</span>
           </button>
         </Tooltip>
       </nav>

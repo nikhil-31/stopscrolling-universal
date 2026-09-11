@@ -14,6 +14,9 @@ interface StopScrollingDesktop {
   setInsightsTab: (tab: import("@shared/types").InsightsTab) => void;
   setLeaderboardPeriod: (period: import("@shared/types").LeaderboardPeriod) => void;
   toggleTracking: () => void;
+  startTracking: () => void;
+  stopTracking: () => void;
+  addTimerBonus: (seconds?: number) => void;
   refresh: () => void;
   syncAll: () => void;
   pullFromServer: () => void;

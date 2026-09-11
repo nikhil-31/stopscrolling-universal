@@ -23,6 +23,7 @@ import {
 import { deviceKey, resolvedDeviceName, withComputedOnline } from "@shared/device";
 import { IPC } from "@shared/ipc";
 import { localTimeZone, toDateInput } from "@shared/platform";
+import { TIMER_BONUS_STEP_SECONDS, usesTodayWindow } from "@shared/timer";
 import type { AppSnapshot, AuthUiState, BlockingUiState, InspectorState, LeaderboardUiState } from "@shared/snapshot";
 import {
   endOfMonth,
@@ -167,13 +168,15 @@ export class AppController {
     if (this.navigation === "calendar") {
       return { start: startOfMonth(this.calendarMonth), end: endOfMonth(this.calendarMonth) };
     }
-    if (this.navigation === "today") return todayPeriodBounds(this.todayPeriod, this.todayDay);
+    if (usesTodayWindow(this.navigation)) {
+      return todayPeriodBounds(this.todayPeriod, this.todayDay);
+    }
     if (this.navigation === "insights") return periodBounds(this.insightsPeriod, this.insightsAnchor);
     return periodBounds("day", this.todayDay);
   }
 
   snapshot(): AppSnapshot {
-    if (this.navigation === "leaderboard") this.navigation = "today";
+    if (this.navigation === "leaderboard" || this.navigation === "timer") this.navigation = "today";
     const entries = this.tracker.mergedEntries();
     const period = this.navigation === "insights" ? this.insightsPeriod : "day";
     const anchor =
@@ -183,11 +186,12 @@ export class AppController {
           ? this.calendarAnchor
           : this.todayDay;
     const todayBounds = todayPeriodBounds(this.todayPeriod, this.todayDay);
-    const snapshotBounds = this.navigation === "today"
+    const todayWindow = usesTodayWindow(this.navigation);
+    const snapshotBounds = todayWindow
       ? todayBounds
       : periodBounds(period, anchor);
     const serverSummary = this.mappedServerSummary(snapshotBounds);
-    const snapshot = this.navigation === "today"
+    const snapshot = todayWindow
       ? snapshotFromRange(entries, todayBounds, serverSummary)
       : snapshotFromEntries(entries, period, anchor, serverSummary);
     const extraDevices = this.tracker.registeredDevices.map((device) => ({
@@ -200,7 +204,7 @@ export class AppController {
         entries,
         this.navigation === "calendar" ? this.calendarAnchor : this.todayDay,
         extraDevices,
-        this.navigation === "today" ? todayBounds : undefined,
+        todayWindow ? todayBounds : undefined,
       ),
       this.hiddenDeviceKeys,
     );
@@ -274,7 +278,7 @@ export class AppController {
   }
 
   selectNavigation(item: NavigationItem) {
-    if (item === "leaderboard") item = "today";
+    if (item === "leaderboard" || item === "timer") item = "today";
     this.navigation = item;
     this.inspector = { kind: "none", segment: null, block: null };
     this.statusMessage = `Showing ${item[0].toUpperCase()}${item.slice(1)}`;
@@ -319,7 +323,7 @@ export class AppController {
   startTimelineRefresh() {
     if (this.timelineTimer) clearInterval(this.timelineTimer);
     this.timelineTimer = setInterval(() => {
-      if (["today", "calendar", "insights"].includes(this.navigation)) {
+      if (["today", "timer", "calendar", "insights"].includes(this.navigation)) {
         void this.refreshVisibleRange();
       }
       if (this.auth.user) void this.tracker.heartbeat();
@@ -445,6 +449,15 @@ export class AppController {
     saveSettings(this.settings);
     this.api.setBaseUrl(this.settings.apiBaseUrl);
     this.broadcast();
+  }
+
+  addTimerBonus(seconds = TIMER_BONUS_STEP_SECONDS) {
+    const day = toDateInput(new Date());
+    const current = this.settings.timerBonusDay === day ? this.settings.timerBonusSeconds : 0;
+    this.updateSettings({
+      timerBonusSeconds: current + Math.max(0, seconds),
+      timerBonusDay: day,
+    });
   }
 
   setCalendarView(view: CalendarView) {
@@ -675,7 +688,7 @@ export class AppController {
       apps: this.serverSummary.apps?.map((app, index) => ({
         key: app.id ?? `${app.app_name ?? "app"}-${index}`,
         label: app.app_name ?? "Unknown",
-        subtitle: app.device_label || app.browser_app || app.category,
+        subtitle: app.browser_app || (app.is_website ? "Website" : app.category),
         category: app.category,
         seconds: app.seconds,
         percentage: app.percentage > 1 ? app.percentage / 100 : app.percentage,

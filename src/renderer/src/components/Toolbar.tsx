@@ -12,6 +12,7 @@ import { Button, IconButton, Tooltip } from "./ui";
 
 const subtitles: Record<AppSnapshot["navigation"], string> = {
   today: "Your activity, one intentional day at a time",
+  timer: "Remaining focus time for today",
   calendar: "See where your time went",
   insights: "Patterns across your digital life",
   blocking: "Sessions, schedules, and lists",
@@ -50,7 +51,7 @@ export function Toolbar({ state }: { state: AppSnapshot }) {
             onCurrent={() => window.stopscrolling.setInsightsAnchor(new Date().toISOString())}
           />
         ) : null}
-        {!["today", "calendar", "insights"].includes(state.navigation) ? (
+        {!["today", "timer", "calendar", "insights"].includes(state.navigation) ? (
           <span className="timezone">{localTimeZoneLabel()}</span>
         ) : null}
       </div>
@@ -58,7 +59,7 @@ export function Toolbar({ state }: { state: AppSnapshot }) {
         <Tooltip label="Refresh timeline">
           <IconButton label="Refresh timeline" icon={RefreshCw} onClick={() => window.stopscrolling.refresh()} />
         </Tooltip>
-        {["today", "calendar", "insights"].includes(state.navigation) ? (
+        {["today", "timer", "calendar", "insights"].includes(state.navigation) ? (
           <Tooltip label="Accessibility permission">
             <IconButton label="Accessibility permission" icon={Hand} onClick={() => window.stopscrolling.requestAccessibility()} />
           </Tooltip>

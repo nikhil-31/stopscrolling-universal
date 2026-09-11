@@ -202,9 +202,11 @@ function emptyTimeline(): ScreenTimeDeviceTimeline {
 export function VerticalDay({
   timelines,
   events = [],
+  className,
 }: {
   timelines: ScreenTimeDeviceTimeline[];
   events?: CalendarOverlayEvent[];
+  className?: string;
 }) {
   const blocks = timelines.flatMap((timeline) => timeline.blocks);
   const fallbackStart = new Date();
@@ -220,7 +222,7 @@ export function VerticalDay({
   const nowY = ((now - dayStart.getTime()) / (dayEnd.getTime() - dayStart.getTime())) * height;
 
   return (
-    <div className="vertical-day-shell">
+    <div className={["vertical-day-shell", className].filter(Boolean).join(" ")}>
       <div
         className="vertical-day"
         role="img"
@@ -254,7 +256,9 @@ export function VerticalDay({
                 onClick={() => window.stopscrolling.selectInspector({ kind: "block", block })}
               >
                 <strong>{block.title}</strong>
-                {blockHeight > 34 ? <span className="block-time">{formatClock(block.start)}</span> : null}
+                {blockHeight > 34 ? (
+                  <span className="block-time">{formatClock(block.start)} – {formatClock(block.end)}</span>
+                ) : null}
               </button>
             );
           })}

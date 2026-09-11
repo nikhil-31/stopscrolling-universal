@@ -10,6 +10,7 @@ import { BlockingScreen } from "./screens/BlockingScreen";
 import { CalendarScreen } from "./screens/CalendarScreen";
 import { InsightsScreen } from "./screens/InsightsScreen";
 import { LeaderboardScreen } from "./screens/LeaderboardScreen";
+import { TimerScreen } from "./screens/TimerScreen";
 import { TodayScreen } from "./screens/TodayScreen";
 
 export function App() {
@@ -47,8 +48,9 @@ export function App() {
             data-testid="content-area"
             aria-label={`${state.navigation} content`}
           >
-            <div className={`content-canvas ${["today", "calendar"].includes(state.navigation) ? "content-canvas-calendar" : ""}`} key={state.navigation}>
+            <div className={`content-canvas ${["today", "timer", "calendar"].includes(state.navigation) ? "content-canvas-calendar" : ""}`} key={state.navigation}>
               {state.navigation === "today" && <TodayScreen state={state} />}
+              {state.navigation === "timer" && <TimerScreen state={state} />}
               {state.navigation === "calendar" && <CalendarScreen state={state} />}
               {state.navigation === "insights" && <InsightsScreen state={state} />}
               {state.navigation === "blocking" && <BlockingScreen state={state} />}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { navigationItems } from "@shared/navigation";
 import type { AppSnapshot } from "@shared/snapshot";
 import {
   BarChart3,
@@ -24,16 +25,26 @@ interface PaletteAction {
   run: () => void;
 }
 
+const navIcons: Record<string, LucideIcon> = {
+  today: SunMedium,
+  calendar: CalendarDays,
+  insights: BarChart3,
+  blocking: Shield,
+  account: CircleUserRound,
+};
+
 export function CommandPalette({ state }: { state: AppSnapshot }) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const actions = useMemo(
     (): PaletteAction[] => [
-      { title: "Go to Today", hint: "⌘1", group: "Navigate", icon: SunMedium, run: () => window.stopscrolling.navigate("today") },
-      { title: "Go to Calendar", hint: "⌘2", group: "Navigate", icon: CalendarDays, run: () => window.stopscrolling.navigate("calendar") },
-      { title: "Go to Insights", hint: "⌘3", group: "Navigate", icon: BarChart3, run: () => window.stopscrolling.navigate("insights") },
-      { title: "Go to Blocking", hint: "⌘4", group: "Navigate", icon: Shield, run: () => window.stopscrolling.navigate("blocking") },
-      { title: "Go to Account", hint: "⌘5", group: "Navigate", icon: CircleUserRound, run: () => window.stopscrolling.navigate("account") },
+      ...navigationItems.map((item) => ({
+        title: `Go to ${item.label}`,
+        hint: `⌘${item.shortcutDigit}`,
+        group: "Navigate" as const,
+        icon: navIcons[item.id] ?? SunMedium,
+        run: () => window.stopscrolling.navigate(item.id),
+      })),
       {
         title: state.isTracking ? "Stop tracking" : "Start tracking",
         hint: "⇧⌘R",

@@ -1,4 +1,4 @@
-export type NavigationItem = "today" | "calendar" | "insights" | "blocking" | "leaderboard" | "account";
+export type NavigationItem = "today" | "timer" | "calendar" | "insights" | "blocking" | "leaderboard" | "account";
 
 export type InsightsPeriod = "day" | "week" | "month" | "year";
 export type InsightsTab = "overview" | "breakdown" | "sessions";
@@ -304,6 +304,8 @@ export interface AppSettings {
   showGoogleCalendarEvents: boolean;
   googleClientId: string;
   dailyWorkTargetSeconds: number;
+  timerBonusSeconds: number;
+  timerBonusDay: string;
 }
 
 export interface ScreenTimeApiPayload {

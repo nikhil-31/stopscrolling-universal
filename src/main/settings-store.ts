@@ -11,6 +11,8 @@ export const defaultSettings = (): AppSettings => ({
   showGoogleCalendarEvents: false,
   googleClientId: "",
   dailyWorkTargetSeconds: 8 * 60 * 60,
+  timerBonusSeconds: 0,
+  timerBonusDay: "",
 });
 
 export function loadSettings(): AppSettings {

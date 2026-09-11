@@ -51,6 +51,15 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.toggleTracking, () => {
     void (controller.tracker.isTracking ? controller.tracker.stopTracking() : controller.tracker.startTracking());
   });
+  ipcMain.on(IPC.startTracking, () => {
+    void controller.tracker.startTracking();
+  });
+  ipcMain.on(IPC.stopTracking, () => {
+    void controller.tracker.stopTracking();
+  });
+  ipcMain.on(IPC.addTimerBonus, (_event, seconds?: number) => {
+    controller.addTimerBonus(seconds);
+  });
   ipcMain.on(IPC.refresh, () => {
     void controller.refreshVisibleRange();
   });

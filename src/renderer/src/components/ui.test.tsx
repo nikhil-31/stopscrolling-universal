@@ -86,11 +86,16 @@ describe("application chrome", () => {
     expect(desktop.navigate).toHaveBeenCalledWith("calendar");
     await user.click(screen.getByRole("button", { name: /Blocking/ }));
     expect(desktop.navigate).toHaveBeenCalledWith("blocking");
+    expect(screen.queryByRole("button", { name: /Timer/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Account/ })).toHaveTextContent("⌘5");
   });
 
   it("supports command keyboard selection and escape", async () => {
     const user = userEvent.setup();
     const view = render(<CommandPalette state={snapshot()} />);
+    expect(screen.queryByRole("button", { name: /Go to Timer/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Go to Calendar/ })).toHaveTextContent("⌘2");
+    expect(screen.getByRole("button", { name: /Go to Account/ })).toHaveTextContent("⌘5");
     await user.type(screen.getByRole("textbox", { name: "Search commands" }), "calendar");
     await user.keyboard("{Enter}");
     expect(desktop.navigate).toHaveBeenCalledWith("calendar");
