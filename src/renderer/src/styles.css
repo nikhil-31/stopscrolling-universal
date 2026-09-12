@@ -126,9 +126,9 @@ button { cursor: pointer; }
   border-radius: 8px;
   padding: 7px 12px;
 }
-.button.primary { background: var(--accent); color: white; border-color: transparent; }
-.button.ghost { background: transparent; }
-.button.danger { color: var(--danger); }
+.button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+.button.ghost { background: var(--surface, var(--card)); }
+.button.danger { color: white; background: var(--danger); border-color: var(--danger); }
 
 .card, .grouped-section {
   background: var(--card);

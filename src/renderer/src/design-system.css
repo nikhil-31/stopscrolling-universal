@@ -16,6 +16,8 @@
   --brand: #b00020;
   --brand-strong: #8c001a;
   --brand-soft: rgba(176, 0, 32, 0.12);
+  --on-brand: #ffffff;
+  --on-danger: #ffffff;
   --violet: #8b5cf6;
   --violet-soft: rgba(139, 92, 246, 0.12);
   --success: #12966f;
@@ -61,6 +63,8 @@
     --brand: #cf6679;
     --brand-strong: #e08998;
     --brand-soft: rgba(207, 102, 121, 0.16);
+    --on-brand: #121212;
+    --on-danger: #121212;
     --violet: #ccc2dc;
     --violet-soft: rgba(204, 194, 220, 0.16);
     --success: #81c995;
@@ -95,6 +99,8 @@
   --brand: #cf6679;
   --brand-strong: #e08998;
   --brand-soft: rgba(207, 102, 121, 0.16);
+  --on-brand: #121212;
+  --on-danger: #121212;
   --violet: #ccc2dc;
   --violet-soft: rgba(204, 194, 220, 0.16);
   --success: #81c995;
@@ -381,23 +387,24 @@ a { color: var(--brand); }
 .button { min-height: 36px; padding: 0 13px; font-size: 12px; }
 .button-sm { min-height: 30px; padding: 0 10px; font-size: 11px; }
 .button-primary {
-  color: white;
-  background: linear-gradient(135deg, var(--brand), var(--violet));
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--brand) 20%, transparent);
+  color: var(--on-brand);
+  background: var(--brand);
+  border-color: var(--brand);
 }
-.button-primary:hover { filter: brightness(1.05); }
-.button-secondary { background: var(--surface); border-color: var(--line); }
+.button-primary:hover { background: var(--brand-strong); border-color: var(--brand-strong); }
+.button-secondary { color: var(--text); background: var(--surface-solid); border-color: var(--line); }
 .button-secondary:hover { background: var(--surface-raised); border-color: var(--line-strong); }
-.button-ghost { color: var(--text-secondary); background: transparent; }
-.button-ghost:hover { color: var(--text); background: var(--surface-hover); }
-.button-danger { color: var(--danger); background: var(--danger-soft); }
-.button-danger:hover { background: color-mix(in srgb, var(--danger) 17%, transparent); }
+.button-ghost { color: var(--text); background: var(--surface-subtle); border-color: var(--line); }
+.button-ghost:hover { background: var(--surface-hover); }
+.button-danger { color: var(--on-danger); background: var(--danger); border-color: var(--danger); }
+.button-danger:hover { filter: brightness(1.08); }
 .icon-button {
   width: 34px;
   height: 34px;
   padding: 0;
   color: var(--text-secondary);
-  background: transparent;
+  background: var(--surface-solid);
+  border-color: var(--line);
 }
 .icon-button:hover { color: var(--text); background: var(--surface-hover); }
 
@@ -1126,7 +1133,7 @@ button.data-row:hover { background: var(--surface-hover); }
 }
 .month-day:hover { color: var(--text); border-color: var(--line-strong); }
 .month-day.outside { opacity: 0.32; }
-.month-day.selected { color: white; background: linear-gradient(135deg, var(--brand), var(--violet)); box-shadow: 0 4px 12px color-mix(in srgb, var(--brand) 22%, transparent); }
+.month-day.selected { color: var(--on-brand); background: var(--brand); }
 .calendar-layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 16px; align-items: start; }
 .calendar-side { position: sticky; top: 0; }
 .calendar-event-list { display: grid; gap: 7px; }
