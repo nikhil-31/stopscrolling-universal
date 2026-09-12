@@ -9,10 +9,8 @@ const views: CalendarView[] = ["day", "week", "month"];
 
 export function CalendarChrome({
   state,
-  onOpenMore,
 }: {
   state: AppSnapshot;
-  onOpenMore: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const anchor = new Date(state.calendarAnchor);
@@ -74,16 +72,6 @@ export function CalendarChrome({
                     Connect Google Calendar
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  className="calendar-more-action"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onOpenMore();
-                  }}
-                >
-                  Manage labels
-                </button>
               </div>
             ) : null}
           </div>

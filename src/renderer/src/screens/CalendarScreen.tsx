@@ -4,7 +4,6 @@ import { CalendarChrome } from "../components/calendar/CalendarChrome";
 import { CalendarDialogs } from "../components/calendar/CalendarDialogs";
 import { DayBoard } from "../components/calendar/DayBoard";
 import { MonthHeatmap, WeekStrip } from "../components/calendar/PeriodBoards";
-import { ReviewEntriesBar } from "../components/calendar/ReviewEntriesBar";
 import { SummarySidebar } from "../components/calendar/SummarySidebar";
 import type { CalendarPrompt } from "../components/calendar/types";
 
@@ -13,14 +12,13 @@ export function CalendarScreen({ state }: { state: AppSnapshot }) {
 
   return (
     <div className="calendar-page" data-testid="calendar-page">
-      <CalendarChrome state={state} onOpenMore={() => setPrompt({ kind: "labels" })} />
+      <CalendarChrome state={state} />
       <div className="calendar-day-layout">
-        {state.calendarView === "day" ? <DayBoard state={state} onPrompt={setPrompt} /> : null}
+        {state.calendarView === "day" ? <DayBoard state={state} /> : null}
         {state.calendarView === "week" ? <WeekStrip state={state} /> : null}
         {state.calendarView === "month" ? <MonthHeatmap state={state} /> : null}
         <SummarySidebar state={state} onEditTarget={() => setPrompt({ kind: "target" })} />
       </div>
-      <ReviewEntriesBar state={state} onOpen={() => setPrompt({ kind: "review" })} />
       <CalendarDialogs state={state} prompt={prompt} onClose={() => setPrompt(null)} />
     </div>
   );

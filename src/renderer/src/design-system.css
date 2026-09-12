@@ -1207,7 +1207,7 @@ button.data-row:hover { background: var(--surface-hover); }
 }
 .day-board-head, .day-board-body {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1.5fr) minmax(70px, 0.7fr) minmax(70px, 0.7fr) minmax(140px, 1.1fr);
+  min-width: 100%;
 }
 .day-board-head {
   position: sticky;
@@ -1219,7 +1219,13 @@ button.data-row:hover { background: var(--surface-hover); }
   font-size: 10px;
   font-weight: 700;
 }
-.day-board-head span { padding: 8px 8px 7px; border-left: 1px solid var(--line); }
+.day-board-head span {
+  padding: 8px 8px 7px;
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .day-board-head span:first-child { border-left: 0; }
 .day-board-body { position: relative; overflow: visible; }
 .day-board-hours { color: var(--text-tertiary); font-size: 10px; font-variant-numeric: tabular-nums; }
@@ -1263,9 +1269,13 @@ button.data-row:hover { background: var(--surface-hover); }
 .day-block-entry.is-solid,
 .day-block-entry.is-hatched {
   --block-color: var(--brand);
-  background: var(--block-color);
-  background-image: none;
-  border: 1px solid var(--block-color);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--block-color) 92%, white),
+    var(--block-color)
+  );
+  border: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
   color: #fff;
 }
 .day-block-entry span { color: rgba(255, 255, 255, 0.82); }
