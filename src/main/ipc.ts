@@ -1,6 +1,6 @@
 import { BrowserWindow, Menu, app, ipcMain, shell } from "electron";
 import { IPC } from "@shared/ipc";
-import type { AppSettings, InsightsPeriod, LeaderboardPeriod, NavigationItem, TodayPeriod, TodayTab, InsightsTab, BlocklistWritePayload, BlockingScheduleWritePayload } from "@shared/types";
+import type { AppSettings, InsightsPeriod, LeaderboardPeriod, NavigationItem, TodayPeriod, TodayTab, InsightsTab, BlocklistWritePayload, BlocklistUpdatePayload, BlockingScheduleUpdatePayload, BlockingScheduleWritePayload } from "@shared/types";
 import type { CalendarView } from "@shared/calendar-workspace";
 import type { AppController } from "./app-controller";
 import { refreshTray } from "./tray";
@@ -127,8 +127,14 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.createBlocklist, (_event, input: BlocklistWritePayload) => {
     void controller.createBlocklist(input);
   });
+  ipcMain.on(IPC.updateBlocklist, (_event, input: BlocklistUpdatePayload) => {
+    void controller.updateBlocklist(input);
+  });
   ipcMain.on(IPC.createBlockingSchedule, (_event, input: BlockingScheduleWritePayload) => {
     void controller.createBlockingSchedule(input);
+  });
+  ipcMain.on(IPC.updateBlockingSchedule, (_event, input: BlockingScheduleUpdatePayload) => {
+    void controller.updateBlockingSchedule(input);
   });
   ipcMain.on(IPC.googleConnect, () => {
     void controller.google.connect(controller.settings.googleClientId).then(() => {

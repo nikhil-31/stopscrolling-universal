@@ -17,6 +17,7 @@ import type {
   Blocklist,
   BlocklistWritePayload,
   BlockingSchedule,
+  BlockingScheduleUpdatePayload,
   BlockingScheduleWritePayload,
 } from "@shared/types";
 import { logNetwork } from "./logger";
@@ -298,6 +299,13 @@ export class StopScrollingAPI {
     });
   }
 
+  async updateBlocklist(id: string, input: BlocklistWritePayload) {
+    return this.request<Blocklist>(`api/blocklists/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+
   async blockingSchedules() {
     return asList(
       await this.request<{ results?: BlockingSchedule[] } | BlockingSchedule[]>("api/blocking-schedules/"),
@@ -307,6 +315,13 @@ export class StopScrollingAPI {
   async createBlockingSchedule(input: BlockingScheduleWritePayload) {
     return this.request<BlockingSchedule>("api/blocking-schedules/", {
       method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  async updateBlockingSchedule(id: string, input: BlockingScheduleWritePayload) {
+    return this.request<BlockingSchedule>(`api/blocking-schedules/${id}/`, {
+      method: "PATCH",
       body: JSON.stringify(input),
     });
   }

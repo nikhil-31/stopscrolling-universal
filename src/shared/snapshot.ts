@@ -27,9 +27,30 @@ import type {
 } from "./types";
 
 export interface InspectorState {
-  kind: "none" | "segment" | "block";
+  kind: "none" | "segment" | "block" | "schedule";
   segment: ScreenTimeTimelineSegment | null;
   block: ScreenTimeSessionBlock | null;
+  schedule: BlockingSchedule | null;
+}
+
+export interface InspectorSelection {
+  kind: InspectorState["kind"];
+  segment?: ScreenTimeTimelineSegment | null;
+  block?: ScreenTimeSessionBlock | null;
+  schedule?: BlockingSchedule | null;
+}
+
+export function emptyInspector(): InspectorState {
+  return { kind: "none", segment: null, block: null, schedule: null };
+}
+
+export function inspectorFromSelection(payload: InspectorSelection): InspectorState {
+  return {
+    kind: payload.kind,
+    segment: payload.kind === "segment" ? payload.segment ?? null : null,
+    block: payload.kind === "block" ? payload.block ?? null : null,
+    schedule: payload.kind === "schedule" ? payload.schedule ?? null : null,
+  };
 }
 
 export interface AuthUiState {

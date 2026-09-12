@@ -2,13 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   blocklistEntriesFromText,
   collectBlocklistEntries,
+  decomposeBlocklistEntries,
   formatRemaining,
   isAlwaysActive,
   isScheduleRunningNow,
   normalizeWebsite,
   parseWebsiteList,
   remainingUntilEnd,
+  scheduleDeviceLabel,
   scheduleRowKind,
+  scheduleStatusLabel,
+  scheduleToComposerDraft,
 } from "./blocking";
 import type { BlockingSchedule } from "./types";
 
@@ -62,6 +66,47 @@ describe("blocking helpers", () => {
     ]);
   });
 
+  it("maps saved entries back onto custom sites and complete filters", () => {
+    expect(decomposeBlocklistEntries([
+      { entry_type: "website", identifier: "instagram.com", label: "Instagram" },
+      { entry_type: "website", identifier: "x.com", label: "X" },
+      { entry_type: "app", identifier: "com.apple.Safari", label: "Safari" },
+    ])).toEqual({
+      customWebsites: ["x.com"],
+      commonFilterIds: ["instagram"],
+      categoryIds: [],
+      appEntries: [{ entry_type: "app", identifier: "com.apple.Safari", label: "Safari" }],
+    });
+    expect(decomposeBlocklistEntries([
+      { entry_type: "website", identifier: "whatsapp.com" },
+      { entry_type: "website", identifier: "web.whatsapp.com" },
+    ]).commonFilterIds).toEqual(["whatsapp"]);
+  });
+
+  it("maps a schedule onto the session composer", () => {
+    expect(scheduleToComposerDraft(schedule({
+      start_time: "16:00:00",
+      end_time: "18:00:00",
+      time_zone: "UTC",
+      blocklists: [{ blocklist_id: "list-1", name: "Social" }],
+      devices: [{
+        device_id: "d1",
+        device_platform: "macos",
+        device_name: "Studio Mac",
+        label: "Mac",
+      }],
+    }))).toEqual({
+      name: "Work focus",
+      startTime: "16:00",
+      endTime: "18:00",
+      timeZone: "UTC",
+      selectedDays: [0, 1, 2, 3, 4],
+      selectedBlocklistIds: ["list-1"],
+      selectedDeviceIds: ["d1"],
+      isActive: true,
+    });
+  });
+
   it("detects a running weekday session", () => {
     const now = new Date("2026-09-10T10:30:00");
     expect(now.getDay()).toBe(4);
@@ -85,5 +130,16 @@ describe("blocking helpers", () => {
   it("labels named sessions outside the window", () => {
     const now = new Date("2026-09-10T20:00:00");
     expect(scheduleRowKind(schedule(), now)).toBe("named");
+  });
+
+  it("names devices and session status", () => {
+    expect(scheduleStatusLabel("current")).toBe("Running");
+    expect(scheduleStatusLabel("schedule")).toBe("Always Active");
+    expect(scheduleDeviceLabel({
+      device_id: "d1",
+      device_platform: "macos",
+      device_name: "Studio Mac",
+      label: "Mac",
+    })).toBe("Studio Mac");
   });
 });

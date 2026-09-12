@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC } from "@shared/ipc";
-import type { AppSnapshot } from "@shared/snapshot";
+import type { AppSnapshot, InspectorSelection } from "@shared/snapshot";
 import type {
   CalendarAssignment,
   CalendarLabel,
@@ -14,7 +14,6 @@ import type {
   LeaderboardPeriod,
   NavigationItem,
   ScreenTimeSessionBlock,
-  ScreenTimeTimelineSegment,
   TodayTab,
   TodayPeriod,
 } from "@shared/types";
@@ -46,11 +45,7 @@ const api = {
   requestAccessibility: () => ipcRenderer.send(IPC.requestAccessibility),
   openSettings: () => ipcRenderer.send(IPC.openSettings),
   openPath: (path: string) => ipcRenderer.send(IPC.openPath, path),
-  selectInspector: (payload: {
-    kind: "none" | "segment" | "block";
-    segment?: ScreenTimeTimelineSegment | null;
-    block?: ScreenTimeSessionBlock | null;
-  }) => ipcRenderer.send(IPC.selectInspector, payload),
+  selectInspector: (payload: InspectorSelection) => ipcRenderer.send(IPC.selectInspector, payload),
   setCommandPalette: (open: boolean) => ipcRenderer.send(IPC.commandPalette, open),
   updateSettings: (patch: Partial<AppSettings>) => ipcRenderer.send(IPC.updateSettings, patch),
   setDeviceVisible: (key: string, visible: boolean) => ipcRenderer.send(IPC.setDeviceVisible, { key, visible }),
@@ -65,7 +60,9 @@ const api = {
   friendsDecline: (id: number) => ipcRenderer.send(IPC.friendsDecline, id),
   friendsRemove: (id: number) => ipcRenderer.send(IPC.friendsRemove, id),
   createBlocklist: (input: import("@shared/types").BlocklistWritePayload) => ipcRenderer.send(IPC.createBlocklist, input),
+  updateBlocklist: (input: import("@shared/types").BlocklistUpdatePayload) => ipcRenderer.send(IPC.updateBlocklist, input),
   createBlockingSchedule: (input: import("@shared/types").BlockingScheduleWritePayload) => ipcRenderer.send(IPC.createBlockingSchedule, input),
+  updateBlockingSchedule: (input: import("@shared/types").BlockingScheduleUpdatePayload) => ipcRenderer.send(IPC.updateBlockingSchedule, input),
   googleConnect: () => ipcRenderer.send(IPC.googleConnect),
   googleDisconnect: () => ipcRenderer.send(IPC.googleDisconnect),
   setCalendarView: (view: CalendarView) => ipcRenderer.send(IPC.setCalendarView, view),

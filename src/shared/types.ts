@@ -346,6 +346,10 @@ export interface BlocklistWritePayload {
   entries: Array<{ entry_type: "app" | "website"; identifier: string; label?: string }>;
 }
 
+export interface BlocklistUpdatePayload extends BlocklistWritePayload {
+  blocklist_id: string;
+}
+
 export interface BlockingScheduleBlocklistRef {
   blocklist_id: string;
   name: string;
@@ -383,4 +387,8 @@ export interface BlockingScheduleWritePayload {
   blocklist_ids: string[];
   device_ids: string[];
   is_active?: boolean;
+}
+
+export interface BlockingScheduleUpdatePayload extends BlockingScheduleWritePayload {
+  schedule_id: string;
 }

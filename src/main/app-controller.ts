@@ -24,7 +24,8 @@ import { deviceKey, resolvedDeviceName, withComputedOnline } from "@shared/devic
 import { IPC } from "@shared/ipc";
 import { localTimeZone, toDateInput } from "@shared/platform";
 import { TIMER_BONUS_STEP_SECONDS, usesTodayWindow } from "@shared/timer";
-import type { AppSnapshot, AuthUiState, BlockingUiState, InspectorState, LeaderboardUiState } from "@shared/snapshot";
+import type { AppSnapshot, AuthUiState, BlockingUiState, InspectorSelection, LeaderboardUiState } from "@shared/snapshot";
+import { emptyInspector, inspectorFromSelection } from "@shared/snapshot";
 import {
   endOfMonth,
   entriesToTimelines,
@@ -46,10 +47,11 @@ import type {
   NavigationItem,
   PeriodSummaryResponse,
   ScreenTimeSessionBlock,
-  ScreenTimeTimelineSegment,
   TodayPeriod,
   TodayTab,
   BlocklistWritePayload,
+  BlocklistUpdatePayload,
+  BlockingScheduleUpdatePayload,
   BlockingScheduleWritePayload,
 } from "@shared/types";
 import { isMfa, StopScrollingAPI } from "./api-client";
@@ -123,7 +125,7 @@ export class AppController {
   insightsPeriod: InsightsPeriod = "day";
   insightsAnchor = new Date();
   insightsTab: InsightsTab = "overview";
-  inspector: InspectorState = { kind: "none", segment: null, block: null };
+  inspector = emptyInspector();
   hiddenDeviceKeys = loadHiddenKeys();
   auth = defaultAuth();
   leaderboard = defaultLeaderboard();
@@ -280,7 +282,7 @@ export class AppController {
   selectNavigation(item: NavigationItem) {
     if (item === "leaderboard" || item === "timer") item = "today";
     this.navigation = item;
-    this.inspector = { kind: "none", segment: null, block: null };
+    this.inspector = emptyInspector();
     this.statusMessage = `Showing ${item[0].toUpperCase()}${item.slice(1)}`;
     this.commandPaletteOpen = false;
     if (item === "blocking") void this.refreshBlocking();
@@ -534,17 +536,14 @@ export class AppController {
     this.broadcast();
   }
 
-  selectInspector(payload: { kind: "none" | "segment" | "block"; segment?: ScreenTimeTimelineSegment | null; block?: ScreenTimeSessionBlock | null }) {
-    this.inspector = {
-      kind: payload.kind,
-      segment: payload.segment ?? null,
-      block: payload.block ?? null,
-    };
+  selectInspector(payload: InspectorSelection) {
+    this.inspector = inspectorFromSelection(payload);
     this.broadcast();
   }
 
   async refreshBlocking() {
     if (!this.auth.user) {
+      if (this.inspector.kind === "schedule") this.inspector = emptyInspector();
       this.blocking = {
         ...defaultBlocking(),
         statusMessage: "Sign in on the Account screen to manage sessions and blocklists.",
@@ -562,6 +561,12 @@ export class AppController {
       this.blocking.blocklists = blocklists;
       this.blocking.schedules = schedules;
       this.blocking.statusMessage = `${schedules.length} sessions · ${blocklists.length} blocklists`;
+      if (this.inspector.kind === "schedule" && this.inspector.schedule) {
+        const next = schedules.find((item) => item.schedule_id === this.inspector.schedule?.schedule_id);
+        this.inspector = next
+          ? inspectorFromSelection({ kind: "schedule", schedule: next })
+          : emptyInspector();
+      }
       try {
         this.tracker.registeredDevices = await this.api.devices();
         this.tracker.deviceStatus = await this.api.deviceStatus();
@@ -592,6 +597,23 @@ export class AppController {
     }
   }
 
+  async updateBlocklist(input: BlocklistUpdatePayload) {
+    if (!this.auth.user) {
+      this.blocking.statusMessage = "Sign in on the Account screen to edit blocklists.";
+      this.broadcast();
+      return;
+    }
+    try {
+      const { blocklist_id, ...payload } = input;
+      await this.api.updateBlocklist(blocklist_id, payload);
+      this.statusMessage = "Blocklist updated.";
+      await this.refreshBlocking();
+    } catch (error) {
+      this.blocking.statusMessage = error instanceof Error ? error.message : "Could not update blocklist.";
+      this.broadcast();
+    }
+  }
+
   async createBlockingSchedule(input: BlockingScheduleWritePayload) {
     if (!this.auth.user) {
       this.blocking.statusMessage = "Sign in on the Account screen to create sessions.";
@@ -604,6 +626,23 @@ export class AppController {
       await this.refreshBlocking();
     } catch (error) {
       this.blocking.statusMessage = error instanceof Error ? error.message : "Could not create session.";
+      this.broadcast();
+    }
+  }
+
+  async updateBlockingSchedule(input: BlockingScheduleUpdatePayload) {
+    if (!this.auth.user) {
+      this.blocking.statusMessage = "Sign in on the Account screen to edit sessions.";
+      this.broadcast();
+      return;
+    }
+    try {
+      const { schedule_id, ...payload } = input;
+      await this.api.updateBlockingSchedule(schedule_id, payload);
+      this.statusMessage = "Session updated.";
+      await this.refreshBlocking();
+    } catch (error) {
+      this.blocking.statusMessage = error instanceof Error ? error.message : "Could not update session.";
       this.broadcast();
     }
   }

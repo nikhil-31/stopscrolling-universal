@@ -27,7 +27,7 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
     isAuthenticated: false,
     currentContext: null,
     statusMessage: "Ready",
-    inspector: { kind: "none", segment: null, block: null },
+    inspector: { kind: "none", segment: null, block: null, schedule: null },
     ...patch,
   } as AppSnapshot;
 }
@@ -112,6 +112,7 @@ describe("application chrome", () => {
           inspector: {
             kind: "segment",
             block: null,
+            schedule: null,
             segment: {
               id: "one",
               start: "2026-09-09T09:00:00Z",
@@ -133,6 +134,89 @@ describe("application chrome", () => {
     );
     await user.click(screen.getByRole("button", { name: "Close inspector" }));
     expect(desktop.selectInspector).toHaveBeenCalledWith({ kind: "none" });
+  });
+
+  it("shows blocking session details in the inspector", () => {
+    render(
+      <Inspector
+        state={snapshot({
+          inspector: {
+            kind: "schedule",
+            segment: null,
+            block: null,
+            schedule: {
+              schedule_id: "sched-1",
+              name: "Deep work",
+              start_time: "16:00:00",
+              end_time: "18:00:00",
+              days_of_week: [0, 1, 2, 3, 4],
+              time_zone: "UTC",
+              is_active: true,
+              blocklists: [{ blocklist_id: "list-1", name: "Social" }],
+              devices: [{
+                device_id: "device-id-1",
+                device_platform: "macos",
+                device_name: "Studio Mac",
+                label: "Studio Mac",
+              }],
+              blocklist_count: 1,
+              device_count: 1,
+              created_at: "2026-09-10T00:00:00Z",
+              updated_at: "2026-09-10T00:00:00Z",
+            },
+          },
+        })}
+      />,
+    );
+    expect(screen.getByRole("complementary", { name: "Session inspector" })).toBeVisible();
+    expect(screen.getByText("Session details")).toBeVisible();
+    expect(screen.getByText("Deep work")).toBeVisible();
+    expect(screen.getByText("Social")).toBeVisible();
+    expect(screen.getByText("Studio Mac")).toBeVisible();
+    expect(screen.getByText("UTC")).toBeVisible();
+    expect(screen.getByLabelText("Repeats Mon, Tue, Wed, Thu, Fri")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Edit session" })).toBeVisible();
+  });
+
+  it("asks to edit a blocking session from the inspector", async () => {
+    const onEditSchedule = vi.fn();
+    render(
+      <Inspector
+        state={snapshot({
+          inspector: {
+            kind: "schedule",
+            segment: null,
+            block: null,
+            schedule: {
+              schedule_id: "sched-1",
+              name: "Deep work",
+              start_time: "16:00:00",
+              end_time: "18:00:00",
+              days_of_week: [0, 1, 2, 3, 4],
+              time_zone: "UTC",
+              is_active: true,
+              blocklists: [{ blocklist_id: "list-1", name: "Social" }],
+              devices: [{
+                device_id: "device-id-1",
+                device_platform: "macos",
+                device_name: "Studio Mac",
+                label: "Studio Mac",
+              }],
+              blocklist_count: 1,
+              device_count: 1,
+              created_at: "2026-09-10T00:00:00Z",
+              updated_at: "2026-09-10T00:00:00Z",
+            },
+          },
+        })}
+        onEditSchedule={onEditSchedule}
+      />,
+    );
+    await userEvent.setup().click(screen.getByRole("button", { name: "Edit session" }));
+    expect(onEditSchedule).toHaveBeenCalledWith(expect.objectContaining({
+      schedule_id: "sched-1",
+      name: "Deep work",
+    }));
   });
 });
 

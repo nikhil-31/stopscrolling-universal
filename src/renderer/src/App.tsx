@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { navItemForDigit } from "@shared/navigation";
+import type { BlockingSchedule } from "@shared/types";
 import { CommandPalette } from "./components/CommandPalette";
 import { Inspector } from "./components/Inspector";
 import { Sidebar } from "./components/Sidebar";
@@ -15,6 +16,7 @@ import { TodayScreen } from "./screens/TodayScreen";
 
 export function App() {
   const state = useAppState();
+  const [editingSchedule, setEditingSchedule] = useState<BlockingSchedule | null>(null);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -35,6 +37,10 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  useEffect(() => {
+    if (state?.navigation !== "blocking") setEditingSchedule(null);
+  }, [state?.navigation]);
+
   if (!state) return <div className="loading-page">Loading Stop Scrolling…</div>;
 
   return (
@@ -53,12 +59,18 @@ export function App() {
               {state.navigation === "timer" && <TimerScreen state={state} />}
               {state.navigation === "calendar" && <CalendarScreen state={state} />}
               {state.navigation === "insights" && <InsightsScreen state={state} />}
-              {state.navigation === "blocking" && <BlockingScreen state={state} />}
+              {state.navigation === "blocking" && (
+                <BlockingScreen
+                  state={state}
+                  editingSchedule={editingSchedule}
+                  onCloseEdit={() => setEditingSchedule(null)}
+                />
+              )}
               {state.navigation === "leaderboard" && <LeaderboardScreen state={state} />}
               {state.navigation === "account" && <AccountScreen state={state} />}
             </div>
           </main>
-          <Inspector state={state} />
+          <Inspector state={state} onEditSchedule={setEditingSchedule} />
         </div>
       </div>
       {state.commandPaletteOpen ? <CommandPalette state={state} /> : null}

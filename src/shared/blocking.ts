@@ -129,6 +129,50 @@ export function collectBlocklistEntries(input: {
   return [...entries.values()];
 }
 
+export function decomposeBlocklistEntries(
+  entries: Array<{ entry_type: "app" | "website"; identifier: string; label?: string }>,
+) {
+  const websiteIds = [...new Set(
+    entries
+      .filter((entry) => entry.entry_type === "website")
+      .map((entry) => normalizeWebsite(entry.identifier))
+      .filter(Boolean),
+  )];
+  const websiteSet = new Set(websiteIds);
+  const covered = new Set<string>();
+
+  const commonFilterIds: string[] = [];
+  for (const filter of COMMON_FILTERS) {
+    const ids = filter.identifiers.map(normalizeWebsite).filter(Boolean);
+    if (ids.length && ids.every((id) => websiteSet.has(id))) {
+      commonFilterIds.push(filter.id);
+      ids.forEach((id) => covered.add(id));
+    }
+  }
+
+  const categoryIds: string[] = [];
+  for (const category of CATEGORY_FILTERS) {
+    const ids = category.identifiers.map(normalizeWebsite).filter(Boolean);
+    if (ids.length && ids.every((id) => websiteSet.has(id))) {
+      categoryIds.push(category.id);
+      ids.forEach((id) => covered.add(id));
+    }
+  }
+
+  return {
+    customWebsites: websiteIds.filter((id) => !covered.has(id)),
+    commonFilterIds,
+    categoryIds,
+    appEntries: entries
+      .filter((entry) => entry.entry_type === "app" && entry.identifier.trim())
+      .map((entry) => ({
+        entry_type: "app" as const,
+        identifier: entry.identifier.trim(),
+        label: entry.label?.trim() || entry.identifier.trim(),
+      })),
+  };
+}
+
 export function clockLabel(time: string) {
   return time.slice(0, 5);
 }
@@ -205,4 +249,47 @@ export function scheduleRowKind(
   if (isScheduleRunningNow(schedule, now)) return "current";
   if (isAlwaysActive(schedule)) return "schedule";
   return "named";
+}
+
+export function scheduleStatusLabel(kind: "current" | "schedule" | "named") {
+  if (kind === "current") return "Running";
+  if (kind === "schedule") return "Always Active";
+  return "Scheduled";
+}
+
+export function scheduleDeviceLabel(device: BlockingSchedule["devices"][number]) {
+  return device.device_name || device.label || device.device_id;
+}
+
+export function emptySessionDraft() {
+  return {
+    name: "",
+    startTime: "09:00",
+    endTime: "17:00",
+    timeZone: defaultTimeZone(),
+    selectedDays: [0, 1, 2, 3, 4],
+    selectedBlocklistIds: [] as string[],
+    selectedDeviceIds: [] as string[],
+    isActive: undefined as boolean | undefined,
+  };
+}
+
+export type SessionComposerDraft = ReturnType<typeof emptySessionDraft>;
+
+export function scheduleToComposerDraft(
+  schedule: Pick<
+    BlockingSchedule,
+    "name" | "start_time" | "end_time" | "days_of_week" | "time_zone" | "blocklists" | "devices" | "is_active"
+  >,
+): SessionComposerDraft {
+  return {
+    name: schedule.name,
+    startTime: clockLabel(schedule.start_time),
+    endTime: clockLabel(schedule.end_time),
+    timeZone: schedule.time_zone,
+    selectedDays: [...schedule.days_of_week],
+    selectedBlocklistIds: schedule.blocklists.map((list) => list.blocklist_id),
+    selectedDeviceIds: schedule.devices.map((device) => device.device_id),
+    isActive: schedule.is_active,
+  };
 }

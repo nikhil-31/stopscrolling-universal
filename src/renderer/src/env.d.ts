@@ -23,11 +23,7 @@ interface StopScrollingDesktop {
   requestAccessibility: () => void;
   openSettings: () => void;
   openPath: (path: string) => void;
-  selectInspector: (payload: {
-    kind: "none" | "segment" | "block";
-    segment?: import("@shared/types").ScreenTimeTimelineSegment | null;
-    block?: import("@shared/types").ScreenTimeSessionBlock | null;
-  }) => void;
+  selectInspector: (payload: import("@shared/snapshot").InspectorSelection) => void;
   setCommandPalette: (open: boolean) => void;
   updateSettings: (patch: Partial<import("@shared/types").AppSettings>) => void;
   setDeviceVisible: (key: string, visible: boolean) => void;
@@ -42,7 +38,9 @@ interface StopScrollingDesktop {
   friendsDecline: (id: number) => void;
   friendsRemove: (id: number) => void;
   createBlocklist: (input: import("@shared/types").BlocklistWritePayload) => void;
+  updateBlocklist: (input: import("@shared/types").BlocklistUpdatePayload) => void;
   createBlockingSchedule: (input: import("@shared/types").BlockingScheduleWritePayload) => void;
+  updateBlockingSchedule: (input: import("@shared/types").BlockingScheduleUpdatePayload) => void;
   googleConnect: () => void;
   googleDisconnect: () => void;
   setCalendarView: (view: import("@shared/calendar-workspace").CalendarView) => void;
