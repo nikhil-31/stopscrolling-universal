@@ -27,6 +27,20 @@ export function resolvedDeviceName(platform: string, deviceName: string): string
   return deviceName || platformDisplayName(platform);
 }
 
+export function deviceDisplayName(platform: string, deviceName: string, nickname = ""): string {
+  return nickname.trim() || resolvedDeviceName(platform, deviceName);
+}
+
+export function displayNameForDevice(
+  platform: string,
+  deviceName: string,
+  devices: Array<Pick<DeviceListEntry, "visibilityKey" | "nickname" | "deviceName" | "devicePlatform">> = [],
+): string {
+  const key = deviceKey(platform, deviceName);
+  const match = (devices ?? []).find((device) => device.visibilityKey === key);
+  return deviceDisplayName(platform, deviceName, match?.nickname ?? "");
+}
+
 export function deviceKey(platform: string, deviceName: string): string {
   return `${platform || "unknown"}|${resolvedDeviceName(platform, deviceName)}`;
 }

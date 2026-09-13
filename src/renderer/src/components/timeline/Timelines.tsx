@@ -1,4 +1,5 @@
 import { useState, type MouseEvent as ReactMouseEvent } from "react";
+import { displayNameForDevice } from "@shared/device";
 import {
   colorForCategory,
   formatClock,
@@ -11,6 +12,7 @@ import {
 } from "@shared/timeline";
 import type {
   CalendarOverlayEvent,
+  DeviceListEntry,
   ScreenTimeDeviceTimeline,
   ScreenTimeSessionBlock,
 } from "@shared/types";
@@ -19,9 +21,11 @@ import { Badge, Card, EmptyState } from "../ui";
 
 export function TimelineGroup({
   timelines,
+  devices = [],
   compact = false,
 }: {
   timelines: ScreenTimeDeviceTimeline[];
+  devices?: DeviceListEntry[];
   compact?: boolean;
 }) {
   return (
@@ -30,6 +34,7 @@ export function TimelineGroup({
         <NativeMacTimeline
           key={timeline.id}
           timeline={timeline}
+          devices={devices}
           showDeviceHeader={!compact && timelines.length > 1}
           compact={compact}
         />
@@ -40,10 +45,12 @@ export function TimelineGroup({
 
 function NativeMacTimeline({
   timeline,
+  devices,
   showDeviceHeader,
   compact = false,
 }: {
   timeline: ScreenTimeDeviceTimeline;
+  devices: DeviceListEntry[];
   showDeviceHeader: boolean;
   compact?: boolean;
 }) {
@@ -86,7 +93,7 @@ function NativeMacTimeline({
       {showDeviceHeader ? (
         <div className="native-device-row">
           <span className="native-device-icon"><Laptop2 size={14} aria-hidden="true" /></span>
-          <strong>{timeline.deviceName || "This device"}</strong>
+          <strong>{displayNameForDevice(timeline.devicePlatform, timeline.deviceName, devices) || "This device"}</strong>
           <span>{timeline.devicePlatform || "desktop"}</span>
           <span className="native-device-spacer" />
           <Globe2 size={12} aria-hidden="true" />
@@ -97,7 +104,7 @@ function NativeMacTimeline({
       <div
         className={`native-timeline-track ${compact ? "is-compact" : ""}`}
         role="img"
-        aria-label={`${timeline.deviceName || "Device"} day timeline, ${timeline.blocks.length} blocks, ${formatDuration(total)} tracked`}
+        aria-label={`${displayNameForDevice(timeline.devicePlatform, timeline.deviceName, devices) || "Device"} day timeline, ${timeline.blocks.length} blocks, ${formatDuration(total)} tracked`}
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
       >
@@ -201,10 +208,12 @@ function emptyTimeline(): ScreenTimeDeviceTimeline {
 
 export function VerticalDay({
   timelines,
+  devices = [],
   events = [],
   className,
 }: {
   timelines: ScreenTimeDeviceTimeline[];
+  devices?: DeviceListEntry[];
   events?: CalendarOverlayEvent[];
   className?: string;
 }) {
@@ -252,7 +261,7 @@ export function VerticalDay({
                   width: `${placement.widthFraction * 100}%`,
                   background: colorForCategory(block.category),
                 }}
-                title={`${block.title}\n${formatDuration(block.durationSeconds)}\n${block.deviceName}`}
+                title={`${block.title}\n${formatDuration(block.durationSeconds)}\n${displayNameForDevice(block.devicePlatform, block.deviceName, devices)}`}
                 onClick={() => window.stopscrolling.selectInspector({ kind: "block", block })}
               >
                 <strong>{block.title}</strong>
@@ -292,7 +301,7 @@ export function VerticalDay({
   );
 }
 
-export function TimelineCard({ timelines }: { timelines: ScreenTimeDeviceTimeline[] }) {
+export function TimelineCard({ timelines, devices }: { timelines: ScreenTimeDeviceTimeline[]; devices?: DeviceListEntry[] }) {
   return (
     <Card className="data-card">
       <div className="data-card-header">
@@ -301,7 +310,7 @@ export function TimelineCard({ timelines }: { timelines: ScreenTimeDeviceTimelin
           <div className="data-card-subtitle">Activity across your visible devices</div>
         </div>
       </div>
-      <TimelineGroup timelines={timelines} />
+      <TimelineGroup timelines={timelines} devices={devices} />
     </Card>
   );
 }

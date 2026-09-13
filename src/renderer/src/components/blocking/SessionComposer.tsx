@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { defaultTimeZone, WEEKDAYS, type SessionComposerDraft } from "@shared/blocking";
+import { defaultTimeZone, scheduleDeviceLabel, WEEKDAYS, type SessionComposerDraft } from "@shared/blocking";
+import { deviceDisplayName } from "@shared/device";
 import type {
   Blocklist,
   BlockingScheduleBlocklistRef,
@@ -191,7 +192,7 @@ export function SessionComposer({
           <div className="blocking-check-list" role="group" aria-label="Devices">
             {devices.map((device) => (
               <label className="blocking-device-option" key={device.deviceID}>
-                <span className="row-title">{device.deviceName}</span>
+                <span className="row-title">{deviceDisplayName(device.devicePlatform, device.deviceName, device.nickname)}</span>
                 <input
                   type="checkbox"
                   checked={selectedDeviceIds.includes(device.deviceID)}
@@ -201,7 +202,7 @@ export function SessionComposer({
             ))}
             {missingDevices.map((device) => (
               <label className="blocking-device-option" key={device.device_id}>
-                <span className="row-title">{device.device_name || device.label || device.device_id}</span>
+                <span className="row-title">{scheduleDeviceLabel(device)}</span>
                 <input
                   type="checkbox"
                   checked={selectedDeviceIds.includes(device.device_id)}

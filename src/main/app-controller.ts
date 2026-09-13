@@ -536,6 +536,23 @@ export class AppController {
     this.broadcast();
   }
 
+  async setDeviceNickname(deviceID: string, nickname: string) {
+    if (!this.auth.user) {
+      this.statusMessage = "Sign in on the Account screen to rename devices.";
+      this.broadcast();
+      return;
+    }
+    try {
+      await this.api.updateDevice(deviceID, { label: nickname.trim() });
+      this.statusMessage = "Device nickname updated.";
+      await this.tracker.refreshDevices();
+      await this.refreshBlocking();
+    } catch (error) {
+      this.statusMessage = error instanceof Error ? error.message : "Could not update device nickname.";
+      this.broadcast();
+    }
+  }
+
   selectInspector(payload: InspectorSelection) {
     this.inspector = inspectorFromSelection(payload);
     this.broadcast();
@@ -697,6 +714,7 @@ export class AppController {
         withComputedOnline({
           visibilityKey: key,
           deviceName: resolvedDeviceName(device.device_platform, device.device_name),
+          nickname: device.label ?? "",
           devicePlatform: device.device_platform,
           deviceID: device.device_id,
           sessionCount: device.session_count,

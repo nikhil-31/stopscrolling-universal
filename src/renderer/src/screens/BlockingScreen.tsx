@@ -7,6 +7,7 @@ import {
   scheduleWhen,
 } from "@shared/blocking";
 import type { AppSnapshot } from "@shared/snapshot";
+import { deviceDisplayName } from "@shared/device";
 import type { Blocklist, BlockingSchedule, DeviceListEntry } from "@shared/types";
 import { BlocklistComposer } from "../components/blocking/BlocklistComposer";
 import { BlocklistDetailDialog } from "../components/blocking/BlocklistDetailDialog";
@@ -217,7 +218,7 @@ export function BlockingScreen({
                       {device.devicePlatform === "windows" ? <MonitorSmartphone size={15} /> : <Laptop2 size={15} />}
                     </span>
                     <span className="row-copy">
-                      <span className="row-title">{device.deviceName}</span>
+                      <span className="row-title">{deviceDisplayName(device.devicePlatform, device.deviceName, device.nickname)}</span>
                       <span className="row-subtitle">{device.devicePlatform}</span>
                     </span>
                     <span className={`dot ${device.isOnline ? "online" : ""}`} title={device.isOnline ? "Online" : "Offline"} />

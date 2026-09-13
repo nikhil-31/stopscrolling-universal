@@ -25,6 +25,7 @@ export const IPC = {
   commandPalette: "app:command-palette",
   updateSettings: "app:update-settings",
   setDeviceVisible: "app:set-device-visible",
+  setDeviceNickname: "app:set-device-nickname",
   authLogin: "app:auth-login",
   authRegister: "app:auth-register",
   authVerifyMfa: "app:auth-verify-mfa",

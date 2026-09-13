@@ -10,6 +10,7 @@ import {
   WEEKDAYS,
 } from "@shared/blocking";
 import { formatClock, formatDuration } from "@shared/timeline";
+import { displayNameForDevice } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { BlockingSchedule } from "@shared/types";
 import { Clock3, Globe2, Laptop2, Layers3, Shield, X } from "lucide-react";
@@ -126,7 +127,7 @@ export function Inspector({
         <p className="muted">{segment.appName}</p>
         <div className="inspector-meta">
           <Badge tone="accent">{segment.category}</Badge>
-          <Badge><Laptop2 size={11} aria-hidden="true" />{segment.deviceName}</Badge>
+          <Badge><Laptop2 size={11} aria-hidden="true" />{displayNameForDevice(segment.devicePlatform, segment.deviceName, state.devices)}</Badge>
           {segment.isLive ? <Badge tone="danger" dot>Live</Badge> : null}
         </div>
         <div className="inspector-duration">
@@ -161,7 +162,7 @@ export function Inspector({
         <p className="muted">{block.subtitle}</p>
         <div className="inspector-meta">
           <Badge tone="accent">{block.category}</Badge>
-          <Badge><Laptop2 size={11} aria-hidden="true" />{block.deviceName}</Badge>
+          <Badge><Laptop2 size={11} aria-hidden="true" />{displayNameForDevice(block.devicePlatform, block.deviceName, state.devices)}</Badge>
           <Badge><Layers3 size={11} aria-hidden="true" />{block.items.length} sessions</Badge>
         </div>
         <div className="inspector-duration">

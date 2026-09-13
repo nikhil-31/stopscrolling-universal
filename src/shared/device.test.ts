@@ -1,6 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { isDeviceOnline } from "./device";
-import { browserKind, extractUrlFromText, isBrowserProcess, looksLikeBrowser, normalizeCapturedUrl, parseBrowserTabResult } from "./browser";
+import { deviceDisplayName, displayNameForDevice, deviceKey, isDeviceOnline } from "./device";
+import { browserKind, browserUrlScripts, extractUrlFromText, isBrowserProcess, looksLikeBrowser, normalizeCapturedUrl, parseBrowserTabResult, scriptingAppName, websiteHostname } from "./browser";
+
+describe("device display names", () => {
+  it("prefers a nickname and falls back to hostname or platform", () => {
+    expect(deviceDisplayName("macos", "Studio Mac", "Work Mac")).toBe("Work Mac");
+    expect(deviceDisplayName("macos", "Studio Mac", "  ")).toBe("Studio Mac");
+    expect(deviceDisplayName("macos", "", "")).toBe("Mac");
+  });
+
+  it("looks up nicknames by platform and hostname without changing the key", () => {
+    const devices = [{
+      visibilityKey: "macos|Studio Mac",
+      deviceName: "Studio Mac",
+      nickname: "Work Mac",
+      devicePlatform: "macos",
+    }];
+    expect(displayNameForDevice("macos", "Studio Mac", devices)).toBe("Work Mac");
+    expect(deviceKey("macos", "Studio Mac")).toBe("macos|Studio Mac");
+    expect(displayNameForDevice("ios", "iPhone", devices)).toBe("iPhone");
+  });
+});
 
 describe("device online fallback", () => {
   it("prefers the server-reported state", () => {
@@ -43,5 +63,23 @@ describe("browser URL parsing", () => {
     });
     expect(browserKind("Google Chrome", "com.google.Chrome")).toBe("chromium");
     expect(browserKind("Safari", "com.apple.Safari")).toBe("safari");
+    expect(websiteHostname("https://www.GitHub.com/org/repo?tab=1")).toBe("github.com");
+    expect(websiteHostname("")).toBe("");
+  });
+});
+
+describe("browser scripting names", () => {
+  it("maps Chrome helpers to the scriptable Google Chrome app", () => {
+    expect(scriptingAppName("Google Chrome", "com.google.Chrome")).toBe("Google Chrome");
+    expect(scriptingAppName("Google Chrome Helper", "com.google.Chrome.helper")).toBe("Google Chrome");
+    expect(scriptingAppName("Chromium", "org.chromium.Chromium")).toBe("Chromium");
+    expect(scriptingAppName("Safari", "com.apple.Safari")).toBe("Safari");
+  });
+
+  it("asks Chrome for the active tab URL without bundling title", () => {
+    expect(browserUrlScripts("chromium", '"Google Chrome"')).toEqual([
+      'tell application "Google Chrome" to return URL of active tab of front window',
+      'tell application "Google Chrome" to return URL of active tab of window 1',
+    ]);
   });
 });

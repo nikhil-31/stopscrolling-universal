@@ -1,9 +1,11 @@
+import { displayNameForDevice } from "@shared/device";
 import {
   colorForCategory,
   formatClock,
   formatDuration,
 } from "@shared/timeline";
 import type {
+  DeviceListEntry,
   ScreenTimeAppBreakdown,
   ScreenTimeCategoryBreakdown,
   ScreenTimeDeviceTimeline,
@@ -50,7 +52,7 @@ export function EventLog({ segments }: { segments: ScreenTimeTimelineSegment[] }
   );
 }
 
-export function BlockList({ timelines }: { timelines: ScreenTimeDeviceTimeline[] }) {
+export function BlockList({ timelines, devices = [] }: { timelines: ScreenTimeDeviceTimeline[]; devices?: DeviceListEntry[] }) {
   const blocks = timelines.flatMap((timeline) => timeline.blocks);
   if (!blocks.length) {
     return <EmptyState title="No focused blocks" body="Nearby sessions are grouped into blocks after you track activity." icon={Boxes} />;
@@ -77,7 +79,7 @@ export function BlockList({ timelines }: { timelines: ScreenTimeDeviceTimeline[]
               />
               <span className="row-copy">
                 <span className="row-title">{block.title}</span>
-                <span className="row-subtitle">{block.subtitle} · {block.deviceName}</span>
+                <span className="row-subtitle">{block.subtitle} · {displayNameForDevice(block.devicePlatform, block.deviceName, devices)}</span>
               </span>
             </span>
             <span className="row-value">{formatDuration(block.durationSeconds)}</span>

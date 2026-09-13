@@ -1,5 +1,5 @@
 import { formatClock24, hourLabel24, isOngoingBlock } from "@shared/calendar-workspace";
-import { resolvedDeviceName } from "@shared/device";
+import { displayNameForDevice } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
 import { endOfDay, startOfDay } from "@shared/platform";
 import { formatClock } from "@shared/timeline";
@@ -41,7 +41,7 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
       <div className="day-board-head" style={{ gridTemplateColumns, minWidth: gridMinWidth }}>
         <span />
         {timelines.map((timeline) => (
-          <span key={timeline.id}>{manyDevices ? deviceLabel(timeline) : "Time Entries"}</span>
+          <span key={timeline.id}>{manyDevices ? deviceLabel(timeline, state.devices) : "Time Entries"}</span>
         ))}
         <span>Calendar</span>
       </div>
@@ -56,7 +56,7 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
             key={timeline.id}
             className="day-board-col day-board-entries"
             data-testid={`calendar-device-column-${timeline.id}`}
-            aria-label={manyDevices ? `Time entries · ${deviceLabel(timeline)}` : "Time Entries"}
+            aria-label={manyDevices ? `Time entries · ${deviceLabel(timeline, state.devices)}` : "Time Entries"}
           >
             {timeline.blocks.map((block) => {
               const live = isLocalLiveBlock(block, timeline, state, now);
@@ -106,8 +106,8 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
   );
 }
 
-function deviceLabel(timeline: ScreenTimeDeviceTimeline) {
-  return resolvedDeviceName(timeline.devicePlatform, timeline.deviceName);
+function deviceLabel(timeline: ScreenTimeDeviceTimeline, devices: AppSnapshot["devices"]) {
+  return displayNameForDevice(timeline.devicePlatform, timeline.deviceName, devices);
 }
 
 function isLocalLiveBlock(

@@ -49,6 +49,7 @@ const api = {
   setCommandPalette: (open: boolean) => ipcRenderer.send(IPC.commandPalette, open),
   updateSettings: (patch: Partial<AppSettings>) => ipcRenderer.send(IPC.updateSettings, patch),
   setDeviceVisible: (key: string, visible: boolean) => ipcRenderer.send(IPC.setDeviceVisible, { key, visible }),
+  setDeviceNickname: (deviceID: string, nickname: string) => ipcRenderer.send(IPC.setDeviceNickname, { deviceID, nickname }),
   authSetForm: (patch: Partial<AppSnapshot["auth"]>) => ipcRenderer.send(IPC.authSetForm, patch),
   authLogin: () => ipcRenderer.send(IPC.authLogin),
   authRegister: () => ipcRenderer.send(IPC.authRegister),

@@ -102,7 +102,7 @@ export function TimerScreen({ state }: { state: AppSnapshot }) {
             />
           )
         ) : (
-          <VerticalDay timelines={state.timelines} className="timer-timeline" />
+          <VerticalDay timelines={state.timelines} devices={state.devices} className="timer-timeline" />
         )}
       </aside>
     </div>

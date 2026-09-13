@@ -62,6 +62,7 @@ export interface DeviceStatusRow {
 export interface DeviceListEntry {
   visibilityKey: string;
   deviceName: string;
+  nickname: string;
   devicePlatform: string;
   deviceID: string | null;
   sessionCount: number;

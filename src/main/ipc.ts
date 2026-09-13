@@ -95,6 +95,9 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.setDeviceVisible, (_event, payload: { key: string; visible: boolean }) => {
     controller.setDeviceVisible(payload.key, payload.visible);
   });
+  ipcMain.on(IPC.setDeviceNickname, (_event, payload: { deviceID: string; nickname: string }) => {
+    void controller.setDeviceNickname(payload.deviceID, payload.nickname);
+  });
   ipcMain.on(IPC.authSetForm, (_event, patch: Partial<AppController["auth"]>) => {
     controller.auth = { ...controller.auth, ...patch };
     broadcast();

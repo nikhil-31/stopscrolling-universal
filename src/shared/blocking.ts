@@ -258,7 +258,7 @@ export function scheduleStatusLabel(kind: "current" | "schedule" | "named") {
 }
 
 export function scheduleDeviceLabel(device: BlockingSchedule["devices"][number]) {
-  return device.device_name || device.label || device.device_id;
+  return device.label || device.device_name || device.device_id;
 }
 
 export function emptySessionDraft() {

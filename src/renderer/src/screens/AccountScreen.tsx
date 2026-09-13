@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { deviceDisplayName } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
+import type { DeviceListEntry } from "@shared/types";
 import {
   CheckCircle2,
   Eye,
@@ -7,6 +9,7 @@ import {
   Laptop2,
   LogOut,
   MonitorSmartphone,
+  Pencil,
   ShieldCheck,
   Sparkles,
   UserRound,
@@ -179,28 +182,98 @@ export function AccountScreen({ state }: { state: AppSnapshot }) {
         >
           <div className="device-grid">
             {state.devices.map((device) => (
-              <div className="device-card" key={device.visibilityKey}>
-                <div className="device-card-top">
-                  <span className="device-icon">
-                    {device.devicePlatform === "windows" ? <MonitorSmartphone size={15} /> : <Laptop2 size={15} />}
-                  </span>
-                  <span className="row-copy">
-                    <span className="row-title">{device.deviceName}</span>
-                    <span className="row-subtitle">{device.devicePlatform} · {device.sessionCount} sessions</span>
-                  </span>
-                  <span className={`dot ${device.isOnline ? "online" : ""}`} title={device.isOnline ? "Online" : "Offline"} />
-                </div>
-                <Toggle
-                  label="Show in timelines"
-                  checked={!state.hiddenDeviceKeys.includes(device.visibilityKey)}
-                  onChange={(visible) => window.stopscrolling.setDeviceVisible(device.visibilityKey, visible)}
-                />
-              </div>
+              <DeviceNicknameCard
+                key={device.visibilityKey}
+                device={device}
+                visible={!state.hiddenDeviceKeys.includes(device.visibilityKey)}
+              />
             ))}
           </div>
           {!state.devices.length ? <p className="muted">Devices appear here after your first sync.</p> : null}
         </Grouped>
       </div>
+    </div>
+  );
+}
+
+function DeviceNicknameCard({
+  device,
+  visible,
+}: {
+  device: DeviceListEntry;
+  visible: boolean;
+}) {
+  const displayName = deviceDisplayName(device.devicePlatform, device.deviceName, device.nickname);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(device.nickname || displayName);
+
+  useEffect(() => {
+    if (!editing) setDraft(device.nickname || displayName);
+  }, [device.nickname, displayName, editing]);
+
+  function save() {
+    const next = draft.trim();
+    const current = device.nickname.trim();
+    if (device.deviceID && next !== current && !(current === "" && next === device.deviceName)) {
+      window.stopscrolling.setDeviceNickname(device.deviceID, next);
+    }
+    setEditing(false);
+  }
+
+  const subtitle = device.nickname.trim()
+    ? `${device.deviceName} · ${device.devicePlatform} · ${device.sessionCount} sessions`
+    : `${device.devicePlatform} · ${device.sessionCount} sessions`;
+
+  return (
+    <div className="device-card">
+      <div className="device-card-top">
+        <span className="device-icon">
+          {device.devicePlatform === "windows" ? <MonitorSmartphone size={15} /> : <Laptop2 size={15} />}
+        </span>
+        {editing ? (
+          <TextField
+            className="device-nickname-field"
+            label="Nickname"
+            value={draft}
+            maxLength={128}
+            autoFocus
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={save}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                save();
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setDraft(device.nickname || displayName);
+                setEditing(false);
+              }
+            }}
+          />
+        ) : (
+          <span className="row-copy">
+            <span className="device-card-title-row">
+              <span className="row-title">{displayName}</span>
+              {device.deviceID ? (
+                <IconButton
+                  className="device-nickname-edit"
+                  label={`Rename ${displayName}`}
+                  icon={Pencil}
+                  onClick={() => setEditing(true)}
+                />
+              ) : null}
+            </span>
+            <span className="row-subtitle">{subtitle}</span>
+          </span>
+        )}
+        <span className={`dot ${device.isOnline ? "online" : ""}`} title={device.isOnline ? "Online" : "Offline"} />
+      </div>
+      <Toggle
+        label="Show in timelines"
+        checked={visible}
+        onChange={(nextVisible) => window.stopscrolling.setDeviceVisible(device.visibilityKey, nextVisible)}
+      />
     </div>
   );
 }

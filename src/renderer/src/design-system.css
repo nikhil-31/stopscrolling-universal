@@ -1629,6 +1629,13 @@ button.data-row:hover { background: var(--surface-hover); }
 .device-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .device-card { padding: 12px; background: var(--surface-subtle); border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .device-card-top { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.device-card-top .row-copy { min-width: 0; flex: 1; }
+.device-card-title-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.device-card-title-row .row-title { flex: 1; }
+.device-nickname-edit { width: 22px; height: 22px; flex: 0 0 auto; }
+.device-nickname-edit svg { width: 13px; height: 13px; }
+.device-nickname-field { flex: 1; min-width: 0; }
+.device-nickname-field .field-label { font-size: 10px; }
 .device-icon { display: grid; place-items: center; width: 30px; height: 30px; color: var(--brand); background: var(--brand-soft); border-radius: 9px; }
 .dot { width: 7px; height: 7px; background: var(--text-tertiary); border-radius: 50%; }
 .dot.online { background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }

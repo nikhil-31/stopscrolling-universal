@@ -114,6 +114,36 @@ describe("CalendarScreen", () => {
     render(
       <CalendarScreen
         state={snapshot({
+          devices: [
+            {
+              visibilityKey: "macos|Studio Mac",
+              deviceName: "Studio Mac",
+              nickname: "Work Mac",
+              devicePlatform: "macos",
+              deviceID: "mac-1",
+              sessionCount: 4,
+              timeZone: "UTC",
+              lastSeenAt: null,
+              lastOnlineAt: null,
+              reportedOnline: null,
+              isOnline: true,
+              isRegistered: true,
+            },
+            {
+              visibilityKey: "ios|iPhone",
+              deviceName: "iPhone",
+              nickname: "",
+              devicePlatform: "ios",
+              deviceID: "phone-1",
+              sessionCount: 2,
+              timeZone: "UTC",
+              lastSeenAt: null,
+              lastOnlineAt: null,
+              reportedOnline: null,
+              isOnline: true,
+              isRegistered: true,
+            },
+          ],
           timelines: [
             timeline({
               id: "macos|Studio Mac",
@@ -133,8 +163,9 @@ describe("CalendarScreen", () => {
     );
 
     expect(screen.queryByText("Time Entries")).toBeNull();
-    expect(screen.getByText("Studio Mac")).toBeVisible();
+    expect(screen.getByText("Work Mac")).toBeVisible();
     expect(screen.getByText("iPhone")).toBeVisible();
+    expect(screen.queryByText("Studio Mac")).toBeNull();
 
     const mac = screen.getByTestId("calendar-device-column-macos|Studio Mac");
     const phone = screen.getByTestId("calendar-device-column-ios|iPhone");

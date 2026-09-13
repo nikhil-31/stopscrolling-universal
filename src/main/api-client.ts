@@ -194,10 +194,17 @@ export class StopScrollingAPI {
     device_platform: string;
     device_name: string;
     time_zone: string;
-    label: string;
+    label?: string;
   }) {
     return this.request<DeviceRow>("api/devices/", {
       method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateDevice(deviceId: string, payload: { label: string }) {
+    return this.request<DeviceRow>(`api/devices/${deviceId}/`, {
+      method: "PATCH",
       body: JSON.stringify(payload),
     });
   }

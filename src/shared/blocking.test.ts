@@ -140,6 +140,12 @@ describe("blocking helpers", () => {
       device_platform: "macos",
       device_name: "Studio Mac",
       label: "Mac",
+    })).toBe("Mac");
+    expect(scheduleDeviceLabel({
+      device_id: "d1",
+      device_platform: "macos",
+      device_name: "Studio Mac",
+      label: "",
     })).toBe("Studio Mac");
   });
 });

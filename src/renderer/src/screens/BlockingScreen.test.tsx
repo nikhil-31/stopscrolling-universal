@@ -21,6 +21,7 @@ const desktop = {
 const device: DeviceListEntry = {
   visibilityKey: "device-1",
   deviceName: "Studio Mac",
+  nickname: "",
   devicePlatform: "macos",
   deviceID: "device-id-1",
   sessionCount: 4,
@@ -145,6 +146,25 @@ describe("BlockingScreen", () => {
       kind: "schedule",
       schedule: namedSchedule,
     }));
+  });
+
+  it("shows a device nickname instead of the hostname", () => {
+    render(
+      <BlockingScreen
+        state={snapshot({
+          isAuthenticated: true,
+          devices: [{ ...device, nickname: "Work Mac" }],
+          blocking: {
+            schedules: [namedSchedule],
+            blocklists: [blocklist],
+            statusMessage: "",
+            loading: false,
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText("Work Mac")).toBeVisible();
+    expect(screen.queryByText("Studio Mac")).toBeNull();
   });
 
   it("marks the inspected session as selected", () => {

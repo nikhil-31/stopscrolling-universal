@@ -274,7 +274,6 @@ export class ScreenTimeTracker {
       device_platform: currentDevicePlatform(),
       device_name: deviceName(),
       time_zone: localTimeZone(),
-      label: "",
     });
     this.localDeviceId = row.device_id;
     mkdirSync(dirname(localDeviceIdPath()), { recursive: true });

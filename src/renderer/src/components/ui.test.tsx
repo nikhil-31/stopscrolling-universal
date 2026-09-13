@@ -18,6 +18,8 @@ const desktop = {
   openSettings: vi.fn(),
   refresh: vi.fn(),
   selectInspector: vi.fn(),
+  setDeviceVisible: vi.fn(),
+  setDeviceNickname: vi.fn(),
 };
 
 function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
@@ -261,8 +263,9 @@ describe("account states", () => {
             },
           },
           devices: [{
-            visibilityKey: "device-1",
+            visibilityKey: "macos|Studio Mac",
             deviceName: "Studio Mac",
+            nickname: "",
             devicePlatform: "macos",
             deviceID: "device-id-1",
             sessionCount: 4,
@@ -278,7 +281,54 @@ describe("account states", () => {
       />,
     );
     expect(screen.getByText("focus@example.com")).toBeVisible();
+    expect(screen.getByText("Studio Mac")).toBeVisible();
     expect(screen.getByRole("checkbox", { name: "Show in timelines" })).toBeChecked();
+  });
+
+  it("shows a nickname and saves edits from the device card", async () => {
+    const user = userEvent.setup();
+    render(
+      <AccountScreen
+        state={snapshot({
+          auth: {
+            ...auth,
+            user: {
+              id: 7,
+              email: "focus@example.com",
+              tracking_id: "tracking-7",
+              totp_enabled: true,
+              phone_number: "",
+              phone_verified: false,
+              mfa_delivery: "totp",
+              social_providers: [],
+            },
+          },
+          devices: [{
+            visibilityKey: "macos|Studio Mac",
+            deviceName: "Studio Mac",
+            nickname: "Work Mac",
+            devicePlatform: "macos",
+            deviceID: "device-id-1",
+            sessionCount: 4,
+            timeZone: "UTC",
+            lastSeenAt: "2026-09-09T09:00:00Z",
+            lastOnlineAt: "2026-09-09T09:00:00Z",
+            reportedOnline: true,
+            isOnline: true,
+            isRegistered: true,
+          }],
+          hiddenDeviceKeys: [],
+        } as Partial<AppSnapshot>)}
+      />,
+    );
+    expect(screen.getByText("Work Mac")).toBeVisible();
+    expect(screen.getByText(/Studio Mac · macos · 4 sessions/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Rename Work Mac" }));
+    const field = screen.getByLabelText("Nickname");
+    await user.clear(field);
+    await user.type(field, "Home Mac");
+    await user.keyboard("{Enter}");
+    expect(desktop.setDeviceNickname).toHaveBeenCalledWith("device-id-1", "Home Mac");
   });
 });
 
