@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockSegments, entriesToTimelines, formatPeriod, periodBounds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
+import { blockSegments, entriesToTimelines, formatPeriod, normalizeInsightsTab, periodBounds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 
@@ -23,6 +23,14 @@ function entry(partial: Partial<ScreenTimeEntry> & Pick<ScreenTimeEntry, "startT
     ...partial,
   };
 }
+
+describe("normalizeInsightsTab", () => {
+  it("keeps sessions and treats breakdown as overview", () => {
+    expect(normalizeInsightsTab("sessions")).toBe("sessions");
+    expect(normalizeInsightsTab("overview")).toBe("overview");
+    expect(normalizeInsightsTab("breakdown")).toBe("overview");
+  });
+});
 
 describe("mergeRecords", () => {
   it("collapses the same session present locally and on the server", () => {

@@ -3,6 +3,7 @@ import { persistenceKey } from "./payload";
 import { endOfDay, startOfDay, toDateInput } from "./platform";
 import type {
   InsightsPeriod,
+  InsightsTab,
   ScreenTimeAppBreakdown,
   ScreenTimeCategoryBreakdown,
   ScreenTimeDeviceTimeline,
@@ -126,6 +127,10 @@ export function formatTodayPeriod(period: TodayPeriod, anchor: Date) {
 
 export function normalizeTodayTab(tab: string): "timeline" | "eventLog" {
   return tab === "eventLog" ? "eventLog" : "timeline";
+}
+
+export function normalizeInsightsTab(tab: string): InsightsTab {
+  return tab === "sessions" ? "sessions" : "overview";
 }
 
 export function timelineAxisTicks(start: Date, end: Date) {

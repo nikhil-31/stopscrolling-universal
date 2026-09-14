@@ -30,6 +30,7 @@ import {
   endOfMonth,
   entriesToTimelines,
   filterVisibleTimelines,
+  normalizeInsightsTab,
   normalizeTodayTab,
   periodBounds,
   snapshotFromEntries,
@@ -246,7 +247,7 @@ export class AppController {
       ),
       insightsPeriod: this.insightsPeriod,
       insightsAnchor: this.insightsAnchor.toISOString(),
-      insightsTab: this.insightsTab,
+      insightsTab: normalizeInsightsTab(this.insightsTab),
       snapshot: this.navigation === "calendar"
         ? { ...snapshot, trackedSecondsByDay: trackedSecondsByDay(entries, this.calendarMonth) }
         : snapshot,
@@ -474,6 +475,11 @@ export class AppController {
 
   setTodayTab(tab: string) {
     this.todayTab = normalizeTodayTab(tab);
+    this.broadcast();
+  }
+
+  setInsightsTab(tab: string) {
+    this.insightsTab = normalizeInsightsTab(tab);
     this.broadcast();
   }
 

@@ -1,12 +1,10 @@
-import { formatDuration } from "@shared/timeline";
+import { formatDuration, normalizeInsightsTab } from "@shared/timeline";
 import type { AppSnapshot } from "@shared/snapshot";
 import {
   BarChart3,
   Clock3,
   Layers3,
   List,
-  PieChart,
-  Shapes,
   Sparkles,
 } from "lucide-react";
 import { BreakdownList, EventLog, TimelineCard, TrendCard } from "../components/timeline";
@@ -14,6 +12,7 @@ import { LoadingState, MetricCard, Tabs } from "../components/ui";
 
 export function InsightsScreen({ state }: { state: AppSnapshot }) {
   if (state.loadingEntries) return <LoadingState label="Building your insights…" />;
+  const tab = normalizeInsightsTab(state.insightsTab);
   const topCategory = state.snapshot.categories[0];
   const average = state.snapshot.sessionCount
     ? state.snapshot.totalSeconds / state.snapshot.sessionCount
@@ -52,25 +51,22 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
 
       <Tabs
         ariaLabel="Insights views"
-        value={state.insightsTab}
-        onChange={(tab) => window.stopscrolling.setInsightsTab(tab)}
+        value={tab}
+        onChange={(next) => window.stopscrolling.setInsightsTab(next)}
         items={[
           { value: "overview", label: "Overview", icon: BarChart3 },
-          { value: "breakdown", label: "Breakdown", icon: PieChart },
           { value: "sessions", label: "Sessions", icon: List },
         ]}
       />
 
-      {state.insightsTab === "overview" ? (
+      {tab === "overview" ? (
         <div className="stack">
           <TrendCard buckets={state.snapshot.buckets} period={state.insightsPeriod} />
           {state.insightsPeriod === "day" ? <TimelineCard timelines={state.timelines} devices={state.devices} /> : null}
+          <BreakdownList categories={state.snapshot.categories} apps={state.snapshot.apps} />
         </div>
       ) : null}
-      {state.insightsTab === "breakdown" ? (
-        <BreakdownList categories={state.snapshot.categories} apps={state.snapshot.apps} />
-      ) : null}
-      {state.insightsTab === "sessions" ? <EventLog segments={state.snapshot.listSegments} /> : null}
+      {tab === "sessions" ? <EventLog segments={state.snapshot.listSegments} /> : null}
     </div>
   );
 }

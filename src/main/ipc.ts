@@ -1,6 +1,6 @@
 import { BrowserWindow, Menu, app, ipcMain, shell } from "electron";
 import { IPC } from "@shared/ipc";
-import type { AppSettings, InsightsPeriod, LeaderboardPeriod, NavigationItem, TodayPeriod, TodayTab, InsightsTab, BlocklistWritePayload, BlocklistUpdatePayload, BlockingScheduleUpdatePayload, BlockingScheduleWritePayload } from "@shared/types";
+import type { AppSettings, InsightsPeriod, LeaderboardPeriod, NavigationItem, TodayPeriod, TodayTab, BlocklistWritePayload, BlocklistUpdatePayload, BlockingScheduleUpdatePayload, BlockingScheduleWritePayload } from "@shared/types";
 import type { CalendarView } from "@shared/calendar-workspace";
 import type { AppController } from "./app-controller";
 import { refreshTray } from "./tray";
@@ -40,9 +40,8 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.setTodayPeriod, (_event, period: TodayPeriod) => {
     controller.setTodayPeriod(period);
   });
-  ipcMain.on(IPC.setInsightsTab, (_event, tab: InsightsTab) => {
-    controller.insightsTab = tab;
-    broadcast();
+  ipcMain.on(IPC.setInsightsTab, (_event, tab: string) => {
+    controller.setInsightsTab(tab);
   });
   ipcMain.on(IPC.setLeaderboardPeriod, (_event, period: LeaderboardPeriod) => {
     controller.leaderboard.period = period;

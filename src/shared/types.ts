@@ -1,7 +1,7 @@
 export type NavigationItem = "today" | "timer" | "calendar" | "insights" | "blocking" | "leaderboard" | "account";
 
 export type InsightsPeriod = "day" | "week" | "month" | "year";
-export type InsightsTab = "overview" | "breakdown" | "sessions";
+export type InsightsTab = "overview" | "sessions";
 export type TodayTab = "timeline" | "eventLog";
 export type TodayPeriod = "day" | "week" | "month";
 export type LeaderboardPeriod = "day" | "week";
