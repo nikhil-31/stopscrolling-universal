@@ -54,6 +54,58 @@ export function browserKind(appName: string, bundleID = ""): BrowserKind | null 
   return "chromium";
 }
 
+/** AppleScript application name for the main browser, including Chrome Helper processes. */
+export function scriptingAppName(appName: string, bundleID = ""): string | null {
+  if (!looksLikeBrowser(appName) && !looksLikeBrowser(bundleID)) return null;
+  const haystack = `${appName} ${bundleID}`.toLowerCase();
+  if (haystack.includes("safari technology preview")) return "Safari Technology Preview";
+  if (haystack.includes("orion")) return "Orion";
+  if (haystack.includes("safari")) return "Safari";
+  if (haystack.includes("chrome canary")) return "Google Chrome Canary";
+  if (haystack.includes("chrome beta")) return "Google Chrome Beta";
+  if (haystack.includes("chrome dev")) return "Google Chrome Dev";
+  if (haystack.includes("chromium")) return "Chromium";
+  if (haystack.includes("chrome")) return "Google Chrome";
+  if (haystack.includes("brave")) return "Brave Browser";
+  if (haystack.includes("edgemac") || haystack.includes("microsoft edge") || haystack.includes("msedge")) {
+    return "Microsoft Edge";
+  }
+  if (haystack.includes("thebrowser") || /(^|[^a-z])arc([^a-z]|$)/.test(haystack)) return "Arc";
+  if (haystack.includes("opera gx") || haystack.includes("opera_gx")) return "Opera GX";
+  if (haystack.includes("opera")) return "Opera";
+  if (haystack.includes("vivaldi")) return "Vivaldi";
+  if (haystack.includes("zen")) return "Zen Browser";
+  if (haystack.includes("firefox developer")) return "Firefox Developer Edition";
+  if (haystack.includes("firefox")) return "Firefox";
+  return appName || null;
+}
+
+export function browserUrlScripts(kind: BrowserKind, specifier: string) {
+  if (kind === "safari") {
+    return [
+      `tell application ${specifier} to return URL of current tab of front window`,
+      `tell application ${specifier} to return URL of current tab of window 1`,
+    ];
+  }
+  if (kind === "firefox") {
+    return [`tell application ${specifier} to return URL of active tab of front window`];
+  }
+  return [
+    `tell application ${specifier} to return URL of active tab of front window`,
+    `tell application ${specifier} to return URL of active tab of window 1`,
+  ];
+}
+
+export function browserTitleScripts(kind: BrowserKind, specifier: string) {
+  if (kind === "safari") {
+    return [`tell application ${specifier} to return name of current tab of front window`];
+  }
+  return [
+    `tell application ${specifier} to return title of active tab of front window`,
+    `tell application ${specifier} to return name of active tab of front window`,
+  ];
+}
+
 export function normalizeCapturedUrl(raw: string | null | undefined): string {
   const trimmed = (raw ?? "").trim().replace(/^["']|["']$/g, "");
   if (!trimmed || /^(missing value|null|undefined|none)$/i.test(trimmed)) return "";
@@ -78,6 +130,16 @@ export function extractUrlFromText(text: string | null | undefined): string {
   if (!text) return "";
   const match = text.match(/https?:\/\/[^\s<>"']+/i);
   return normalizeCapturedUrl(match?.[0] ?? "");
+}
+
+export function websiteHostname(url: string | null | undefined): string {
+  const normalized = normalizeCapturedUrl(url);
+  if (!normalized) return "";
+  try {
+    return new URL(normalized).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return "";
+  }
 }
 
 export function parseBrowserTabResult(raw: string): { title: string; url: string } {

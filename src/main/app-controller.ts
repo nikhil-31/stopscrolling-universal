@@ -27,9 +27,14 @@ import { TIMER_BONUS_STEP_SECONDS, usesTodayWindow } from "@shared/timer";
 import type { AppSnapshot, AuthUiState, BlockingUiState, InspectorSelection, LeaderboardUiState } from "@shared/snapshot";
 import { emptyInspector, inspectorFromSelection } from "@shared/snapshot";
 import {
+  ALL_DEVICES,
+  ALL_INSIGHTS_DEVICES,
   endOfMonth,
   entriesToTimelines,
+  filterEntriesForInsights,
+  filterTimelinesForInsights,
   filterVisibleTimelines,
+  normalizeInsightsDeviceKey,
   normalizeInsightsTab,
   normalizeTodayTab,
   periodBounds,
@@ -126,6 +131,8 @@ export class AppController {
   insightsPeriod: InsightsPeriod = "day";
   insightsAnchor = new Date();
   insightsTab: InsightsTab = "overview";
+  insightsDeviceKey = ALL_INSIGHTS_DEVICES;
+  todayDeviceKey = ALL_DEVICES;
   inspector = emptyInspector();
   hiddenDeviceKeys = loadHiddenKeys();
   auth = defaultAuth();
@@ -172,7 +179,7 @@ export class AppController {
       return { start: startOfMonth(this.calendarMonth), end: endOfMonth(this.calendarMonth) };
     }
     if (usesTodayWindow(this.navigation)) {
-      return todayPeriodBounds(this.todayPeriod, this.todayDay);
+      return todayPeriodBounds("day", this.todayDay);
     }
     if (this.navigation === "insights") return periodBounds(this.insightsPeriod, this.insightsAnchor);
     return periodBounds("day", this.todayDay);
@@ -180,7 +187,24 @@ export class AppController {
 
   snapshot(): AppSnapshot {
     if (this.navigation === "leaderboard" || this.navigation === "timer") this.navigation = "today";
-    const entries = this.tracker.mergedEntries();
+    const allEntries = this.tracker.mergedEntries();
+    const devices = this.deviceEntries();
+    const visibleDeviceKeys = devices
+      .filter((device) => !this.hiddenDeviceKeys.has(device.visibilityKey))
+      .map((device) => device.visibilityKey);
+    const insightsDeviceKey = normalizeInsightsDeviceKey(this.insightsDeviceKey, visibleDeviceKeys);
+    const todayDeviceKey = normalizeInsightsDeviceKey(this.todayDeviceKey, visibleDeviceKeys);
+    const deviceKeyForNav = this.navigation === "insights"
+      ? insightsDeviceKey
+      : this.navigation === "today"
+        ? todayDeviceKey
+        : ALL_DEVICES;
+    const deviceScoped = (this.navigation === "insights" || this.navigation === "today") && (
+      deviceKeyForNav !== ALL_DEVICES || this.hiddenDeviceKeys.size > 0
+    );
+    const entries = this.navigation === "insights" || this.navigation === "today"
+      ? filterEntriesForInsights(allEntries, deviceKeyForNav, this.hiddenDeviceKeys)
+      : allEntries;
     const period = this.navigation === "insights" ? this.insightsPeriod : "day";
     const anchor =
       this.navigation === "insights"
@@ -188,12 +212,12 @@ export class AppController {
         : this.navigation === "calendar"
           ? this.calendarAnchor
           : this.todayDay;
-    const todayBounds = todayPeriodBounds(this.todayPeriod, this.todayDay);
+    const todayBounds = todayPeriodBounds("day", this.todayDay);
     const todayWindow = usesTodayWindow(this.navigation);
     const snapshotBounds = todayWindow
       ? todayBounds
       : periodBounds(period, anchor);
-    const serverSummary = this.mappedServerSummary(snapshotBounds);
+    const serverSummary = deviceScoped ? undefined : this.mappedServerSummary(snapshotBounds);
     const snapshot = todayWindow
       ? snapshotFromRange(entries, todayBounds, serverSummary)
       : snapshotFromEntries(entries, period, anchor, serverSummary);
@@ -202,19 +226,17 @@ export class AppController {
       name: device.device_name,
       timeZone: device.time_zone,
     }));
-    const timelines = filterVisibleTimelines(
-      entriesToTimelines(
-        entries,
-        this.navigation === "calendar" ? this.calendarAnchor : this.todayDay,
-        extraDevices,
-        todayWindow ? todayBounds : undefined,
+    const timelines = filterTimelinesForInsights(
+      filterVisibleTimelines(
+        entriesToTimelines(entries, anchor, extraDevices, snapshotBounds),
+        this.hiddenDeviceKeys,
       ),
-      this.hiddenDeviceKeys,
+      deviceKeyForNav,
     );
     const calendarTimelines = this.navigation === "calendar"
       ? timelines
       : filterVisibleTimelines(
-          entriesToTimelines(entries, this.calendarAnchor, extraDevices),
+          entriesToTimelines(allEntries, this.calendarAnchor, extraDevices),
           this.hiddenDeviceKeys,
         );
     const calendarDayStats = buildCalendarDayStats(
@@ -235,7 +257,8 @@ export class AppController {
       settings: this.settings,
       todayDay: this.todayDay.toISOString(),
       todayTab: this.todayTab,
-      todayPeriod: this.todayPeriod,
+      todayPeriod: "day",
+      todayDeviceKey,
       calendarAnchor: this.calendarAnchor.toISOString(),
       calendarMonth: this.calendarMonth.toISOString(),
       calendarView: this.calendarView,
@@ -248,13 +271,14 @@ export class AppController {
       insightsPeriod: this.insightsPeriod,
       insightsAnchor: this.insightsAnchor.toISOString(),
       insightsTab: normalizeInsightsTab(this.insightsTab),
+      insightsDeviceKey,
       snapshot: this.navigation === "calendar"
         ? { ...snapshot, trackedSecondsByDay: trackedSecondsByDay(entries, this.calendarMonth) }
         : snapshot,
       timelines,
       loadingEntries: this.tracker.loadingEntries,
       entriesUnavailableReason: this.tracker.entriesUnavailableReason,
-      devices: this.deviceEntries(),
+      devices,
       hiddenDeviceKeys: [...this.hiddenDeviceKeys],
       inspector: this.inspector,
       capabilities: this.tracker.capabilities(),
@@ -468,8 +492,8 @@ export class AppController {
     void this.refreshVisibleRange();
   }
 
-  setTodayPeriod(period: TodayPeriod) {
-    this.todayPeriod = period;
+  setTodayPeriod(_period: TodayPeriod) {
+    this.todayPeriod = "day";
     void this.refreshVisibleRange();
   }
 
@@ -480,6 +504,16 @@ export class AppController {
 
   setInsightsTab(tab: string) {
     this.insightsTab = normalizeInsightsTab(tab);
+    this.broadcast();
+  }
+
+  setInsightsDevice(key: string) {
+    this.insightsDeviceKey = key;
+    this.broadcast();
+  }
+
+  setTodayDevice(key: string) {
+    this.todayDeviceKey = key;
     this.broadcast();
   }
 

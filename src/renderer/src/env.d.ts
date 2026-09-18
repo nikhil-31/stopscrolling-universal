@@ -11,7 +11,9 @@ interface StopScrollingDesktop {
   setInsightsAnchor: (iso: string) => void;
   setTodayTab: (tab: import("@shared/types").TodayTab) => void;
   setTodayPeriod: (period: import("@shared/types").TodayPeriod) => void;
+  setTodayDevice: (key: string) => void;
   setInsightsTab: (tab: import("@shared/types").InsightsTab) => void;
+  setInsightsDevice: (key: string) => void;
   setLeaderboardPeriod: (period: import("@shared/types").LeaderboardPeriod) => void;
   toggleTracking: () => void;
   startTracking: () => void;

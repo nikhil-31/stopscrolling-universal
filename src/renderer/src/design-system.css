@@ -660,6 +660,7 @@ a { color: var(--brand); }
 }
 
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.device-picker { flex-wrap: wrap; justify-content: flex-end; max-width: 420px; }
 .page-eyebrow { margin-bottom: 3px; color: var(--brand); font-size: 10px; font-weight: 750; letter-spacing: 0.1em; text-transform: uppercase; }
 .page-header h2 { margin: 0; font-size: 24px; font-weight: 750; letter-spacing: -0.04em; }
 .page-header p { max-width: 590px; margin: 5px 0 0; color: var(--text-secondary); font-size: 11px; }

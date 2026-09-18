@@ -98,6 +98,7 @@ export interface AppSnapshot {
   todayDay: string;
   todayTab: TodayTab;
   todayPeriod: TodayPeriod;
+  todayDeviceKey: string;
   calendarAnchor: string;
   calendarMonth: string;
   calendarView: CalendarView;
@@ -107,6 +108,7 @@ export interface AppSnapshot {
   insightsPeriod: InsightsPeriod;
   insightsAnchor: string;
   insightsTab: InsightsTab;
+  insightsDeviceKey: string;
   snapshot: ScreenTimeSnapshot;
   timelines: ScreenTimeDeviceTimeline[];
   loadingEntries: boolean;

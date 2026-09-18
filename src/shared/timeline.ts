@@ -1,3 +1,4 @@
+import { websiteHostname } from "./browser";
 import { deviceKey, resolvedDeviceName } from "./device";
 import { persistenceKey } from "./payload";
 import { endOfDay, startOfDay, toDateInput } from "./platform";
@@ -131,6 +132,35 @@ export function normalizeTodayTab(tab: string): "timeline" | "eventLog" {
 
 export function normalizeInsightsTab(tab: string): InsightsTab {
   return tab === "sessions" ? "sessions" : "overview";
+}
+
+export const ALL_INSIGHTS_DEVICES = "all";
+export const ALL_DEVICES = ALL_INSIGHTS_DEVICES;
+
+export function normalizeInsightsDeviceKey(key: string, knownVisibleKeys: string[]): string {
+  if (key !== ALL_INSIGHTS_DEVICES && knownVisibleKeys.includes(key)) return key;
+  return ALL_INSIGHTS_DEVICES;
+}
+
+export function filterEntriesForInsights(
+  entries: ScreenTimeEntry[],
+  selectedKey: string,
+  hiddenKeys: Iterable<string>,
+): ScreenTimeEntry[] {
+  const hidden = hiddenKeys instanceof Set ? hiddenKeys : new Set(hiddenKeys);
+  const visible = entries.filter((entry) => !hidden.has(deviceKey(entry.platform, entry.deviceName)));
+  if (selectedKey === ALL_INSIGHTS_DEVICES) return visible;
+  return visible.filter((entry) => deviceKey(entry.platform, entry.deviceName) === selectedKey);
+}
+
+export function filterTimelinesForInsights(
+  timelines: ScreenTimeDeviceTimeline[],
+  selectedKey: string,
+): ScreenTimeDeviceTimeline[] {
+  if (selectedKey === ALL_INSIGHTS_DEVICES) return timelines;
+  return timelines.filter(
+    (timeline) => deviceKey(timeline.devicePlatform, timeline.deviceName) === selectedKey,
+  );
 }
 
 export function timelineAxisTicks(start: Date, end: Date) {
@@ -478,17 +508,30 @@ export function segmentSeconds(segment: ScreenTimeTimelineSegment) {
   return Math.max(0, (new Date(segment.end).getTime() - new Date(segment.start).getTime()) / 1000);
 }
 
+export function appBreakdownKey(segment: Pick<ScreenTimeTimelineSegment, "url" | "appName" | "label">) {
+  const host = websiteHostname(segment.url);
+  if (host) return `web|${host}`;
+  return `app|${segment.appName || segment.label}`;
+}
+
+export function percentLabel(ratio: number) {
+  const value = ratio > 1 ? ratio : ratio * 100;
+  const percent = Math.round(value);
+  return percent < 1 ? "<1%" : `${percent}%`;
+}
+
 export function buildBreakdowns(segments: ScreenTimeTimelineSegment[]) {
   const total = segments.reduce((sum, segment) => sum + segmentSeconds(segment), 0);
   const byCategory = new Map<string, number>();
-  const byApp = new Map<string, { seconds: number; segment: ScreenTimeTimelineSegment }>();
+  const byApp = new Map<string, { seconds: number; segment: ScreenTimeTimelineSegment; host: string }>();
 
   for (const segment of segments) {
     const seconds = segmentSeconds(segment);
     byCategory.set(segment.category, (byCategory.get(segment.category) ?? 0) + seconds);
-    const key = `${segment.appName}|${segment.subtitle}|${segment.category}`;
+    const host = websiteHostname(segment.url);
+    const key = appBreakdownKey(segment);
     const existing = byApp.get(key);
-    byApp.set(key, { seconds: (existing?.seconds ?? 0) + seconds, segment });
+    byApp.set(key, { seconds: (existing?.seconds ?? 0) + seconds, segment, host });
   }
 
   const categories: ScreenTimeCategoryBreakdown[] = Array.from(byCategory.entries())
@@ -498,8 +541,8 @@ export function buildBreakdowns(segments: ScreenTimeTimelineSegment[]) {
   const apps: ScreenTimeAppBreakdown[] = Array.from(byApp.entries())
     .map(([key, value]) => ({
       key,
-      label: value.segment.appName || value.segment.label,
-      subtitle: value.segment.url || value.segment.subtitle,
+      label: value.host || value.segment.appName || value.segment.label,
+      subtitle: value.host ? (value.segment.appName || "Browser") : value.segment.category,
       category: value.segment.category,
       seconds: value.seconds,
       percentage: total ? value.seconds / total : 0,
@@ -641,15 +684,22 @@ export function snapshotFromRange(
     ? buildPeriodBuckets(segments, bucketSpec.period, bucketSpec.anchor, dailyTotals)
     : [];
   const bucketSum = buckets.reduce((sum, bucket) => sum + bucket.seconds, 0);
+  const totalSeconds = serverSummary?.trackedSecondsByDay
+    ? dailySum
+    : serverSummary?.totalSeconds ?? Math.max(breakdowns.total, bucketSum);
+  const sourceApps = breakdowns.apps.length ? breakdowns.apps : serverSummary?.apps ?? [];
+  const shareBase = sourceApps.reduce((sum, app) => sum + app.seconds, 0) || totalSeconds;
+  const apps = sourceApps.map((app) => ({
+    ...app,
+    percentage: shareBase ? app.seconds / shareBase : 0,
+  }));
   return {
-    totalSeconds: serverSummary?.trackedSecondsByDay
-      ? dailySum
-      : serverSummary?.totalSeconds ?? Math.max(breakdowns.total, bucketSum),
+    totalSeconds,
     sessionCount: serverSummary?.sessionCount ?? segments.length,
     timelineSegments: segments,
     listSegments: segments,
     categories,
-    apps: serverSummary?.apps?.length ? serverSummary.apps : breakdowns.apps,
+    apps,
     buckets,
     trackedSecondsByDay: dailyTotals,
   };

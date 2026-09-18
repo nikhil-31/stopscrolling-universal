@@ -1,4 +1,9 @@
-import { formatDuration, normalizeInsightsTab } from "@shared/timeline";
+import { displayNameForDevice } from "@shared/device";
+import {
+  formatDuration,
+  normalizeInsightsDeviceKey,
+  normalizeInsightsTab,
+} from "@shared/timeline";
 import type { AppSnapshot } from "@shared/snapshot";
 import {
   BarChart3,
@@ -7,12 +12,22 @@ import {
   List,
   Sparkles,
 } from "lucide-react";
+import { DevicePicker, visibleDevicesForPicker } from "../components/DevicePicker";
 import { BreakdownList, EventLog, TimelineCard, TrendCard } from "../components/timeline";
 import { LoadingState, MetricCard, Tabs } from "../components/ui";
 
 export function InsightsScreen({ state }: { state: AppSnapshot }) {
   if (state.loadingEntries) return <LoadingState label="Building your insights…" />;
   const tab = normalizeInsightsTab(state.insightsTab);
+  const visibleDevices = visibleDevicesForPicker(state.devices, state.hiddenDeviceKeys);
+  const deviceKey = normalizeInsightsDeviceKey(
+    state.insightsDeviceKey,
+    visibleDevices.map((device) => device.visibilityKey),
+  );
+  const selectedDevice = visibleDevices.find((device) => device.visibilityKey === deviceKey);
+  const scopeDetail = selectedDevice
+    ? `On ${displayNameForDevice(selectedDevice.devicePlatform, selectedDevice.deviceName, visibleDevices)} this ${state.insightsPeriod}`
+    : `Across this ${state.insightsPeriod}`;
   const topCategory = state.snapshot.categories[0];
   const average = state.snapshot.sessionCount
     ? state.snapshot.totalSeconds / state.snapshot.sessionCount
@@ -25,12 +40,19 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
           <h2>Understand your attention</h2>
           <p>Zoom out from individual sessions to see the habits shaping your screen time.</p>
         </div>
+        <DevicePicker
+          devices={state.devices}
+          hiddenDeviceKeys={state.hiddenDeviceKeys}
+          value={state.insightsDeviceKey}
+          onChange={(key) => window.stopscrolling.setInsightsDevice(key)}
+          ariaLabel="Insights devices"
+        />
       </header>
       <section className="stats">
         <MetricCard
           label="Tracked time"
           value={formatDuration(state.snapshot.totalSeconds)}
-          detail={`Across this ${state.insightsPeriod}`}
+          detail={scopeDetail}
           icon={Clock3}
         />
         <MetricCard

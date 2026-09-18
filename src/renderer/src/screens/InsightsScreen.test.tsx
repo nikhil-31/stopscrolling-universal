@@ -1,14 +1,33 @@
 // @vitest-environment jsdom
 
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSnapshot } from "@shared/snapshot";
+import { ALL_INSIGHTS_DEVICES } from "@shared/timeline";
+import type { DeviceListEntry } from "@shared/types";
 import { InsightsScreen } from "./InsightsScreen";
 
 const desktop = {
   setInsightsTab: vi.fn(),
+  setInsightsDevice: vi.fn(),
   selectInspector: vi.fn(),
 };
+
+function device(partial: Partial<DeviceListEntry> & Pick<DeviceListEntry, "visibilityKey" | "deviceName" | "devicePlatform">): DeviceListEntry {
+  return {
+    nickname: "",
+    deviceID: null,
+    sessionCount: 1,
+    timeZone: "UTC",
+    lastSeenAt: null,
+    lastOnlineAt: null,
+    reportedOnline: null,
+    isOnline: false,
+    isRegistered: true,
+    ...partial,
+  };
+}
 
 function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
   return {
@@ -16,7 +35,9 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
     loadingEntries: false,
     insightsPeriod: "week",
     insightsTab: "overview",
+    insightsDeviceKey: ALL_INSIGHTS_DEVICES,
     devices: [],
+    hiddenDeviceKeys: [],
     timelines: [],
     snapshot: {
       totalSeconds: 3600,
@@ -66,5 +87,87 @@ describe("InsightsScreen", () => {
     render(<InsightsScreen state={snapshot({ insightsTab: "breakdown" as unknown as AppSnapshot["insightsTab"] })} />);
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Time by category")).toBeVisible();
+  });
+
+  it("hides the device picker when fewer than two devices are visible", () => {
+    render(<InsightsScreen state={snapshot({
+      devices: [device({ visibilityKey: "macos|Studio Mac", deviceName: "Studio Mac", devicePlatform: "macos" })],
+    })} />);
+    expect(screen.queryByRole("tablist", { name: "Insights devices" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "All devices" })).toBeNull();
+  });
+
+  it("lets you pick a device when two or more are visible", async () => {
+    const user = userEvent.setup();
+    render(<InsightsScreen state={snapshot({
+      devices: [
+        device({ visibilityKey: "macos|Studio Mac", deviceName: "Studio Mac", devicePlatform: "macos", nickname: "Work Mac" }),
+        device({ visibilityKey: "ios|iPhone", deviceName: "iPhone", devicePlatform: "ios" }),
+      ],
+    })} />);
+    expect(screen.getByRole("tab", { name: "All devices" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Work Mac" })).toBeVisible();
+    expect(screen.getByRole("tab", { name: "iPhone" })).toBeVisible();
+    expect(screen.getByText("Across this week")).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "Work Mac" }));
+    expect(desktop.setInsightsDevice).toHaveBeenCalledWith("macos|Studio Mac");
+  });
+
+  it("renders daily rhythm blocks for the selected day", () => {
+    const dayStart = new Date(2026, 8, 10).toISOString();
+    const dayEnd = new Date(2026, 8, 11).toISOString();
+    render(<InsightsScreen state={snapshot({
+      insightsPeriod: "day",
+      timelines: [{
+        id: "macos|Studio Mac",
+        deviceName: "Studio Mac",
+        devicePlatform: "macos",
+        timeZoneIdentifier: "UTC",
+        dayStart,
+        dayEnd,
+        segments: [],
+        blocks: [{
+          id: "block-1",
+          start: new Date(2026, 8, 10, 9).toISOString(),
+          end: new Date(2026, 8, 10, 10).toISOString(),
+          title: "Cursor",
+          subtitle: "Development",
+          category: "Development",
+          devicePlatform: "macos",
+          deviceName: "Studio Mac",
+          durationSeconds: 3600,
+          items: [{
+            id: "cursor",
+            title: "Cursor",
+            subtitle: "Development",
+            url: "",
+            category: "Development",
+            appName: "Cursor",
+            start: new Date(2026, 8, 10, 9).toISOString(),
+            end: new Date(2026, 8, 10, 10).toISOString(),
+            durationSeconds: 3600,
+          }],
+        }],
+      }],
+    })} />);
+    expect(screen.getByText("Daily rhythm")).toBeVisible();
+    expect(screen.getByRole("img", { name: /1 blocks, 1h tracked/ })).toBeVisible();
+    expect(screen.queryByText(/No activity recorded/)).toBeNull();
+  });
+
+  it("shows the selected device in metric copy and ignores hidden devices", () => {
+    render(<InsightsScreen state={snapshot({
+      insightsDeviceKey: "macos|Studio Mac",
+      hiddenDeviceKeys: ["ios|iPhone"],
+      devices: [
+        device({ visibilityKey: "macos|Studio Mac", deviceName: "Studio Mac", devicePlatform: "macos" }),
+        device({ visibilityKey: "ios|iPhone", deviceName: "iPhone", devicePlatform: "ios" }),
+        device({ visibilityKey: "windows|PC", deviceName: "PC", devicePlatform: "windows" }),
+      ],
+    })} />);
+    expect(screen.getByRole("tab", { name: "Studio Mac" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "PC" })).toBeVisible();
+    expect(screen.queryByRole("tab", { name: "iPhone" })).toBeNull();
+    expect(screen.getByText("On Studio Mac this week")).toBeVisible();
   });
 });

@@ -1,11 +1,9 @@
-import type { TodayPeriod } from "@shared/types";
-import { formatTodayPeriod, shiftTodayAnchor } from "@shared/timeline";
+import { ALL_DEVICES, formatTodayPeriod, shiftTodayAnchor } from "@shared/timeline";
 import type { AppSnapshot } from "@shared/snapshot";
 import { CalendarClock, ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
 import { useState } from "react";
+import { DevicePicker } from "../DevicePicker";
 import { IconButton, Tooltip } from "../ui";
-
-const periods: TodayPeriod[] = ["day", "week", "month"];
 
 export function TodayChrome({
   state,
@@ -22,14 +20,14 @@ export function TodayChrome({
       <h2 className="today-chrome-title">
         <span>Activity</span>
         <span className="today-chrome-slash">/</span>
-        <span>{formatTodayPeriod(state.todayPeriod, anchor)}</span>
+        <span>{formatTodayPeriod("day", anchor)}</span>
       </h2>
       <div className="today-chrome-controls">
         <div className="calendar-chrome-nav">
           <IconButton
-            label="Previous period"
+            label="Previous day"
             icon={ChevronLeft}
-            onClick={() => window.stopscrolling.setTodayDay(shiftTodayAnchor(state.todayPeriod, anchor, -1).toISOString())}
+            onClick={() => window.stopscrolling.setTodayDay(shiftTodayAnchor("day", anchor, -1).toISOString())}
           />
           <Tooltip label="Jump to today">
             <IconButton
@@ -39,38 +37,33 @@ export function TodayChrome({
             />
           </Tooltip>
           <IconButton
-            label="Next period"
+            label="Next day"
             icon={ChevronRight}
-            onClick={() => window.stopscrolling.setTodayDay(shiftTodayAnchor(state.todayPeriod, anchor, 1).toISOString())}
+            onClick={() => window.stopscrolling.setTodayDay(shiftTodayAnchor("day", anchor, 1).toISOString())}
           />
         </div>
-        <div className="seg calendar-view-switch" aria-label="Activity period">
-          {periods.map((period) => (
-            <button
-              key={period}
-              className={state.todayPeriod === period ? "active" : ""}
-              aria-pressed={state.todayPeriod === period}
-              onClick={() => window.stopscrolling.setTodayPeriod(period)}
-            >
-              {period[0].toUpperCase() + period.slice(1)}
-            </button>
-          ))}
-          <div className="calendar-more">
-            <IconButton label="More activity options" icon={Ellipsis} onClick={() => setMenuOpen((open) => !open)} />
-            {menuOpen ? (
-              <div className="calendar-more-menu" role="menu">
-                <button type="button" className="calendar-more-action" onClick={() => { setMenuOpen(false); onOpenMore(); }}>
-                  Manage labels
-                </button>
-                <button type="button" className="calendar-more-action" onClick={() => { setMenuOpen(false); window.stopscrolling.navigate("account"); }}>
-                  Sign in & sync
-                </button>
-                <button type="button" className="calendar-more-action" onClick={() => { setMenuOpen(false); window.stopscrolling.requestAccessibility(); }}>
-                  Accessibility permission
-                </button>
-              </div>
-            ) : null}
-          </div>
+        <DevicePicker
+          devices={state.devices}
+          hiddenDeviceKeys={state.hiddenDeviceKeys}
+          value={state.todayDeviceKey ?? ALL_DEVICES}
+          onChange={(key) => window.stopscrolling.setTodayDevice(key)}
+          ariaLabel="Today devices"
+        />
+        <div className="calendar-more">
+          <IconButton label="More activity options" icon={Ellipsis} onClick={() => setMenuOpen((open) => !open)} />
+          {menuOpen ? (
+            <div className="calendar-more-menu" role="menu">
+              <button type="button" className="calendar-more-action" onClick={() => { setMenuOpen(false); onOpenMore(); }}>
+                Manage labels
+              </button>
+              <button type="button" className="calendar-more-action" onClick={() => { setMenuOpen(false); window.stopscrolling.navigate("account"); }}>
+                Sign in & sync
+              </button>
+              <button type="button" className="calendar-more-action" onClick={() => { setMenuOpen(false); window.stopscrolling.requestAccessibility(); }}>
+                {state.capabilities.accessibilityGranted ? "Accessibility granted" : "Grant Accessibility"}
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     </header>

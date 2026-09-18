@@ -40,8 +40,14 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.setTodayPeriod, (_event, period: TodayPeriod) => {
     controller.setTodayPeriod(period);
   });
+  ipcMain.on(IPC.setTodayDevice, (_event, key: string) => {
+    controller.setTodayDevice(key);
+  });
   ipcMain.on(IPC.setInsightsTab, (_event, tab: string) => {
     controller.setInsightsTab(tab);
+  });
+  ipcMain.on(IPC.setInsightsDevice, (_event, key: string) => {
+    controller.setInsightsDevice(key);
   });
   ipcMain.on(IPC.setLeaderboardPeriod, (_event, period: LeaderboardPeriod) => {
     controller.leaderboard.period = period;

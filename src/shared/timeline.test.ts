@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockSegments, entriesToTimelines, formatPeriod, normalizeInsightsTab, periodBounds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
+import { blockSegments, entriesToTimelines, filterEntriesForInsights, filterTimelinesForInsights, formatPeriod, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 
@@ -29,6 +29,74 @@ describe("normalizeInsightsTab", () => {
     expect(normalizeInsightsTab("sessions")).toBe("sessions");
     expect(normalizeInsightsTab("overview")).toBe("overview");
     expect(normalizeInsightsTab("breakdown")).toBe("overview");
+  });
+});
+
+describe("insights device scope", () => {
+  const mac = entry({
+    startTimeUTC: "2026-06-22T09:00:00.000Z",
+    endTimeUTC: "2026-06-22T10:00:00.000Z",
+    appName: "Code",
+    platform: "macos",
+    deviceName: "Studio Mac",
+  });
+  const phone = entry({
+    startTimeUTC: "2026-06-22T11:00:00.000Z",
+    endTimeUTC: "2026-06-22T11:30:00.000Z",
+    appName: "Safari",
+    platform: "ios",
+    deviceName: "iPhone",
+  });
+
+  it("normalizes unknown or hidden keys to all devices", () => {
+    expect(normalizeInsightsDeviceKey("all", ["macos|Studio Mac"])).toBe(ALL_INSIGHTS_DEVICES);
+    expect(normalizeInsightsDeviceKey("macos|Studio Mac", ["macos|Studio Mac"])).toBe("macos|Studio Mac");
+    expect(normalizeInsightsDeviceKey("ios|iPhone", ["macos|Studio Mac"])).toBe(ALL_INSIGHTS_DEVICES);
+    expect(normalizeInsightsDeviceKey("gone", [])).toBe(ALL_INSIGHTS_DEVICES);
+  });
+
+  it("keeps visible devices together and can isolate one", () => {
+    expect(filterEntriesForInsights([mac, phone], ALL_INSIGHTS_DEVICES, []).map((item) => item.appName)).toEqual([
+      "Code",
+      "Safari",
+    ]);
+    expect(filterEntriesForInsights([mac, phone], "ios|iPhone", []).map((item) => item.appName)).toEqual(["Safari"]);
+  });
+
+  it("drops hidden devices even when viewing all", () => {
+    expect(filterEntriesForInsights([mac, phone], ALL_INSIGHTS_DEVICES, ["ios|iPhone"]).map((item) => item.appName)).toEqual([
+      "Code",
+    ]);
+    expect(filterEntriesForInsights([mac, phone], "ios|iPhone", ["ios|iPhone"])).toEqual([]);
+  });
+
+  it("filters timelines to the selected device", () => {
+    const timelines = entriesToTimelines([mac, phone], new Date("2026-06-22T12:00:00.000Z"));
+    expect(timelines.map((timeline) => timeline.id).sort()).toEqual(["ios|iPhone", "macos|Studio Mac"]);
+    expect(filterTimelinesForInsights(timelines, ALL_INSIGHTS_DEVICES)).toHaveLength(2);
+    expect(filterTimelinesForInsights(timelines, "macos|Studio Mac").map((timeline) => timeline.id)).toEqual([
+      "macos|Studio Mac",
+    ]);
+  });
+
+  it("windows Insights daily rhythm to the insights day, not Today", () => {
+    const insightsDay = new Date(2026, 8, 10, 15);
+    const today = new Date(2026, 8, 18, 12);
+    const activity = entry({
+      startTimeUTC: new Date(2026, 8, 10, 9).toISOString(),
+      endTimeUTC: new Date(2026, 8, 10, 10).toISOString(),
+      appName: "Cursor",
+    });
+    const extra = [{ platform: "macos", name: "Mac" }];
+
+    const usingToday = entriesToTimelines([activity], today, extra);
+    expect(usingToday.flatMap((timeline) => timeline.blocks)).toEqual([]);
+
+    const bounds = periodBounds("day", insightsDay);
+    const usingInsights = entriesToTimelines([activity], insightsDay, extra, bounds);
+    expect(usingInsights[0].blocks.map((block) => block.title)).toEqual(["Cursor"]);
+    expect(usingInsights[0].dayStart).toBe(bounds.start.toISOString());
+    expect(usingInsights[0].dayEnd).toBe(bounds.end.toISOString());
   });
 });
 
@@ -198,6 +266,67 @@ describe("insights snapshot", () => {
     expect(snapshotFromEntries(entries, "week", anchor).totalSeconds).toBe(2 * 3600);
     expect(snapshotFromEntries(entries, "month", anchor).totalSeconds).toBe(3 * 3600);
     expect(snapshotFromEntries(entries, "year", anchor).totalSeconds).toBe(4 * 3600);
+  });
+
+  it("splits browser time by website and keeps native apps separate", () => {
+    const snapshot = snapshotFromEntries([
+      entry({
+        startTimeUTC: "2026-06-22T09:00:00.000Z",
+        endTimeUTC: "2026-06-22T09:40:00.000Z",
+        appName: "Safari",
+        url: "https://github.com/org/repo",
+        category: "Development",
+      }),
+      entry({
+        startTimeUTC: "2026-06-22T09:40:00.000Z",
+        endTimeUTC: "2026-06-22T10:00:00.000Z",
+        appName: "Safari",
+        url: "https://www.github.com/settings",
+        category: "Development",
+      }),
+      entry({
+        startTimeUTC: "2026-06-22T10:00:00.000Z",
+        endTimeUTC: "2026-06-22T10:30:00.000Z",
+        appName: "Safari",
+        url: "https://www.youtube.com/watch?v=1",
+        category: "Video",
+      }),
+      entry({
+        startTimeUTC: "2026-06-22T10:30:00.000Z",
+        endTimeUTC: "2026-06-22T11:00:00.000Z",
+        appName: "Cursor",
+        category: "Development",
+      }),
+    ], "day", new Date("2026-06-22T12:00:00"));
+
+    expect(snapshot.apps.map((app) => [app.label, app.seconds, Math.round(app.percentage * 100)])).toEqual([
+      ["github.com", 60 * 60, 50],
+      ["youtube.com", 30 * 60, 25],
+      ["Cursor", 30 * 60, 25],
+    ]);
+  });
+
+  it("keeps local website rows instead of a lumped server Safari total", () => {
+    const snapshot = snapshotFromEntries([
+      entry({
+        startTimeUTC: "2026-06-22T09:00:00.000Z",
+        endTimeUTC: "2026-06-22T10:00:00.000Z",
+        appName: "Safari",
+        url: "https://news.ycombinator.com",
+      }),
+    ], "day", new Date("2026-06-22T12:00:00"), {
+      apps: [{
+        key: "safari",
+        label: "Safari",
+        subtitle: "Studio Mac",
+        category: "Web",
+        seconds: 3600,
+        percentage: 100,
+      }],
+    });
+    expect(snapshot.apps).toHaveLength(1);
+    expect(snapshot.apps[0].label).toBe("news.ycombinator.com");
+    expect(snapshot.apps[0].percentage).toBe(1);
   });
 
   it("uses daily totals inside the selected bounds instead of an unscoped server total", () => {
