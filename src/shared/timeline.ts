@@ -514,6 +514,50 @@ export function appBreakdownKey(segment: Pick<ScreenTimeTimelineSegment, "url" |
   return `app|${segment.appName || segment.label}`;
 }
 
+export function itemBreakdownKey(item: Pick<ScreenTimeSessionBlock["items"][number], "url" | "appName" | "title">) {
+  return appBreakdownKey({ url: item.url, appName: item.appName, label: item.title });
+}
+
+export interface TimelineHighlightRange {
+  id: string;
+  start: Date;
+  end: Date;
+  xFraction: number;
+  widthFraction: number;
+}
+
+export function blockMatchesApp(block: ScreenTimeSessionBlock, appKey: string) {
+  return block.items.some((item) => itemBreakdownKey(item) === appKey);
+}
+
+export function highlightRangesForApp(
+  blocks: ScreenTimeSessionBlock[],
+  appKey: string,
+  dayStart: Date,
+  dayEnd: Date,
+): TimelineHighlightRange[] {
+  if (!appKey) return [];
+  const span = dayEnd.getTime() - dayStart.getTime();
+  if (span <= 0) return [];
+  return blocks.flatMap((block) =>
+    block.items.flatMap((item) => {
+      if (itemBreakdownKey(item) !== appKey) return [];
+      const clippedStart = Math.max(new Date(item.start).getTime(), dayStart.getTime());
+      const clippedEnd = Math.min(new Date(item.end).getTime(), dayEnd.getTime());
+      if (clippedEnd <= clippedStart) return [];
+      const xFraction = Math.max(0, Math.min(1, (clippedStart - dayStart.getTime()) / span));
+      const widthFraction = Math.max(0.004, Math.min(1 - xFraction, (clippedEnd - clippedStart) / span));
+      return [{
+        id: item.id,
+        start: new Date(clippedStart),
+        end: new Date(clippedEnd),
+        xFraction,
+        widthFraction,
+      }];
+    }),
+  );
+}
+
 export function percentLabel(ratio: number) {
   const value = ratio > 1 ? ratio : ratio * 100;
   const percent = Math.round(value);

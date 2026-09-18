@@ -1,9 +1,11 @@
 import { useState, type MouseEvent as ReactMouseEvent } from "react";
 import { displayNameForDevice } from "@shared/device";
 import {
+  blockMatchesApp,
   colorForCategory,
   formatClock,
   formatDuration,
+  highlightRangesForApp,
   hourLabel,
   sessionBlockPlacements,
   timelineAxisTicks,
@@ -16,17 +18,20 @@ import type {
   ScreenTimeDeviceTimeline,
   ScreenTimeSessionBlock,
 } from "@shared/types";
-import { AppWindow, Clock3, Globe2, Laptop2, Layers3 } from "lucide-react";
-import { Badge, Card, EmptyState } from "../ui";
+import { Globe2, Laptop2 } from "lucide-react";
+import { Card } from "../ui";
+import { SessionHoverCard } from "./SessionHoverCard";
 
 export function TimelineGroup({
   timelines,
   devices = [],
   compact = false,
+  highlightedAppKey = null,
 }: {
   timelines: ScreenTimeDeviceTimeline[];
   devices?: DeviceListEntry[];
   compact?: boolean;
+  highlightedAppKey?: string | null;
 }) {
   return (
     <div className={`native-timeline-stack ${compact ? "is-compact" : ""}`}>
@@ -37,6 +42,7 @@ export function TimelineGroup({
           devices={devices}
           showDeviceHeader={!compact && timelines.length > 1}
           compact={compact}
+          highlightedAppKey={highlightedAppKey}
         />
       ))}
     </div>
@@ -48,13 +54,21 @@ function NativeMacTimeline({
   devices,
   showDeviceHeader,
   compact = false,
+  highlightedAppKey = null,
 }: {
   timeline: ScreenTimeDeviceTimeline;
   devices: DeviceListEntry[];
   showDeviceHeader: boolean;
   compact?: boolean;
+  highlightedAppKey?: string | null;
 }) {
-  const [hover, setHover] = useState<{ x: number; time: Date; block: ScreenTimeSessionBlock | null } | null>(null);
+  const [hover, setHover] = useState<{
+    x: number;
+    clientX: number;
+    clientY: number;
+    time: Date;
+    block: ScreenTimeSessionBlock | null;
+  } | null>(null);
   const dayStart = new Date(timeline.dayStart).getTime();
   const dayEnd = new Date(timeline.dayEnd).getTime();
   const span = dayEnd - dayStart || 1;
@@ -74,6 +88,9 @@ function NativeMacTimeline({
     { fraction: 1, label: "12 AM" },
   ];
   const total = timeline.blocks.reduce((sum, block) => sum + block.durationSeconds, 0);
+  const highlights = highlightedAppKey
+    ? highlightRangesForApp(timeline.blocks, highlightedAppKey, new Date(timeline.dayStart), new Date(timeline.dayEnd))
+    : [];
 
   const onMove = (event: ReactMouseEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -85,7 +102,7 @@ function NativeMacTimeline({
       const end = new Date(candidate.end).getTime();
       return timestamp >= start && timestamp <= end;
     }) ?? null;
-    setHover({ x, time: new Date(timestamp), block });
+    setHover({ x, clientX: event.clientX, clientY: event.clientY, time: new Date(timestamp), block });
   };
 
   return (
@@ -119,10 +136,11 @@ function NativeMacTimeline({
           const x = Math.max(0, Math.min(1, (start - dayStart) / span));
           const width = Math.max(0.004, Math.min(1 - x, (end - start) / span));
           const isHovered = hover?.block?.id === block.id;
+          const isDimmed = Boolean(highlightedAppKey) && !blockMatchesApp(block, highlightedAppKey);
           return (
             <button
               key={block.id}
-              className={`native-timeline-block ${isHovered ? "is-hovered" : ""} ${compact ? "is-compact" : ""}`}
+              className={`native-timeline-block ${isHovered ? "is-hovered" : ""} ${isDimmed ? "is-dimmed" : ""} ${compact ? "is-compact" : ""}`}
               style={{
                 left: `${x * 100}%`,
                 width: `${width * 100}%`,
@@ -133,21 +151,29 @@ function NativeMacTimeline({
             />
           );
         })}
+        {highlights.map((range) => (
+          <div
+            key={range.id}
+            className={`native-timeline-highlight ${compact ? "is-compact" : ""}`}
+            data-testid="timeline-highlight"
+            style={{ left: `${range.xFraction * 100}%`, width: `${range.widthFraction * 100}%` }}
+            aria-hidden="true"
+          />
+        ))}
         {nowFraction !== null ? (
           <div className={`native-now-line ${compact ? "is-compact" : ""}`} style={{ left: `${nowFraction * 100}%` }} />
         ) : null}
         {hover ? (
           <>
             <div className="native-hover-line" style={{ left: hover.x }} />
-            <span
-              className="native-hover-time"
-              style={{ left: `clamp(26px, ${hover.x}px, calc(100% - 26px))` }}
-            >
-              {formatClock(hover.time)}
-            </span>
-            {hover.block ? (
-              <NativeHoverCard block={hover.block} x={hover.x} />
-            ) : null}
+            {hover.block ? null : (
+              <span
+                className="native-hover-time"
+                style={{ left: `clamp(26px, ${hover.x}px, calc(100% - 26px))` }}
+              >
+                {formatClock(hover.time)}
+              </span>
+            )}
           </>
         ) : null}
       </div>
@@ -159,35 +185,10 @@ function NativeMacTimeline({
       {!timeline.blocks.length ? (
         <div className="native-timeline-empty">No activity recorded for this {usePeriodAxis ? "period" : "day"}.</div>
       ) : null}
+      {hover?.block ? (
+        <SessionHoverCard block={hover.block} x={hover.clientX} y={hover.clientY} />
+      ) : null}
     </section>
-  );
-}
-
-function NativeHoverCard({ block, x }: { block: ScreenTimeSessionBlock; x: number }) {
-  return (
-    <div
-      className="native-hover-card"
-      style={{ left: `clamp(8px, calc(${x}px - 120px), calc(100% - 248px))` }}
-    >
-      <div className="native-hover-heading">
-        <strong>{formatClock(block.start)} – {formatClock(block.end)}</strong>
-        <Badge tone="accent">{block.category}</Badge>
-      </div>
-      <div className="native-hover-meta">
-        <span><Clock3 size={11} />{formatDuration(block.durationSeconds)}</span>
-        <span><Layers3 size={11} />{block.items.length} {block.items.length === 1 ? "item" : "items"}</span>
-      </div>
-      {block.title ? <div className="native-hover-title">{block.title}</div> : null}
-      <div className="native-hover-items">
-        {block.items.slice(0, 4).map((item) => (
-          <div key={item.id}>
-            {item.url ? <Globe2 size={11} /> : <AppWindow size={11} />}
-            <span>{item.appName}</span>
-            <span>{formatDuration(item.durationSeconds)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -301,16 +302,24 @@ export function VerticalDay({
   );
 }
 
-export function TimelineCard({ timelines, devices }: { timelines: ScreenTimeDeviceTimeline[]; devices?: DeviceListEntry[] }) {
+export function TimelineCard({
+  timelines,
+  devices,
+  highlightedAppKey = null,
+}: {
+  timelines: ScreenTimeDeviceTimeline[];
+  devices?: DeviceListEntry[];
+  highlightedAppKey?: string | null;
+}) {
   return (
     <Card className="data-card">
       <div className="data-card-header">
         <div>
-          <h3 className="data-card-title">Daily rhythm</h3>
+          <h3 className="data-card-title">Timeline</h3>
           <div className="data-card-subtitle">Activity across your visible devices</div>
         </div>
       </div>
-      <TimelineGroup timelines={timelines} devices={devices} />
+      <TimelineGroup timelines={timelines} devices={devices} highlightedAppKey={highlightedAppKey} />
     </Card>
   );
 }

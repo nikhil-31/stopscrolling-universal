@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSnapshot } from "@shared/snapshot";
@@ -373,5 +373,135 @@ describe("native timeline", () => {
     expect(screen.getByRole("img", { name: /1 blocks, 1h tracked/ })).toBeVisible();
     await user.click(screen.getByRole("button", { name: /^Writing,/ }));
     expect(desktop.selectInspector).toHaveBeenCalledWith(expect.objectContaining({ kind: "block" }));
+  });
+
+  it("shows session details when hovering a block", () => {
+    render(
+      <TimelineGroup
+        timelines={[{
+          id: "timeline-1",
+          deviceName: "Studio Mac",
+          devicePlatform: "macos",
+          timeZoneIdentifier: "UTC",
+          dayStart: "2026-09-09T00:00:00Z",
+          dayEnd: "2026-09-10T00:00:00Z",
+          segments: [],
+          blocks: [{
+            id: "block-1",
+            start: "2026-09-09T09:00:00Z",
+            end: "2026-09-09T10:00:00Z",
+            title: "Writing",
+            subtitle: "Notes",
+            category: "Productivity",
+            devicePlatform: "macos",
+            deviceName: "Studio Mac",
+            durationSeconds: 3600,
+            items: [{
+              id: "notes",
+              title: "Writing",
+              subtitle: "Notes",
+              url: "",
+              category: "Productivity",
+              appName: "Notes",
+              start: "2026-09-09T09:00:00Z",
+              end: "2026-09-09T10:00:00Z",
+              durationSeconds: 3600,
+            }],
+          }],
+        }]}
+      />,
+    );
+    const track = screen.getByRole("img", { name: /1 blocks, 1h tracked/ });
+    vi.spyOn(track, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 2400,
+      bottom: 150,
+      width: 2400,
+      height: 150,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    fireEvent.mouseMove(track, { clientX: 50, clientY: 20 });
+    expect(screen.queryByTestId("session-hover-card")).toBeNull();
+    expect(track.querySelector(".native-hover-time")).not.toBeNull();
+
+    fireEvent.mouseMove(track, { clientX: 950, clientY: 20 });
+    const card = screen.getByTestId("session-hover-card");
+    expect(within(card).getByText("Writing")).toBeVisible();
+    expect(within(card).getAllByText("1h").length).toBeGreaterThan(0);
+    expect(within(card).getByText("Notes")).toBeVisible();
+    const label = screen.getByRole("button", { name: /^Writing,/ }).getAttribute("aria-label") ?? "";
+    const range = label.replace(/^Writing, /, "").replace(/, 1h$/, "").replace(" to ", " – ");
+    expect(within(card).getByText(range)).toBeVisible();
+    expect(track.querySelector(".native-hover-time")).toBeNull();
+
+    fireEvent.mouseLeave(track);
+    expect(screen.queryByTestId("session-hover-card")).toBeNull();
+  });
+
+  it("highlights matching app intervals and dims the rest", () => {
+    const { container } = render(
+      <TimelineGroup
+        highlightedAppKey="app|Notes"
+        timelines={[{
+          id: "timeline-1",
+          deviceName: "Studio Mac",
+          devicePlatform: "macos",
+          timeZoneIdentifier: "UTC",
+          dayStart: "2026-09-09T00:00:00Z",
+          dayEnd: "2026-09-10T00:00:00Z",
+          segments: [],
+          blocks: [{
+            id: "block-1",
+            start: "2026-09-09T09:00:00Z",
+            end: "2026-09-09T10:00:00Z",
+            title: "Writing",
+            subtitle: "Notes",
+            category: "Productivity",
+            devicePlatform: "macos",
+            deviceName: "Studio Mac",
+            durationSeconds: 3600,
+            items: [{
+              id: "notes",
+              title: "Writing",
+              subtitle: "Notes",
+              url: "",
+              category: "Productivity",
+              appName: "Notes",
+              start: "2026-09-09T09:00:00Z",
+              end: "2026-09-09T10:00:00Z",
+              durationSeconds: 3600,
+            }],
+          }, {
+            id: "block-2",
+            start: "2026-09-09T11:00:00Z",
+            end: "2026-09-09T12:00:00Z",
+            title: "Safari",
+            subtitle: "github.com",
+            category: "Development",
+            devicePlatform: "macos",
+            deviceName: "Studio Mac",
+            durationSeconds: 3600,
+            items: [{
+              id: "github",
+              title: "Safari",
+              subtitle: "github.com",
+              url: "https://github.com",
+              category: "Development",
+              appName: "Safari",
+              start: "2026-09-09T11:00:00Z",
+              end: "2026-09-09T12:00:00Z",
+              durationSeconds: 3600,
+            }],
+          }],
+        }]}
+      />,
+    );
+    expect(container.querySelectorAll('[data-testid="timeline-highlight"]')).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /^Writing,/ })).not.toHaveClass("is-dimmed");
+    expect(screen.getByRole("button", { name: /^Safari,/ })).toHaveClass("is-dimmed");
   });
 });

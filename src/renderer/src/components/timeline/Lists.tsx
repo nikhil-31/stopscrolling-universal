@@ -93,9 +93,13 @@ export function BlockList({ timelines, devices = [] }: { timelines: ScreenTimeDe
 export function BreakdownList({
   categories,
   apps,
+  selectedAppKey = null,
+  onSelectApp,
 }: {
   categories: ScreenTimeCategoryBreakdown[];
   apps: ScreenTimeAppBreakdown[];
+  selectedAppKey?: string | null;
+  onSelectApp?: (key: string | null) => void;
 }) {
   return (
     <div className="breakdown-layout">
@@ -134,18 +138,28 @@ export function BreakdownList({
         )) : <EmptyState title="No categories" body="Category totals will appear here." icon={Shapes} />}
       </Grouped>
       <Grouped title="Apps & websites" description="Your most-used destinations">
-        {apps.length ? apps.slice(0, 12).map((item) => (
-          <div className="data-row" key={item.key}>
-            <span className="row-main">
-              <span className="avatar">{item.label.slice(0, 2).toUpperCase()}</span>
-              <span className="row-copy">
-                <span className="row-title">{item.label}</span>
-                <span className="row-subtitle">{item.subtitle || item.category}</span>
+        {apps.length ? apps.slice(0, 12).map((item) => {
+          const selected = selectedAppKey === item.key;
+          return (
+            <button
+              type="button"
+              className={`data-row ${selected ? "is-selected" : ""}`}
+              key={item.key}
+              aria-pressed={selected}
+              aria-label={`Highlight ${item.label} on the timeline`}
+              onClick={() => onSelectApp?.(selected ? null : item.key)}
+            >
+              <span className="row-main">
+                <span className="avatar">{item.label.slice(0, 2).toUpperCase()}</span>
+                <span className="row-copy">
+                  <span className="row-title">{item.label}</span>
+                  <span className="row-subtitle">{item.subtitle || item.category}</span>
+                </span>
               </span>
-            </span>
-            <span className="row-value">{formatDuration(item.seconds)}</span>
-          </div>
-        )) : <EmptyState title="No apps yet" body="App totals will appear here." />}
+              <span className="row-value">{formatDuration(item.seconds)}</span>
+            </button>
+          );
+        }) : <EmptyState title="No apps yet" body="App totals will appear here." />}
       </Grouped>
     </div>
   );

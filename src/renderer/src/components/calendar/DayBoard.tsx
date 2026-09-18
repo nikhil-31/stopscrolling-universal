@@ -4,7 +4,8 @@ import type { AppSnapshot } from "@shared/snapshot";
 import { endOfDay, startOfDay } from "@shared/platform";
 import { formatClock } from "@shared/timeline";
 import type { ForegroundContext, ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { SessionHoverCard } from "../timeline/SessionHoverCard";
 
 const HOUR_HEIGHT = 48;
 const HEIGHT = HOUR_HEIGHT * 24;
@@ -24,17 +25,44 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
   const isToday = now >= dayStart.getTime() && now < dayEnd.getTime();
   const nowY = ((now - dayStart.getTime()) / (dayEnd.getTime() - dayStart.getTime())) * HEIGHT;
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<{
+    block: ScreenTimeSessionBlock;
+    x: number;
+    y: number;
+  } | null>(null);
   const firstEntryTop = earliestEntryTop(blocks, dayStart, dayEnd);
   const gridTemplateColumns = `52px repeat(${timelines.length}, minmax(${ENTRY_MIN}px, 1fr)) minmax(${CALENDAR_MIN}px, 1.1fr)`;
   const gridMinWidth = HOUR_COL + timelines.length * ENTRY_MIN + CALENDAR_MIN;
 
   useEffect(() => {
     const scroller = scrollerRef.current;
-    if (!scroller || firstEntryTop == null) return;
+    if (!scroller) return;
     const header = scroller.querySelector(".day-board-head");
     const headerHeight = header instanceof HTMLElement ? header.offsetHeight : 0;
-    scroller.scrollTop = Math.max(0, firstEntryTop - headerHeight - 8);
-  }, [state.calendarAnchor, firstEntryTop]);
+    const current = Date.now();
+    const start = startOfDay(new Date(state.calendarAnchor)).getTime();
+    const end = endOfDay(new Date(state.calendarAnchor)).getTime();
+    const viewingToday = current >= start && current < end;
+    if (viewingToday) {
+      const y = ((current - start) / (end - start)) * HEIGHT;
+      scroller.scrollTop = dayBoardScrollTop({
+        isToday: true,
+        nowY: y,
+        firstEntryTop: null,
+        viewportHeight: scroller.clientHeight,
+        headerHeight,
+      });
+      return;
+    }
+    if (firstEntryTop == null) return;
+    scroller.scrollTop = dayBoardScrollTop({
+      isToday: false,
+      nowY: 0,
+      firstEntryTop,
+      viewportHeight: scroller.clientHeight,
+      headerHeight,
+    });
+  }, [state.calendarAnchor, isToday ? "now" : firstEntryTop]);
 
   return (
     <div className="day-board" data-testid="calendar-day-board" ref={scrollerRef}>
@@ -61,11 +89,17 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
             {timeline.blocks.map((block) => {
               const live = isLocalLiveBlock(block, timeline, state, now);
               const style = place(block.start, block.end, dayStart, dayEnd);
+              const showHover = (event: ReactMouseEvent) => {
+                setHover({ block, x: event.clientX, y: event.clientY });
+              };
               return (
                 <button
                   key={block.id}
                   className={`day-block day-block-entry is-solid ${live ? "is-live" : ""}`}
                   style={style}
+                  onMouseEnter={showHover}
+                  onMouseMove={showHover}
+                  onMouseLeave={() => setHover(null)}
                   onClick={() => window.stopscrolling.selectInspector({ kind: "block", block })}
                 >
                   {live ? (
@@ -102,6 +136,7 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
         </div>
         {isToday ? <div className="day-board-now" style={{ top: nowY }} /> : null}
       </div>
+      {hover ? <SessionHoverCard block={hover.block} x={hover.x} y={hover.y} /> : null}
     </div>
   );
 }
@@ -141,6 +176,27 @@ function emptyTimeline(dayStart: Date, dayEnd: Date): ScreenTimeDeviceTimeline {
     segments: [],
     blocks: [],
   };
+}
+
+export function dayBoardScrollTop({
+  isToday,
+  nowY,
+  firstEntryTop,
+  viewportHeight,
+  headerHeight,
+}: {
+  isToday: boolean;
+  nowY: number;
+  firstEntryTop: number | null;
+  viewportHeight: number;
+  headerHeight: number;
+}) {
+  if (isToday) {
+    const visible = Math.max(0, viewportHeight - headerHeight);
+    return Math.max(0, nowY - visible / 2);
+  }
+  if (firstEntryTop == null) return 0;
+  return Math.max(0, firstEntryTop - headerHeight - 8);
 }
 
 function earliestEntryTop(

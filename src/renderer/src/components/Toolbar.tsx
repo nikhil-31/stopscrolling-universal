@@ -59,9 +59,11 @@ export function Toolbar({ state }: { state: AppSnapshot }) {
         <Tooltip label="Refresh timeline">
           <IconButton label="Refresh timeline" icon={RefreshCw} onClick={() => window.stopscrolling.refresh()} />
         </Tooltip>
-        {["today", "timer", "calendar", "insights"].includes(state.navigation) ? (
-          <Tooltip label="Accessibility permission">
-            <IconButton label="Accessibility permission" icon={Hand} onClick={() => window.stopscrolling.requestAccessibility()} />
+        {["today", "timer", "calendar", "insights"].includes(state.navigation)
+          && state.capabilities.platform === "macos"
+          && !state.capabilities.accessibilityGranted ? (
+          <Tooltip label="Grant Accessibility permission">
+            <IconButton label="Grant Accessibility permission" icon={Hand} onClick={() => window.stopscrolling.requestAccessibility()} />
           </Tooltip>
         ) : null}
         <Button

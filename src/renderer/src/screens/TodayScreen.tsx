@@ -14,6 +14,7 @@ import { TodayChrome } from "../components/today/TodayChrome";
 
 export function TodayScreen({ state }: { state: AppSnapshot }) {
   const [prompt, setPrompt] = useState<CalendarPrompt>(null);
+  const [highlightedAppKey, setHighlightedAppKey] = useState<string | null>(null);
   const tab = normalizeTodayTab(state.todayTab);
 
   return (
@@ -50,12 +51,14 @@ export function TodayScreen({ state }: { state: AppSnapshot }) {
 
       {tab === "timeline" ? (
         <div className="activity-board">
-          <ActivityTimeline state={state} />
+          <ActivityTimeline state={state} highlightedAppKey={highlightedAppKey} />
           <div className="activity-split">
             <ActivityPie state={state} />
             <CategoriesList state={state} />
             <AppsWebsitesList
               state={state}
+              selectedKey={highlightedAppKey}
+              onSelect={setHighlightedAppKey}
               onLabelApp={(app: ScreenTimeAppBreakdown) => setPrompt({
                 kind: "app-label",
                 appKey: app.key,

@@ -113,7 +113,7 @@ describe("InsightsScreen", () => {
     expect(desktop.setInsightsDevice).toHaveBeenCalledWith("macos|Studio Mac");
   });
 
-  it("renders daily rhythm blocks for the selected day", () => {
+  it("renders timeline blocks for the selected day", () => {
     const dayStart = new Date(2026, 8, 10).toISOString();
     const dayEnd = new Date(2026, 8, 11).toISOString();
     render(<InsightsScreen state={snapshot({
@@ -150,9 +150,72 @@ describe("InsightsScreen", () => {
         }],
       }],
     })} />);
-    expect(screen.getByText("Daily rhythm")).toBeVisible();
+    expect(screen.getByText("Timeline")).toBeVisible();
     expect(screen.getByRole("img", { name: /1 blocks, 1h tracked/ })).toBeVisible();
     expect(screen.queryByText(/No activity recorded/)).toBeNull();
+  });
+
+  it("highlights the day timeline when an app row is clicked", async () => {
+    const user = userEvent.setup();
+    const dayStart = new Date(2026, 8, 10).toISOString();
+    const dayEnd = new Date(2026, 8, 11).toISOString();
+    render(<InsightsScreen state={snapshot({
+      insightsPeriod: "day",
+      snapshot: {
+        totalSeconds: 3600,
+        sessionCount: 1,
+        timelineSegments: [],
+        listSegments: [],
+        categories: [{ category: "Development", seconds: 3600, percentage: 1 }],
+        apps: [{
+          key: "app|Cursor",
+          label: "Cursor",
+          subtitle: "Development",
+          category: "Development",
+          seconds: 3600,
+          percentage: 1,
+        }],
+        buckets: [],
+        trackedSecondsByDay: {},
+      },
+      timelines: [{
+        id: "macos|Studio Mac",
+        deviceName: "Studio Mac",
+        devicePlatform: "macos",
+        timeZoneIdentifier: "UTC",
+        dayStart,
+        dayEnd,
+        segments: [],
+        blocks: [{
+          id: "block-1",
+          start: new Date(2026, 8, 10, 9).toISOString(),
+          end: new Date(2026, 8, 10, 10).toISOString(),
+          title: "Cursor",
+          subtitle: "Development",
+          category: "Development",
+          devicePlatform: "macos",
+          deviceName: "Studio Mac",
+          durationSeconds: 3600,
+          items: [{
+            id: "cursor",
+            title: "Cursor",
+            subtitle: "Development",
+            url: "",
+            category: "Development",
+            appName: "Cursor",
+            start: new Date(2026, 8, 10, 9).toISOString(),
+            end: new Date(2026, 8, 10, 10).toISOString(),
+            durationSeconds: 3600,
+          }],
+        }],
+      }],
+    })} />);
+    expect(screen.queryByTestId("timeline-highlight")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
+    expect(screen.getByRole("button", { name: "Highlight Cursor on the timeline" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("timeline-highlight")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
+    expect(screen.queryByTestId("timeline-highlight")).toBeNull();
   });
 
   it("shows the selected device in metric copy and ignores hidden devices", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockSegments, entriesToTimelines, filterEntriesForInsights, filterTimelinesForInsights, formatPeriod, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
+import { blockSegments, entriesToTimelines, filterEntriesForInsights, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 
@@ -79,7 +79,7 @@ describe("insights device scope", () => {
     ]);
   });
 
-  it("windows Insights daily rhythm to the insights day, not Today", () => {
+  it("windows Insights timeline to the insights day, not Today", () => {
     const insightsDay = new Date(2026, 8, 10, 15);
     const today = new Date(2026, 8, 18, 12);
     const activity = entry({
@@ -190,6 +190,78 @@ describe("session blocks", () => {
       },
     ];
     expect(blockSegments(segments)).toHaveLength(2);
+  });
+});
+
+describe("highlightRangesForApp", () => {
+  const dayStart = new Date("2026-06-22T00:00:00.000Z");
+  const dayEnd = new Date("2026-06-23T00:00:00.000Z");
+
+  function segment(partial: Partial<ScreenTimeTimelineSegment> & Pick<ScreenTimeTimelineSegment, "id" | "start" | "end" | "appName">): ScreenTimeTimelineSegment {
+    return {
+      label: partial.label ?? partial.appName,
+      subtitle: "",
+      url: "",
+      bundleID: partial.appName,
+      category: "Application",
+      devicePlatform: "macos",
+      deviceName: "Mac",
+      timeZoneIdentifier: "UTC",
+      isLive: false,
+      ...partial,
+    };
+  }
+
+  it("returns matching app slices inside mixed blocks", () => {
+    const blocks = blockSegments([
+      segment({ id: "cursor", start: "2026-06-22T09:00:00.000Z", end: "2026-06-22T09:30:00.000Z", appName: "Cursor" }),
+      segment({ id: "notes", start: "2026-06-22T09:31:00.000Z", end: "2026-06-22T10:00:00.000Z", appName: "Notes" }),
+    ]);
+    expect(blocks).toHaveLength(1);
+    const ranges = highlightRangesForApp(blocks, "app|Cursor", dayStart, dayEnd);
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0].id).toBe("cursor");
+    expect(ranges[0].start.toISOString()).toBe("2026-06-22T09:00:00.000Z");
+    expect(ranges[0].end.toISOString()).toBe("2026-06-22T09:30:00.000Z");
+    expect(ranges[0].xFraction).toBeCloseTo(9 / 24);
+    expect(ranges[0].widthFraction).toBeCloseTo(0.5 / 24);
+  });
+
+  it("matches websites by hostname", () => {
+    const blocks = blockSegments([
+      segment({
+        id: "github",
+        start: "2026-06-22T11:00:00.000Z",
+        end: "2026-06-22T12:00:00.000Z",
+        appName: "Safari",
+        url: "https://github.com/org/repo",
+      }),
+      segment({
+        id: "docs",
+        start: "2026-06-22T12:01:00.000Z",
+        end: "2026-06-22T12:30:00.000Z",
+        appName: "Safari",
+        url: "https://docs.google.com",
+      }),
+    ]);
+    const ranges = highlightRangesForApp(blocks, "web|github.com", dayStart, dayEnd);
+    expect(ranges.map((range) => range.id)).toEqual(["github"]);
+  });
+
+  it("clips ranges to the day window", () => {
+    const blocks = blockSegments([
+      segment({
+        id: "overnight",
+        start: "2026-06-21T23:30:00.000Z",
+        end: "2026-06-22T00:30:00.000Z",
+        appName: "Cursor",
+      }),
+    ]);
+    const ranges = highlightRangesForApp(blocks, "app|Cursor", dayStart, dayEnd);
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0].start.toISOString()).toBe("2026-06-22T00:00:00.000Z");
+    expect(ranges[0].end.toISOString()).toBe("2026-06-22T00:30:00.000Z");
+    expect(ranges[0].xFraction).toBe(0);
   });
 });
 

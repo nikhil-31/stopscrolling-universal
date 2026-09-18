@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { displayNameForDevice } from "@shared/device";
 import {
   formatDuration,
@@ -17,6 +18,7 @@ import { BreakdownList, EventLog, TimelineCard, TrendCard } from "../components/
 import { LoadingState, MetricCard, Tabs } from "../components/ui";
 
 export function InsightsScreen({ state }: { state: AppSnapshot }) {
+  const [highlightedAppKey, setHighlightedAppKey] = useState<string | null>(null);
   if (state.loadingEntries) return <LoadingState label="Building your insights…" />;
   const tab = normalizeInsightsTab(state.insightsTab);
   const visibleDevices = visibleDevicesForPicker(state.devices, state.hiddenDeviceKeys);
@@ -84,8 +86,19 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
       {tab === "overview" ? (
         <div className="stack">
           <TrendCard buckets={state.snapshot.buckets} period={state.insightsPeriod} />
-          {state.insightsPeriod === "day" ? <TimelineCard timelines={state.timelines} devices={state.devices} /> : null}
-          <BreakdownList categories={state.snapshot.categories} apps={state.snapshot.apps} />
+          {state.insightsPeriod === "day" ? (
+            <TimelineCard
+              timelines={state.timelines}
+              devices={state.devices}
+              highlightedAppKey={highlightedAppKey}
+            />
+          ) : null}
+          <BreakdownList
+            categories={state.snapshot.categories}
+            apps={state.snapshot.apps}
+            selectedAppKey={highlightedAppKey}
+            onSelectApp={setHighlightedAppKey}
+          />
         </div>
       ) : null}
       {tab === "sessions" ? <EventLog segments={state.snapshot.listSegments} /> : null}

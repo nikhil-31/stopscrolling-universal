@@ -1,18 +1,20 @@
-import { formatDuration } from "@shared/timeline";
+import { formatDuration, percentLabel } from "@shared/timeline";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { ScreenTimeAppBreakdown } from "@shared/types";
 import { SquarePen } from "lucide-react";
-import { useState } from "react";
 import { IconButton } from "../ui";
 
 export function AppsWebsitesList({
   state,
+  selectedKey = null,
+  onSelect,
   onLabelApp,
 }: {
   state: AppSnapshot;
+  selectedKey?: string | null;
+  onSelect: (key: string | null) => void;
   onLabelApp: (app: ScreenTimeAppBreakdown) => void;
 }) {
-  const [selected, setSelected] = useState<string | null>(null);
   const apps = state.snapshot.apps;
 
   return (
@@ -21,32 +23,30 @@ export function AppsWebsitesList({
       {apps.length ? (
         <div className="activity-app-list">
           {apps.map((app) => {
-            const percent = Math.round(app.percentage * 100);
+            const percent = percentLabel(app.percentage);
+            const bar = Math.min(100, Math.max(3, app.percentage > 1 ? app.percentage : app.percentage * 100));
+            const selected = selectedKey === app.key;
             return (
               <div
                 key={app.key}
-                className={`activity-app-row ${selected === app.key ? "is-selected" : ""}`}
+                className={`activity-app-row ${selected ? "is-selected" : ""}`}
               >
                 <button
                   type="button"
                   className="activity-app-main"
-                  onClick={() => {
-                    setSelected(app.key);
-                    const segment = state.snapshot.listSegments.find((item) => (
-                      `${item.appName}|${item.subtitle}|${item.category}` === app.key
-                    ));
-                    if (segment) window.stopscrolling.selectInspector({ kind: "segment", segment });
-                  }}
+                  aria-pressed={selected}
+                  aria-label={`Highlight ${app.label} on the timeline`}
+                  onClick={() => onSelect(selected ? null : app.key)}
                 >
-                  <span className="activity-app-pct">{percent < 1 ? "<1%" : `${percent}%`}</span>
+                  <span className="activity-app-pct">{percent}</span>
                   <span className="activity-app-bar" aria-hidden="true">
-                    <span style={{ width: `${Math.min(100, Math.max(3, percent))}%` }} />
+                    <span style={{ width: `${bar}%` }} />
                   </span>
-                  <span className="activity-app-name">{displayName(app)}</span>
+                  <span className="activity-app-name">{app.label}</span>
                   <span className="activity-app-time">{formatDuration(app.seconds)}</span>
                 </button>
                 <IconButton
-                  label={`Label ${displayName(app)}`}
+                  label={`Label ${app.label}`}
                   icon={SquarePen}
                   onClick={() => onLabelApp(app)}
                 />
@@ -59,16 +59,4 @@ export function AppsWebsitesList({
       )}
     </section>
   );
-}
-
-function displayName(app: ScreenTimeAppBreakdown) {
-  const source = app.subtitle || app.label;
-  try {
-    if (/^https?:\/\//i.test(source)) {
-      return new URL(source).hostname.replace(/^www\./, "");
-    }
-  } catch {
-    /* fall through to the raw label */
-  }
-  return source;
 }

@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
+import { dayBoardScrollTop } from "../components/calendar/DayBoard";
 import { CalendarScreen } from "./CalendarScreen";
 
 const desktop = {
@@ -175,6 +176,32 @@ describe("CalendarScreen", () => {
     expect(within(phone).queryByText("Writing")).toBeNull();
   });
 
+  it("shows session time when hovering a time-entry block", () => {
+    render(
+      <CalendarScreen
+        state={snapshot({
+          timelines: [
+            timeline({
+              id: "macos|Studio Mac",
+              deviceName: "Studio Mac",
+              devicePlatform: "macos",
+              blocks: [block({ id: "mac-block", title: "Writing", deviceName: "Studio Mac", devicePlatform: "macos" })],
+            }),
+          ],
+        })}
+      />,
+    );
+
+    const entry = screen.getByRole("button", { name: /Writing/ });
+    fireEvent.mouseEnter(entry, { clientX: 40, clientY: 40 });
+    const card = screen.getByTestId("session-hover-card");
+    expect(within(card).getByText("Writing", { selector: ".native-hover-title" })).toBeVisible();
+    expect(within(card).getAllByText("1h").length).toBeGreaterThan(0);
+
+    fireEvent.mouseLeave(entry);
+    expect(screen.queryByTestId("session-hover-card")).toBeNull();
+  });
+
   it("marks Tracking... only on the local device live block", () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date(2026, 8, 12, 9, 30).getTime());
     render(
@@ -228,5 +255,49 @@ describe("CalendarScreen", () => {
     expect(within(mac).queryByText("Notes")).toBeNull();
     expect(within(phone).getByText("Safari")).toBeVisible();
     expect(within(phone).queryByText("Tracking...")).toBeNull();
+  });
+
+  it("centers the current time in the day board viewport", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date(2026, 8, 12, 12).getTime());
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.getAttribute("data-testid") === "calendar-day-board" ? 400 : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("day-board-head") ? 32 : 0;
+    });
+
+    render(<CalendarScreen state={snapshot()} />);
+    const board = screen.getByTestId("calendar-day-board");
+    await waitFor(() => {
+      expect(board.scrollTop).toBe(dayBoardScrollTop({
+        isToday: true,
+        nowY: 12 / 24 * 48 * 24,
+        firstEntryTop: null,
+        viewportHeight: 400,
+        headerHeight: 32,
+      }));
+    });
+  });
+});
+
+describe("dayBoardScrollTop", () => {
+  it("puts the now line in the middle of the visible timeline", () => {
+    expect(dayBoardScrollTop({
+      isToday: true,
+      nowY: 576,
+      firstEntryTop: 96,
+      viewportHeight: 400,
+      headerHeight: 32,
+    })).toBe(392);
+  });
+
+  it("falls back to the first entry on other days", () => {
+    expect(dayBoardScrollTop({
+      isToday: false,
+      nowY: 576,
+      firstEntryTop: 96,
+      viewportHeight: 400,
+      headerHeight: 32,
+    })).toBe(56);
   });
 });

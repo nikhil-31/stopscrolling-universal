@@ -1,7 +1,7 @@
 import type { CalendarView } from "@shared/calendar-workspace";
 import { formatFullDate } from "@shared/calendar-workspace";
 import type { AppSnapshot } from "@shared/snapshot";
-import { CalendarClock, ChevronLeft, ChevronRight, Ellipsis, Settings2 } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
 import { useState } from "react";
 import { IconButton, Tooltip } from "../ui";
 
@@ -76,10 +76,6 @@ export function CalendarChrome({
             ) : null}
           </div>
         </div>
-        <button type="button" className="calendar-settings-btn" onClick={() => window.stopscrolling.openSettings()}>
-          <Settings2 size={15} aria-hidden="true" />
-          Settings
-        </button>
       </div>
     </header>
   );
