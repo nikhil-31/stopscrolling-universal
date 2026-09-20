@@ -1,5 +1,6 @@
 import {
   colorForCategory,
+  durationAxisTicks,
   formatDuration,
 } from "@shared/timeline";
 import type {
@@ -69,28 +70,51 @@ export function BucketBars({
   }
 
   const dense = period === "month";
+  const axis = durationAxisTicks(max);
   return (
-    <div
-      className={`bar-chart ${dense ? "bar-chart-month" : ""}`}
-      role="img"
-      aria-label="Tracked time chart"
-      style={{ ["--bucket-count" as string]: buckets.length }}
-    >
-      {buckets.map((bucket) => {
-        const height = max && bucket.seconds ? Math.max(2, (bucket.seconds / max) * 100) : 0;
-        return (
-          <div
-            className="bar-item"
-            key={bucket.id}
-            title={`${bucket.label}: ${formatDuration(bucket.seconds)}`}
-            style={{ ["--height" as string]: `${height}%` }}
+    <div className="bar-chart-frame">
+      <div className="bar-y-axis" data-testid="activity-trend-y-axis" aria-hidden="true">
+        {axis.ticks.map((tick) => (
+          <span
+            key={tick.seconds}
+            className="bar-y-tick"
+            style={{ bottom: `${tick.fraction * 100}%` }}
           >
-            <span className="bar-value">{formatDuration(bucket.seconds)}</span>
-            <span className="bar-column" style={{ height: `${height}%` }} />
-            <span className="bar-label">{bucket.label}</span>
-          </div>
-        );
-      })}
+            {tick.label}
+          </span>
+        ))}
+      </div>
+      <div
+        className={`bar-chart ${dense ? "bar-chart-month" : ""}`}
+        role="img"
+        aria-label={`Tracked time chart, 0 to ${formatDuration(axis.max)}`}
+        style={{ ["--bucket-count" as string]: buckets.length }}
+      >
+        <div className="bar-grid" aria-hidden="true">
+          {axis.ticks.map((tick) => (
+            <span
+              key={tick.seconds}
+              className={`bar-grid-line ${tick.fraction === 0 ? "is-baseline" : ""}`}
+              style={{ bottom: `${tick.fraction * 100}%` }}
+            />
+          ))}
+        </div>
+        {buckets.map((bucket) => {
+          const height = axis.max && bucket.seconds ? Math.max(2, (bucket.seconds / axis.max) * 100) : 0;
+          return (
+            <div
+              className="bar-item"
+              key={bucket.id}
+              title={`${bucket.label}: ${formatDuration(bucket.seconds)}`}
+              style={{ ["--height" as string]: `${height}%` }}
+            >
+              <span className="bar-value">{formatDuration(bucket.seconds)}</span>
+              <span className="bar-column" style={{ height: `${height}%` }} />
+              <span className="bar-label">{bucket.label}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

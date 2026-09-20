@@ -204,6 +204,55 @@ export function formatDuration(seconds: number) {
   return `${hours}h ${minutes}m`;
 }
 
+const DURATION_AXIS_CEILINGS = [
+  15 * 60,
+  30 * 60,
+  45 * 60,
+  60 * 60,
+  90 * 60,
+  2 * 3600,
+  3 * 3600,
+  4 * 3600,
+  6 * 3600,
+  8 * 3600,
+  12 * 3600,
+  18 * 3600,
+  24 * 3600,
+];
+
+const DURATION_AXIS_STEPS = new Set([
+  5 * 60,
+  10 * 60,
+  15 * 60,
+  20 * 60,
+  30 * 60,
+  45 * 60,
+  60 * 60,
+  90 * 60,
+  2 * 3600,
+  3 * 3600,
+  4 * 3600,
+]);
+
+export function durationAxisTicks(maxSeconds: number) {
+  const raw = Math.max(0, maxSeconds);
+  const scaleMax = DURATION_AXIS_CEILINGS.find((value) => value >= raw)
+    ?? Math.max(3600, Math.ceil(raw / 3600) * 3600);
+  const intervals = [4, 3, 2].find((count) => DURATION_AXIS_STEPS.has(scaleMax / count)) ?? 3;
+  const step = scaleMax / intervals;
+  return {
+    max: scaleMax,
+    ticks: Array.from({ length: intervals + 1 }, (_, index) => {
+      const seconds = step * index;
+      return {
+        seconds,
+        fraction: index / intervals,
+        label: seconds === 0 ? "0" : formatDuration(seconds),
+      };
+    }),
+  };
+}
+
 export function formatClock(value: string | Date) {
   const date = typeof value === "string" ? new Date(value) : value;
   return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);

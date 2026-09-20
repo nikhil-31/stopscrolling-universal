@@ -1104,19 +1104,46 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
 
 .chart-card { min-height: 220px; padding: 16px 16px 28px; }
 .chart-card-month { min-height: 248px; }
+.bar-chart-frame {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  column-gap: 8px;
+  height: 150px;
+  margin-bottom: 22px;
+}
+.bar-y-axis { position: relative; }
+.bar-y-tick {
+  position: absolute;
+  right: 0;
+  transform: translateY(50%);
+  color: var(--text-tertiary);
+  font-size: 8px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: right;
+  white-space: nowrap;
+}
 .bar-chart {
+  position: relative;
   display: flex;
   align-items: stretch;
   height: 150px;
-  padding: 14px 2px 0;
-  margin-bottom: 22px;
   border-bottom: 1px solid var(--line);
+  border-left: 1px solid var(--line);
 }
 .bar-chart-month {
   display: grid;
   grid-template-columns: repeat(var(--bucket-count, 31), minmax(0, 1fr));
 }
-.bar-item { position: relative; display: flex; flex: 1; align-items: flex-end; justify-content: center; min-width: 0; }
+.bar-grid { position: absolute; inset: 0; pointer-events: none; }
+.bar-grid-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--line);
+}
+.bar-grid-line.is-baseline { display: none; }
+.bar-item { position: relative; z-index: 1; display: flex; flex: 1; align-items: flex-end; justify-content: center; min-width: 0; }
 .bar-chart-month .bar-item { flex: none; }
 .bar-column {
   width: min(68%, 30px);

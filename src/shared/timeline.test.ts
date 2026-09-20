@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockSegments, entriesToTimelines, filterEntriesForInsights, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
+import { blockSegments, durationAxisTicks, entriesToTimelines, filterEntriesForInsights, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 
@@ -465,6 +465,13 @@ describe("today period windows", () => {
     const monthTicks = timelineAxisTicks(month.start, month.end);
     expect(monthTicks[0].label).toBe("1");
     expect(monthTicks.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("builds a duration y-axis with nice time steps", () => {
+    expect(durationAxisTicks(1200).ticks.map((tick) => tick.label)).toEqual(["0", "10m", "20m", "30m"]);
+    expect(durationAxisTicks(3600).max).toBe(3600);
+    expect(durationAxisTicks(3600).ticks.map((tick) => tick.label)).toEqual(["0", "15m", "30m", "45m", "1h"]);
+    expect(durationAxisTicks(0).ticks[0]).toEqual({ seconds: 0, fraction: 0, label: "0" });
   });
 });
 
