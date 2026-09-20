@@ -1,11 +1,16 @@
 import { colorForCategory, formatDuration } from "@shared/timeline";
 import type { AppSnapshot } from "@shared/snapshot";
+import type { ScreenTimeCategoryBreakdown } from "@shared/types";
 import { Shapes } from "lucide-react";
 import { EmptyState } from "../ui";
 
-export function CategoriesList({ state }: { state: AppSnapshot }) {
-  const categories = state.snapshot.categories;
-
+export function CategoriesList({
+  state,
+  categories = state.snapshot.categories,
+}: {
+  state: AppSnapshot;
+  categories?: ScreenTimeCategoryBreakdown[];
+}) {
   return (
     <section className="activity-panel" aria-label="Categories">
       <div className="activity-panel-label">Categories</div>

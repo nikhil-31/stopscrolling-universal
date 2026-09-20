@@ -1,5 +1,11 @@
-import { useState } from "react";
-import { normalizeTodayTab } from "@shared/timeline";
+import { useMemo, useState } from "react";
+import {
+  buildBreakdowns,
+  filterSegmentsForApp,
+  filterTimelinesForApp,
+  normalizeTodayTab,
+  rankedAppsBySeconds,
+} from "@shared/timeline";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { ScreenTimeAppBreakdown } from "@shared/types";
 import { Banner, Button, Tabs } from "../components/ui";
@@ -14,8 +20,30 @@ import { TodayChrome } from "../components/today/TodayChrome";
 
 export function TodayScreen({ state }: { state: AppSnapshot }) {
   const [prompt, setPrompt] = useState<CalendarPrompt>(null);
-  const [highlightedAppKey, setHighlightedAppKey] = useState<string | null>(null);
+  const [selectedAppKey, setSelectedAppKey] = useState<string | null>(null);
+  const apps = rankedAppsBySeconds(state.snapshot.apps);
+  const selectedApp = selectedAppKey
+    ? apps.find((app) => app.key === selectedAppKey) ?? null
+    : null;
+  const filteredSegments = useMemo(
+    () => selectedAppKey
+      ? filterSegmentsForApp(
+        state.snapshot.listSegments.length ? state.snapshot.listSegments : state.snapshot.timelineSegments,
+        selectedAppKey,
+      )
+      : state.snapshot.listSegments,
+    [selectedAppKey, state.snapshot.listSegments, state.snapshot.timelineSegments],
+  );
+  const filteredTimelines = useMemo(
+    () => selectedAppKey ? filterTimelinesForApp(state.timelines, selectedAppKey) : state.timelines,
+    [selectedAppKey, state.timelines],
+  );
+  const filteredCategories = useMemo(
+    () => selectedAppKey ? buildBreakdowns(filteredSegments).categories : state.snapshot.categories,
+    [selectedAppKey, filteredSegments, state.snapshot.categories],
+  );
   const tab = normalizeTodayTab(state.todayTab);
+  const clearFilter = () => setSelectedAppKey(null);
 
   return (
     <div className="today-page" data-testid="today-page">
@@ -39,6 +67,16 @@ export function TodayScreen({ state }: { state: AppSnapshot }) {
         ) : null}
       </div>
 
+      {selectedApp ? (
+        <div className="insights-filter-banner">
+          <Banner
+            action={<Button size="sm" variant="ghost" onClick={clearFilter}>Show all</Button>}
+          >
+            Showing only {selectedApp.label}
+          </Banner>
+        </div>
+      ) : null}
+
       <Tabs
         ariaLabel="Today views"
         value={tab}
@@ -51,14 +89,14 @@ export function TodayScreen({ state }: { state: AppSnapshot }) {
 
       {tab === "timeline" ? (
         <div className="activity-board">
-          <ActivityTimeline state={state} highlightedAppKey={highlightedAppKey} />
+          <ActivityTimeline state={state} timelines={filteredTimelines} />
           <div className="activity-split">
-            <ActivityPie state={state} />
-            <CategoriesList state={state} />
+            <ActivityPie state={state} categories={filteredCategories} />
+            <CategoriesList state={state} categories={filteredCategories} />
             <AppsWebsitesList
               state={state}
-              selectedKey={highlightedAppKey}
-              onSelect={setHighlightedAppKey}
+              selectedKey={selectedAppKey}
+              onSelect={setSelectedAppKey}
               onLabelApp={(app: ScreenTimeAppBreakdown) => setPrompt({
                 kind: "app-label",
                 appKey: app.key,
@@ -71,7 +109,7 @@ export function TodayScreen({ state }: { state: AppSnapshot }) {
         <div className="activity-board">
           <section className="activity-panel" aria-label="Event log">
             <div className="activity-panel-label">Event Log</div>
-            <EventLog segments={state.snapshot.listSegments} />
+            <EventLog segments={filteredSegments} />
           </section>
         </div>
       )}
