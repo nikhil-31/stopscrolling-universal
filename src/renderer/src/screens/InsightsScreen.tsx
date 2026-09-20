@@ -4,14 +4,15 @@ import {
   formatDuration,
   normalizeInsightsDeviceKey,
   normalizeInsightsTab,
+  percentLabel,
+  rankedAppsBySeconds,
 } from "@shared/timeline";
 import type { AppSnapshot } from "@shared/snapshot";
 import {
-  BarChart3,
-  Clock3,
-  Layers3,
-  List,
-  Sparkles,
+    BarChart3,
+    Clock3,
+    List,
+    Sparkles,
 } from "lucide-react";
 import { DevicePicker, visibleDevicesForPicker } from "../components/DevicePicker";
 import { BreakdownList, EventLog, TimelineCard, TrendCard } from "../components/timeline";
@@ -30,10 +31,7 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
   const scopeDetail = selectedDevice
     ? `On ${displayNameForDevice(selectedDevice.devicePlatform, selectedDevice.deviceName, visibleDevices)} this ${state.insightsPeriod}`
     : `Across this ${state.insightsPeriod}`;
-  const topCategory = state.snapshot.categories[0];
-  const average = state.snapshot.sessionCount
-    ? state.snapshot.totalSeconds / state.snapshot.sessionCount
-    : 0;
+  const topApp = rankedAppsBySeconds(state.snapshot.apps)[0];
   return (
     <div>
       <header className="page-header">
@@ -58,16 +56,9 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
           icon={Clock3}
         />
         <MetricCard
-          label="Average session"
-          value={formatDuration(average)}
-          detail={`${state.snapshot.sessionCount} sessions total`}
-          icon={Layers3}
-          tone="violet"
-        />
-        <MetricCard
-          label="Leading category"
-          value={topCategory?.category ?? "None"}
-          detail={topCategory ? `${Math.round(topCategory.percentage * 100)}% of total time` : "No category data yet"}
+          label="Leading app/website"
+          value={topApp ? formatDuration(topApp.seconds) : "None"}
+          detail={topApp ? `${topApp.label} · ${percentLabel(topApp.percentage)}` : "No app data yet"}
           icon={Sparkles}
           tone="orange"
         />

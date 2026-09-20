@@ -80,8 +80,35 @@ describe("InsightsScreen", () => {
     expect(screen.getByText("Activity trend")).toBeVisible();
     expect(screen.getByText("Time by category")).toBeVisible();
     expect(screen.getByText("Apps & websites")).toBeVisible();
-    expect(screen.getByText("Notes")).toBeVisible();
+    expect(screen.getAllByText("Notes").length).toBeGreaterThan(0);
     expect(screen.getByText("100%")).toBeVisible();
+    expect(screen.getByText("Leading app/website")).toBeVisible();
+    expect(screen.queryByText("Average session")).toBeNull();
+    expect(screen.queryByText("Leading category")).toBeNull();
+  });
+
+  it("shows the highest-time app as the leading app/website", () => {
+    render(<InsightsScreen state={snapshot({
+      snapshot: {
+        totalSeconds: 3000,
+        sessionCount: 2,
+        timelineSegments: [],
+        listSegments: [],
+        categories: [{ category: "Productivity", seconds: 600, percentage: 0.2 }],
+        apps: [
+          { key: "notes", label: "Notes", subtitle: "Productivity", category: "Productivity", seconds: 600, percentage: 0.2 },
+          { key: "cursor", label: "Cursor", subtitle: "Development", category: "Development", seconds: 2400, percentage: 0.8 },
+        ],
+        buckets: [],
+        trackedSecondsByDay: {},
+      },
+    })} />);
+    expect(screen.getByText("Leading app/website")).toBeVisible();
+    expect(screen.getByText("40m", { selector: ".metric-value" })).toBeVisible();
+    expect(screen.getByText("Cursor · 80%", { selector: ".metric-detail" })).toBeVisible();
+    expect(screen.queryByText("Average session")).toBeNull();
+    expect(screen.queryByText("Leading category")).toBeNull();
+    expect(screen.queryByText("Productivity", { selector: ".metric-value" })).toBeNull();
   });
 
   it("orders Apps & websites by time spent descending", () => {
@@ -107,7 +134,7 @@ describe("InsightsScreen", () => {
     ]);
     expect(screen.getByText("80%")).toBeVisible();
     expect(screen.getByText("20%")).toBeVisible();
-    expect(screen.getByText("40m")).toBeVisible();
+    expect(screen.getAllByText("40m").length).toBeGreaterThan(0);
     expect(screen.getByText("10m")).toBeVisible();
     const bars = document.querySelectorAll(".activity-app-bar span");
     expect(bars[0]).toHaveStyle({ width: "80%" });
