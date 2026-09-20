@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { displayNameForDevice } from "@shared/device";
 import {
+  buildBreakdowns,
+  buildPeriodBuckets,
+  filterSegmentsForApp,
+  filterTimelinesForApp,
   formatDuration,
   normalizeInsightsDeviceKey,
   normalizeInsightsTab,
@@ -16,10 +20,37 @@ import {
 } from "lucide-react";
 import { DevicePicker, visibleDevicesForPicker } from "../components/DevicePicker";
 import { BreakdownList, EventLog, TimelineCard, TrendCard } from "../components/timeline";
-import { LoadingState, MetricCard, Tabs } from "../components/ui";
+import { Banner, Button, LoadingState, MetricCard, Tabs } from "../components/ui";
 
 export function InsightsScreen({ state }: { state: AppSnapshot }) {
-  const [highlightedAppKey, setHighlightedAppKey] = useState<string | null>(null);
+  const [selectedAppKey, setSelectedAppKey] = useState<string | null>(null);
+  const apps = rankedAppsBySeconds(state.snapshot.apps);
+  const selectedApp = selectedAppKey
+    ? apps.find((app) => app.key === selectedAppKey) ?? null
+    : null;
+  const filteredSegments = useMemo(
+    () => selectedAppKey
+      ? filterSegmentsForApp(
+        state.snapshot.listSegments.length ? state.snapshot.listSegments : state.snapshot.timelineSegments,
+        selectedAppKey,
+      )
+      : state.snapshot.listSegments,
+    [selectedAppKey, state.snapshot.listSegments, state.snapshot.timelineSegments],
+  );
+  const filteredTimelines = useMemo(
+    () => selectedAppKey ? filterTimelinesForApp(state.timelines, selectedAppKey) : state.timelines,
+    [selectedAppKey, state.timelines],
+  );
+  const filteredBuckets = useMemo(
+    () => selectedAppKey
+      ? buildPeriodBuckets(filteredSegments, state.insightsPeriod, new Date(state.insightsAnchor))
+      : state.snapshot.buckets,
+    [selectedAppKey, filteredSegments, state.insightsPeriod, state.insightsAnchor, state.snapshot.buckets],
+  );
+  const filteredCategories = useMemo(
+    () => selectedAppKey ? buildBreakdowns(filteredSegments).categories : state.snapshot.categories,
+    [selectedAppKey, filteredSegments, state.snapshot.categories],
+  );
   if (state.loadingEntries) return <LoadingState label="Building your insights…" />;
   const tab = normalizeInsightsTab(state.insightsTab);
   const visibleDevices = visibleDevicesForPicker(state.devices, state.hiddenDeviceKeys);
@@ -31,7 +62,10 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
   const scopeDetail = selectedDevice
     ? `On ${displayNameForDevice(selectedDevice.devicePlatform, selectedDevice.deviceName, visibleDevices)} this ${state.insightsPeriod}`
     : `Across this ${state.insightsPeriod}`;
-  const topApp = rankedAppsBySeconds(state.snapshot.apps)[0];
+  const topApp = apps[0];
+  const trackedSeconds = selectedApp ? selectedApp.seconds : state.snapshot.totalSeconds;
+  const trackedDetail = selectedApp ? `${scopeDetail} · ${selectedApp.label}` : scopeDetail;
+  const clearFilter = () => setSelectedAppKey(null);
   return (
     <div>
       <header className="page-header">
@@ -51,8 +85,8 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
       <section className="stats">
         <MetricCard
           label="Tracked time"
-          value={formatDuration(state.snapshot.totalSeconds)}
-          detail={scopeDetail}
+          value={formatDuration(trackedSeconds)}
+          detail={trackedDetail}
           icon={Clock3}
         />
         <MetricCard
@@ -63,6 +97,15 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
           tone="orange"
         />
       </section>
+      {selectedApp ? (
+        <div className="insights-filter-banner">
+          <Banner
+            action={<Button size="sm" variant="ghost" onClick={clearFilter}>Show all</Button>}
+          >
+            Showing only {selectedApp.label}
+          </Banner>
+        </div>
+      ) : null}
 
       <Tabs
         ariaLabel="Insights views"
@@ -76,23 +119,23 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
 
       {tab === "overview" ? (
         <div className="stack">
-          <TrendCard buckets={state.snapshot.buckets} period={state.insightsPeriod} />
+          <TrendCard buckets={filteredBuckets} period={state.insightsPeriod} />
           {state.insightsPeriod === "day" ? (
             <TimelineCard
-              timelines={state.timelines}
+              timelines={filteredTimelines}
               devices={state.devices}
-              highlightedAppKey={highlightedAppKey}
+              subtitle={selectedApp ? `${selectedApp.label} across your visible devices` : undefined}
             />
           ) : null}
           <BreakdownList
-            categories={state.snapshot.categories}
-            apps={state.snapshot.apps}
-            selectedAppKey={highlightedAppKey}
-            onSelectApp={setHighlightedAppKey}
+            categories={filteredCategories}
+            apps={apps}
+            selectedAppKey={selectedAppKey}
+            onSelectApp={setSelectedAppKey}
           />
         </div>
       ) : null}
-      {tab === "sessions" ? <EventLog segments={state.snapshot.listSegments} /> : null}
+      {tab === "sessions" ? <EventLog segments={filteredSegments} /> : null}
     </div>
   );
 }

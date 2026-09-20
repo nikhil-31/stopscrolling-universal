@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockSegments, durationAxisTicks, entriesToTimelines, filterEntriesForInsights, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
+import { blockSegments, durationAxisTicks, entriesToTimelines, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 
@@ -262,6 +262,132 @@ describe("highlightRangesForApp", () => {
     expect(ranges[0].start.toISOString()).toBe("2026-06-22T00:00:00.000Z");
     expect(ranges[0].end.toISOString()).toBe("2026-06-22T00:30:00.000Z");
     expect(ranges[0].xFraction).toBe(0);
+  });
+});
+
+describe("filterSegmentsForApp", () => {
+  function segment(partial: Partial<ScreenTimeTimelineSegment> & Pick<ScreenTimeTimelineSegment, "id" | "start" | "end" | "appName">): ScreenTimeTimelineSegment {
+    return {
+      label: partial.label ?? partial.appName,
+      subtitle: "",
+      url: "",
+      bundleID: partial.appName,
+      category: "Application",
+      devicePlatform: "macos",
+      deviceName: "Mac",
+      timeZoneIdentifier: "UTC",
+      isLive: false,
+      ...partial,
+    };
+  }
+
+  it("keeps only matching app and website segments", () => {
+    const segments = [
+      segment({ id: "cursor", start: "2026-06-22T09:00:00.000Z", end: "2026-06-22T09:30:00.000Z", appName: "Cursor" }),
+      segment({
+        id: "github",
+        start: "2026-06-22T11:00:00.000Z",
+        end: "2026-06-22T12:00:00.000Z",
+        appName: "Safari",
+        url: "https://github.com/org/repo",
+      }),
+    ];
+    expect(filterSegmentsForApp(segments, "app|Cursor").map((item) => item.id)).toEqual(["cursor"]);
+    expect(filterSegmentsForApp(segments, "web|github.com").map((item) => item.id)).toEqual(["github"]);
+  });
+
+  it("returns the original list when no app is selected", () => {
+    const segments = [
+      segment({ id: "cursor", start: "2026-06-22T09:00:00.000Z", end: "2026-06-22T09:30:00.000Z", appName: "Cursor" }),
+    ];
+    expect(filterSegmentsForApp(segments, "")).toBe(segments);
+  });
+});
+
+describe("filterTimelinesForApp", () => {
+  it("splits mixed blocks into matching items and drops the rest", () => {
+    const timelines = [{
+      id: "macos|Mac",
+      deviceName: "Mac",
+      devicePlatform: "macos",
+      timeZoneIdentifier: "UTC",
+      dayStart: "2026-06-22T00:00:00.000Z",
+      dayEnd: "2026-06-23T00:00:00.000Z",
+      segments: [],
+      blocks: blockSegments([
+        {
+          id: "cursor",
+          start: "2026-06-22T09:00:00.000Z",
+          end: "2026-06-22T09:30:00.000Z",
+          label: "Cursor",
+          subtitle: "Development",
+          url: "",
+          bundleID: "Cursor",
+          category: "Development",
+          appName: "Cursor",
+          devicePlatform: "macos",
+          deviceName: "Mac",
+          timeZoneIdentifier: "UTC",
+          isLive: false,
+        },
+        {
+          id: "safari",
+          start: "2026-06-22T09:31:00.000Z",
+          end: "2026-06-22T10:00:00.000Z",
+          label: "Safari",
+          subtitle: "github.com",
+          url: "https://github.com",
+          bundleID: "Safari",
+          category: "Development",
+          appName: "Safari",
+          devicePlatform: "macos",
+          deviceName: "Mac",
+          timeZoneIdentifier: "UTC",
+          isLive: false,
+        },
+      ]),
+    }];
+    expect(timelines[0].blocks).toHaveLength(1);
+    const filtered = filterTimelinesForApp(timelines, "app|Cursor");
+    expect(filtered[0].blocks).toHaveLength(1);
+    expect(filtered[0].blocks[0].title).toBe("Cursor");
+    expect(filtered[0].blocks[0].items.map((item) => item.id)).toEqual(["cursor"]);
+    expect(filtered[0].blocks[0].durationSeconds).toBe(30 * 60);
+  });
+
+  it("returns empty blocks when the app is not on the timeline", () => {
+    const timelines = [{
+      id: "macos|Mac",
+      deviceName: "Mac",
+      devicePlatform: "macos",
+      timeZoneIdentifier: "UTC",
+      dayStart: "2026-06-22T00:00:00.000Z",
+      dayEnd: "2026-06-23T00:00:00.000Z",
+      segments: [],
+      blocks: [{
+        id: "block-1",
+        start: "2026-06-22T11:00:00.000Z",
+        end: "2026-06-22T12:00:00.000Z",
+        title: "Safari",
+        subtitle: "github.com",
+        category: "Development",
+        devicePlatform: "macos",
+        deviceName: "Mac",
+        durationSeconds: 3600,
+        items: [{
+          id: "github",
+          title: "Safari",
+          subtitle: "github.com",
+          url: "https://github.com",
+          category: "Development",
+          appName: "Safari",
+          start: "2026-06-22T11:00:00.000Z",
+          end: "2026-06-22T12:00:00.000Z",
+          durationSeconds: 3600,
+        }],
+      }],
+    }];
+    expect(filterTimelinesForApp(timelines, "app|Notes")[0].blocks).toEqual([]);
   });
 });
 

@@ -538,6 +538,7 @@ a { color: var(--brand); }
 .banner-danger { color: var(--danger); background: var(--danger-soft); }
 .banner-copy { flex: 1; }
 .banner-action { flex: 0 0 auto; }
+.insights-filter-banner { margin-bottom: 16px; }
 
 .field { display: grid; gap: 6px; }
 .field-label { font-size: 11px; font-weight: 680; }

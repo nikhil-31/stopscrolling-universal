@@ -34,6 +34,7 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
     navigation: "insights",
     loadingEntries: false,
     insightsPeriod: "week",
+    insightsAnchor: "2026-09-10T00:00:00.000Z",
     insightsTab: "overview",
     insightsDeviceKey: ALL_INSIGHTS_DEVICES,
     devices: [],
@@ -64,6 +65,129 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
     },
     ...patch,
   } as AppSnapshot;
+}
+
+function dayFilterState(): Partial<AppSnapshot> {
+  const dayStart = new Date(2026, 8, 10).toISOString();
+  const dayEnd = new Date(2026, 8, 11).toISOString();
+  const cursorStart = new Date(2026, 8, 10, 9).toISOString();
+  const cursorEnd = new Date(2026, 8, 10, 10).toISOString();
+  const safariStart = new Date(2026, 8, 10, 11).toISOString();
+  const safariEnd = new Date(2026, 8, 10, 11, 20).toISOString();
+  return {
+    insightsPeriod: "day",
+    insightsAnchor: dayStart,
+    snapshot: {
+      totalSeconds: 4800,
+      sessionCount: 2,
+      timelineSegments: [],
+      listSegments: [
+        {
+          id: "cursor",
+          start: cursorStart,
+          end: cursorEnd,
+          label: "Cursor",
+          subtitle: "Development",
+          url: "",
+          bundleID: "Cursor",
+          category: "Development",
+          appName: "Cursor",
+          devicePlatform: "macos",
+          deviceName: "Studio Mac",
+          timeZoneIdentifier: "UTC",
+          isLive: false,
+        },
+        {
+          id: "safari",
+          start: safariStart,
+          end: safariEnd,
+          label: "Safari",
+          subtitle: "github.com",
+          url: "https://github.com",
+          bundleID: "Safari",
+          category: "Development",
+          appName: "Safari",
+          devicePlatform: "macos",
+          deviceName: "Studio Mac",
+          timeZoneIdentifier: "UTC",
+          isLive: false,
+        },
+      ],
+      categories: [{ category: "Development", seconds: 4800, percentage: 1 }],
+      apps: [
+        {
+          key: "app|Cursor",
+          label: "Cursor",
+          subtitle: "Development",
+          category: "Development",
+          seconds: 3600,
+          percentage: 0.75,
+        },
+        {
+          key: "web|github.com",
+          label: "github.com",
+          subtitle: "Safari",
+          category: "Development",
+          seconds: 1200,
+          percentage: 0.25,
+        },
+      ],
+      buckets: [],
+      trackedSecondsByDay: {},
+    },
+    timelines: [{
+      id: "macos|Studio Mac",
+      deviceName: "Studio Mac",
+      devicePlatform: "macos",
+      timeZoneIdentifier: "UTC",
+      dayStart,
+      dayEnd,
+      segments: [],
+      blocks: [{
+        id: "block-1",
+        start: cursorStart,
+        end: cursorEnd,
+        title: "Cursor",
+        subtitle: "Development",
+        category: "Development",
+        devicePlatform: "macos",
+        deviceName: "Studio Mac",
+        durationSeconds: 3600,
+        items: [{
+          id: "cursor",
+          title: "Cursor",
+          subtitle: "Development",
+          url: "",
+          category: "Development",
+          appName: "Cursor",
+          start: cursorStart,
+          end: cursorEnd,
+          durationSeconds: 3600,
+        }],
+      }, {
+        id: "block-2",
+        start: safariStart,
+        end: safariEnd,
+        title: "Safari",
+        subtitle: "github.com",
+        category: "Development",
+        devicePlatform: "macos",
+        deviceName: "Studio Mac",
+        durationSeconds: 1200,
+        items: [{
+          id: "github",
+          title: "Safari",
+          subtitle: "github.com",
+          url: "https://github.com",
+          category: "Development",
+          appName: "Safari",
+          start: safariStart,
+          end: safariEnd,
+          durationSeconds: 1200,
+        }],
+      }],
+    }],
+  };
 }
 
 beforeEach(() => {
@@ -213,67 +337,46 @@ describe("InsightsScreen", () => {
     expect(screen.queryByText(/No activity recorded/)).toBeNull();
   });
 
-  it("highlights the day timeline when an app row is clicked", async () => {
+  it("filters the day insights to the selected app and restores with Show all", async () => {
     const user = userEvent.setup();
-    const dayStart = new Date(2026, 8, 10).toISOString();
-    const dayEnd = new Date(2026, 8, 11).toISOString();
-    render(<InsightsScreen state={snapshot({
-      insightsPeriod: "day",
-      snapshot: {
-        totalSeconds: 3600,
-        sessionCount: 1,
-        timelineSegments: [],
-        listSegments: [],
-        categories: [{ category: "Development", seconds: 3600, percentage: 1 }],
-        apps: [{
-          key: "app|Cursor",
-          label: "Cursor",
-          subtitle: "Development",
-          category: "Development",
-          seconds: 3600,
-          percentage: 1,
-        }],
-        buckets: [],
-        trackedSecondsByDay: {},
-      },
-      timelines: [{
-        id: "macos|Studio Mac",
-        deviceName: "Studio Mac",
-        devicePlatform: "macos",
-        timeZoneIdentifier: "UTC",
-        dayStart,
-        dayEnd,
-        segments: [],
-        blocks: [{
-          id: "block-1",
-          start: new Date(2026, 8, 10, 9).toISOString(),
-          end: new Date(2026, 8, 10, 10).toISOString(),
-          title: "Cursor",
-          subtitle: "Development",
-          category: "Development",
-          devicePlatform: "macos",
-          deviceName: "Studio Mac",
-          durationSeconds: 3600,
-          items: [{
-            id: "cursor",
-            title: "Cursor",
-            subtitle: "Development",
-            url: "",
-            category: "Development",
-            appName: "Cursor",
-            start: new Date(2026, 8, 10, 9).toISOString(),
-            end: new Date(2026, 8, 10, 10).toISOString(),
-            durationSeconds: 3600,
-          }],
-        }],
-      }],
-    })} />);
-    expect(screen.queryByTestId("timeline-highlight")).toBeNull();
+    const { rerender } = render(<InsightsScreen state={snapshot(dayFilterState())} />);
+    expect(screen.getByText("1h 20m", { selector: ".metric-value" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Cursor,/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Safari,/ })).toBeVisible();
+
     await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
     expect(screen.getByRole("button", { name: "Highlight Cursor on the timeline" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("timeline-highlight")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Showing only Cursor");
+    expect(screen.getByText("Cursor across your visible devices")).toBeVisible();
+    expect(screen.queryByText("1h 20m")).toBeNull();
+    expect(screen.getAllByText("1h", { selector: ".metric-value" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("Across this day · Cursor")).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Cursor,/ })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /^Safari,/ })).toBeNull();
     expect(screen.queryByTestId("timeline-highlight")).toBeNull();
+    expect(screen.getByRole("button", { name: "Highlight github.com on the timeline" })).toBeVisible();
+
+    rerender(<InsightsScreen state={snapshot({ ...dayFilterState(), insightsTab: "sessions" })} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Showing only Cursor");
+    expect(screen.getByText("Cursor")).toBeVisible();
+    expect(screen.queryByText("Safari")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Show all" }));
+    rerender(<InsightsScreen state={snapshot(dayFilterState())} />);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByText("1h 20m", { selector: ".metric-value" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Safari,/ })).toBeVisible();
+  });
+
+  it("clears the app filter when the same row is clicked again", async () => {
+    const user = userEvent.setup();
+    render(<InsightsScreen state={snapshot(dayFilterState())} />);
+    await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Showing only Cursor");
+    await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByText("1h 20m", { selector: ".metric-value" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Safari,/ })).toBeVisible();
   });
 
   it("shows the selected device in metric copy and ignores hidden devices", () => {

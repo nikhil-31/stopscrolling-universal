@@ -580,6 +580,34 @@ export function blockMatchesApp(block: ScreenTimeSessionBlock, appKey: string) {
   return block.items.some((item) => itemBreakdownKey(item) === appKey);
 }
 
+export function filterSegmentsForApp(segments: ScreenTimeTimelineSegment[], appKey: string) {
+  if (!appKey) return segments;
+  return segments.filter((segment) => appBreakdownKey(segment) === appKey);
+}
+
+export function filterTimelinesForApp(timelines: ScreenTimeDeviceTimeline[], appKey: string) {
+  if (!appKey) return timelines;
+  return timelines.map((timeline) => ({
+    ...timeline,
+    segments: filterSegmentsForApp(timeline.segments, appKey),
+    blocks: timeline.blocks.flatMap((block) =>
+      block.items
+        .filter((item) => itemBreakdownKey(item) === appKey)
+        .map((item) => ({
+          ...block,
+          id: `${block.id}:${item.id}`,
+          start: item.start,
+          end: item.end,
+          title: item.title,
+          subtitle: item.subtitle,
+          category: item.category,
+          durationSeconds: item.durationSeconds,
+          items: [item],
+        })),
+    ),
+  }));
+}
+
 export function highlightRangesForApp(
   blocks: ScreenTimeSessionBlock[],
   appKey: string,

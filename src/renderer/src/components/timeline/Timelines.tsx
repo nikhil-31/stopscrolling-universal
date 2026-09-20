@@ -306,17 +306,19 @@ export function TimelineCard({
   timelines,
   devices,
   highlightedAppKey = null,
+  subtitle = "Activity across your visible devices",
 }: {
   timelines: ScreenTimeDeviceTimeline[];
   devices?: DeviceListEntry[];
   highlightedAppKey?: string | null;
+  subtitle?: string;
 }) {
   return (
     <Card className="data-card">
       <div className="data-card-header">
         <div>
           <h3 className="data-card-title">Timeline</h3>
-          <div className="data-card-subtitle">Activity across your visible devices</div>
+          <div className="data-card-subtitle">{subtitle}</div>
         </div>
       </div>
       <TimelineGroup timelines={timelines} devices={devices} highlightedAppKey={highlightedAppKey} />
