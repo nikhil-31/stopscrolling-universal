@@ -1121,7 +1121,7 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
 .bar-column {
   width: min(68%, 30px);
   min-height: 0;
-  background: linear-gradient(180deg, var(--violet), var(--brand));
+  background: var(--brand);
   border-radius: 6px 6px 2px 2px;
   transition: filter 120ms var(--ease), transform 120ms var(--ease);
 }
