@@ -44,4 +44,25 @@ describe("AppsWebsitesList", () => {
     await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
     expect(onSelect).toHaveBeenCalledWith(null);
   });
+
+  it("lists apps from most time spent to least", () => {
+    render(<AppsWebsitesList
+      state={{
+        snapshot: {
+          apps: [
+            { key: "notes", label: "Notes", subtitle: "Productivity", category: "Productivity", seconds: 600, percentage: 0.2 },
+            { key: "cursor", label: "Cursor", subtitle: "Development", category: "Development", seconds: 2400, percentage: 0.8 },
+          ],
+        },
+      } as AppSnapshot}
+      selectedKey={null}
+      onSelect={vi.fn()}
+      onLabelApp={vi.fn()}
+    />);
+    const rows = screen.getAllByRole("button", { name: /Highlight .+ on the timeline/ });
+    expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
+      "Highlight Cursor on the timeline",
+      "Highlight Notes on the timeline",
+    ]);
+  });
 });

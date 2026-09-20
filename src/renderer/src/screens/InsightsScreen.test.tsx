@@ -81,6 +81,37 @@ describe("InsightsScreen", () => {
     expect(screen.getByText("Time by category")).toBeVisible();
     expect(screen.getByText("Apps & websites")).toBeVisible();
     expect(screen.getByText("Notes")).toBeVisible();
+    expect(screen.getByText("100%")).toBeVisible();
+  });
+
+  it("orders Apps & websites by time spent descending", () => {
+    render(<InsightsScreen state={snapshot({
+      snapshot: {
+        totalSeconds: 3000,
+        sessionCount: 2,
+        timelineSegments: [],
+        listSegments: [],
+        categories: [],
+        apps: [
+          { key: "notes", label: "Notes", subtitle: "Productivity", category: "Productivity", seconds: 600, percentage: 0.2 },
+          { key: "cursor", label: "Cursor", subtitle: "Development", category: "Development", seconds: 2400, percentage: 0.8 },
+        ],
+        buckets: [],
+        trackedSecondsByDay: {},
+      },
+    })} />);
+    const rows = screen.getAllByRole("button", { name: /Highlight .+ on the timeline/ });
+    expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
+      "Highlight Cursor on the timeline",
+      "Highlight Notes on the timeline",
+    ]);
+    expect(screen.getByText("80%")).toBeVisible();
+    expect(screen.getByText("20%")).toBeVisible();
+    expect(screen.getByText("40m")).toBeVisible();
+    expect(screen.getByText("10m")).toBeVisible();
+    const bars = document.querySelectorAll(".activity-app-bar span");
+    expect(bars[0]).toHaveStyle({ width: "80%" });
+    expect(bars[1]).toHaveStyle({ width: "20%" });
   });
 
   it("treats a leftover breakdown tab as Overview", () => {

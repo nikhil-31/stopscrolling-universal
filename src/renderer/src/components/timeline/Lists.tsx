@@ -3,6 +3,7 @@ import {
   colorForCategory,
   formatClock,
   formatDuration,
+  rankedAppsBySeconds,
 } from "@shared/timeline";
 import type {
   DeviceListEntry,
@@ -13,6 +14,7 @@ import type {
 } from "@shared/types";
 import { Boxes, List, Shapes } from "lucide-react";
 import { Card, EmptyState, Grouped } from "../ui";
+import { AppsWebsitesShareRow } from "../today/AppsWebsitesList";
 import { PieChart } from "./Charts";
 
 export function EventLog({ segments }: { segments: ScreenTimeTimelineSegment[] }) {
@@ -138,28 +140,25 @@ export function BreakdownList({
         )) : <EmptyState title="No categories" body="Category totals will appear here." icon={Shapes} />}
       </Grouped>
       <Grouped title="Apps & websites" description="Your most-used destinations">
-        {apps.length ? apps.slice(0, 12).map((item) => {
-          const selected = selectedAppKey === item.key;
-          return (
-            <button
-              type="button"
-              className={`data-row ${selected ? "is-selected" : ""}`}
-              key={item.key}
-              aria-pressed={selected}
-              aria-label={`Highlight ${item.label} on the timeline`}
-              onClick={() => onSelectApp?.(selected ? null : item.key)}
-            >
-              <span className="row-main">
-                <span className="avatar">{item.label.slice(0, 2).toUpperCase()}</span>
-                <span className="row-copy">
-                  <span className="row-title">{item.label}</span>
-                  <span className="row-subtitle">{item.subtitle || item.category}</span>
-                </span>
-              </span>
-              <span className="row-value">{formatDuration(item.seconds)}</span>
-            </button>
-          );
-        }) : <EmptyState title="No apps yet" body="App totals will appear here." />}
+        {apps.length ? (
+          <div className="activity-app-list">
+            {rankedAppsBySeconds(apps).slice(0, 12).map((item) => {
+              const selected = selectedAppKey === item.key;
+              return (
+                <div
+                  key={item.key}
+                  className={`activity-app-row ${selected ? "is-selected" : ""}`}
+                >
+                  <AppsWebsitesShareRow
+                    app={item}
+                    selected={selected}
+                    onSelect={() => onSelectApp?.(selected ? null : item.key)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : <EmptyState title="No apps yet" body="App totals will appear here." />}
       </Grouped>
     </div>
   );

@@ -613,6 +613,10 @@ export function percentLabel(ratio: number) {
   return percent < 1 ? "<1%" : `${percent}%`;
 }
 
+export function appShareBarPercent(ratio: number) {
+  return Math.min(100, Math.max(3, ratio > 1 ? ratio : ratio * 100));
+}
+
 export function buildBreakdowns(segments: ScreenTimeTimelineSegment[]) {
   const total = segments.reduce((sum, segment) => sum + segmentSeconds(segment), 0);
   const byCategory = new Map<string, number>();
@@ -644,6 +648,10 @@ export function buildBreakdowns(segments: ScreenTimeTimelineSegment[]) {
     .map((app, colorIndex) => ({ ...app, colorIndex }));
 
   return { total, categories, apps };
+}
+
+export function rankedAppsBySeconds(apps: ScreenTimeAppBreakdown[]) {
+  return [...apps].sort((a, b) => b.seconds - a.seconds);
 }
 
 export function buildPeriodBuckets(
@@ -782,10 +790,10 @@ export function snapshotFromRange(
     : serverSummary?.totalSeconds ?? Math.max(breakdowns.total, bucketSum);
   const sourceApps = breakdowns.apps.length ? breakdowns.apps : serverSummary?.apps ?? [];
   const shareBase = sourceApps.reduce((sum, app) => sum + app.seconds, 0) || totalSeconds;
-  const apps = sourceApps.map((app) => ({
+  const apps = rankedAppsBySeconds(sourceApps.map((app) => ({
     ...app,
     percentage: shareBase ? app.seconds / shareBase : 0,
-  }));
+  })));
   return {
     totalSeconds,
     sessionCount: serverSummary?.sessionCount ?? segments.length,

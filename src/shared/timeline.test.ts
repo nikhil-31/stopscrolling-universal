@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockSegments, durationAxisTicks, entriesToTimelines, filterEntriesForInsights, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
+import { blockSegments, durationAxisTicks, entriesToTimelines, filterEntriesForInsights, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 
@@ -376,6 +376,17 @@ describe("insights snapshot", () => {
       ["youtube.com", 30 * 60, 25],
       ["Cursor", 30 * 60, 25],
     ]);
+  });
+
+  it("orders apps by time spent even when the server list is unsorted", () => {
+    const snapshot = snapshotFromEntries([], "day", new Date("2026-06-22T12:00:00"), {
+      apps: [
+        { key: "notes", label: "Notes", subtitle: "Productivity", category: "Productivity", seconds: 600, percentage: 0.2 },
+        { key: "cursor", label: "Cursor", subtitle: "Development", category: "Development", seconds: 2400, percentage: 0.8 },
+      ],
+    });
+    expect(snapshot.apps.map((app) => app.label)).toEqual(["Cursor", "Notes"]);
+    expect(rankedAppsBySeconds(snapshot.apps).map((app) => app.seconds)).toEqual([2400, 600]);
   });
 
   it("keeps local website rows instead of a lumped server Safari total", () => {

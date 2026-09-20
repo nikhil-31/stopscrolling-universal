@@ -38,6 +38,7 @@ import {
   normalizeInsightsTab,
   normalizeTodayTab,
   periodBounds,
+  rankedAppsBySeconds,
   snapshotFromEntries,
   snapshotFromRange,
   startOfMonth,
@@ -937,7 +938,7 @@ export class AppController {
       sessionCount: this.serverSummary.session_count,
       categories: this.serverSummary.categories,
       trackedSecondsByDay: this.serverSummary.tracked_seconds_by_day,
-      apps: this.serverSummary.apps?.map((app, index) => ({
+      apps: rankedAppsBySeconds((this.serverSummary.apps ?? []).map((app, index) => ({
         key: app.id ?? `${app.app_name ?? "app"}-${index}`,
         label: app.app_name ?? "Unknown",
         subtitle: app.browser_app || (app.is_website ? "Website" : app.category),
@@ -945,7 +946,7 @@ export class AppController {
         seconds: app.seconds,
         percentage: app.percentage > 1 ? app.percentage / 100 : app.percentage,
         colorIndex: app.color_index ?? index,
-      })),
+      }))),
     };
   }
 }
