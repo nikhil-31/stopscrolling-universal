@@ -117,6 +117,9 @@ export function installIpc(controller: AppController) {
     if (start === true) void controller.tracker.startTracking();
     if (start === false) void controller.tracker.stopTracking();
   });
+  ipcMain.on(IPC.setTypesafeApiKey, (_event, key: string) => {
+    controller.setTypesafeApiKey(typeof key === "string" ? key : "");
+  });
   ipcMain.on(IPC.setDeviceVisible, (_event, payload: { key: string; visible: boolean }) => {
     controller.setDeviceVisible(payload.key, payload.visible);
   });

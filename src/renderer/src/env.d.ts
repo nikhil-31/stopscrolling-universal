@@ -28,6 +28,7 @@ interface StopScrollingDesktop {
   selectInspector: (payload: import("@shared/snapshot").InspectorSelection) => void;
   setCommandPalette: (open: boolean) => void;
   updateSettings: (patch: Partial<import("@shared/types").AppSettings>) => void;
+  setTypesafeApiKey: (key: string) => void;
   setDeviceVisible: (key: string, visible: boolean) => void;
   setDeviceNickname: (deviceID: string, nickname: string) => void;
   authSetForm: (patch: Partial<import("@shared/snapshot").AppSnapshot["auth"]>) => void;

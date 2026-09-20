@@ -115,6 +115,7 @@ export interface AppSnapshot {
   calendarWorkspace: CalendarWorkspace;
   calendarDayStats: CalendarDayStats;
   calendarReviewVisible: boolean;
+  typesafeApiKeyConfigured: boolean;
   insightsPeriod: InsightsPeriod;
   insightsAnchor: string;
   insightsTab: InsightsTab;

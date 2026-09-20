@@ -50,6 +50,7 @@ const api = {
   selectInspector: (payload: InspectorSelection) => ipcRenderer.send(IPC.selectInspector, payload),
   setCommandPalette: (open: boolean) => ipcRenderer.send(IPC.commandPalette, open),
   updateSettings: (patch: Partial<AppSettings>) => ipcRenderer.send(IPC.updateSettings, patch),
+  setTypesafeApiKey: (key: string) => ipcRenderer.send(IPC.setTypesafeApiKey, key),
   setDeviceVisible: (key: string, visible: boolean) => ipcRenderer.send(IPC.setDeviceVisible, { key, visible }),
   setDeviceNickname: (deviceID: string, nickname: string) => ipcRenderer.send(IPC.setDeviceNickname, { deviceID, nickname }),
   authSetForm: (patch: Partial<AppSnapshot["auth"]>) => ipcRenderer.send(IPC.authSetForm, patch),

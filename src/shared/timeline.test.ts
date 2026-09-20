@@ -515,3 +515,58 @@ describe("periodBounds", () => {
     expect(snapshot.buckets[29].seconds).toBe(1800);
   });
 });
+
+describe("Jev category overlay", () => {
+  it("remaps unresolved Insights rows from a confident cache", () => {
+    const snapshot = snapshotFromEntries(
+      [
+        entry({
+          startTimeUTC: "2026-06-22T09:00:00.000Z",
+          endTimeUTC: "2026-06-22T10:00:00.000Z",
+          appName: "Google Chrome",
+          url: "https://www.teamblind.com/post",
+          category: "Web",
+        }),
+      ],
+      "day",
+      new Date("2026-06-22T12:00:00"),
+      undefined,
+      {
+        "web|teamblind.com": {
+          category: "Social",
+          confidence: 0.92,
+          model: "jev-1.13.0",
+          at: "2026-09-20T00:00:00.000Z",
+        },
+      },
+    );
+    expect(snapshot.apps.map((app) => [app.label, app.category])).toEqual([["teamblind.com", "Social"]]);
+    expect(snapshot.categories.map((item) => item.category)).toEqual(["Social"]);
+  });
+
+  it("overrides a server pie when a confident Jev cache exists", () => {
+    const snapshot = snapshotFromEntries(
+      [
+        entry({
+          startTimeUTC: "2026-06-22T09:00:00.000Z",
+          endTimeUTC: "2026-06-22T10:00:00.000Z",
+          appName: "Google Chrome",
+          url: "https://www.teamblind.com/post",
+          category: "Web",
+        }),
+      ],
+      "day",
+      new Date("2026-06-22T12:00:00"),
+      { categories: [{ category: "Web", seconds: 3600, percentage: 1 }] },
+      {
+        "web|teamblind.com": {
+          category: "Social",
+          confidence: 0.92,
+          model: "jev-1.13.0",
+          at: "2026-09-20T00:00:00.000Z",
+        },
+      },
+    );
+    expect(snapshot.categories.map((item) => item.category)).toEqual(["Social"]);
+  });
+});

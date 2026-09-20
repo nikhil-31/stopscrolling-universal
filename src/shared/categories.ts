@@ -52,6 +52,12 @@ const domainCategories: Array<[string, string]> = [
   ["docs.google.com", "Productivity"],
 ];
 
+export const UNRESOLVED_CATEGORIES = new Set(["Web", "Application"]);
+
+export function isUnresolvedCategory(category: string) {
+  return UNRESOLVED_CATEGORIES.has(category);
+}
+
 export function resolveCategory(bundleID: string, url: string, title: string, appName = ""): string {
   const bundleKey = bundleID.toLowerCase();
   if (bundleCategories[bundleKey]) return bundleCategories[bundleKey];

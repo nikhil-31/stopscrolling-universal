@@ -70,6 +70,7 @@ import { logObservability } from "./logger";
 import { hiddenDevicesPath, networkLogPath, observabilityLogPath } from "./paths";
 import { loadSettings, saveSettings } from "./settings-store";
 import { clearTokens, loadTokens, saveTokens } from "./token-store";
+import { clearTypesafeApiKey, hasTypesafeApiKey, saveTypesafeApiKey } from "./typesafe-key-store";
 import { ScreenTimeTracker } from "./tracker";
 
 function loadHiddenKeys(): Set<string> {
@@ -239,9 +240,10 @@ export class AppController {
       ? todayBounds
       : periodBounds(period, anchor);
     const serverSummary = deviceScoped ? undefined : this.mappedServerSummary(snapshotBounds);
+    const categoryCache = this.tracker.categoryCache();
     const snapshot = todayWindow
-      ? snapshotFromRange(entries, todayBounds, serverSummary)
-      : snapshotFromEntries(entries, period, anchor, serverSummary);
+      ? snapshotFromRange(entries, todayBounds, serverSummary, undefined, categoryCache)
+      : snapshotFromEntries(entries, period, anchor, serverSummary, categoryCache);
     const extraDevices = this.tracker.registeredDevices.map((device) => ({
       platform: device.device_platform,
       name: device.device_name,
@@ -276,6 +278,7 @@ export class AppController {
       isAuthenticated: Boolean(this.auth.user),
       auth: this.auth,
       settings: this.settings,
+      typesafeApiKeyConfigured: hasTypesafeApiKey(),
       todayDay: this.todayDay.toISOString(),
       todayTab: this.todayTab,
       todayPeriod: "day",
@@ -506,6 +509,13 @@ export class AppController {
     this.settings = { ...this.settings, ...patch };
     saveSettings(this.settings);
     this.api.setBaseUrl(this.settings.apiBaseUrl);
+    this.broadcast();
+  }
+
+  setTypesafeApiKey(key: string) {
+    const trimmed = key.trim();
+    if (trimmed) saveTypesafeApiKey(trimmed);
+    else clearTypesafeApiKey();
     this.broadcast();
   }
 

@@ -26,6 +26,7 @@ export const IPC = {
   selectInspector: "app:select-inspector",
   commandPalette: "app:command-palette",
   updateSettings: "app:update-settings",
+  setTypesafeApiKey: "app:set-typesafe-api-key",
   setDeviceVisible: "app:set-device-visible",
   setDeviceNickname: "app:set-device-nickname",
   authLogin: "app:auth-login",

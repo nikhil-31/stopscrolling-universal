@@ -50,6 +50,14 @@ export function observabilityLogPath() {
   return join(userDataDir(), "observability.log");
 }
 
+export function jevCategoriesPath() {
+  return join(userDataDir(), "jev-categories.json");
+}
+
+export function typesafeKeyPath() {
+  return join(userDataDir(), "typesafe-api-key.dat");
+}
+
 export function deviceName() {
   return hostname() || homedir().split("/").filter(Boolean).pop() || "Desktop";
 }

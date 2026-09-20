@@ -1,4 +1,5 @@
 import { websiteHostname } from "./browser";
+import { overlayCategory, type JevCategoryCache } from "./jev";
 import { deviceKey, resolvedDeviceName } from "./device";
 import { persistenceKey } from "./payload";
 import { endOfDay, startOfDay, toDateInput } from "./platform";
@@ -617,18 +618,19 @@ export function appShareBarPercent(ratio: number) {
   return Math.min(100, Math.max(3, ratio > 1 ? ratio : ratio * 100));
 }
 
-export function buildBreakdowns(segments: ScreenTimeTimelineSegment[]) {
+export function buildBreakdowns(segments: ScreenTimeTimelineSegment[], categoryCache?: JevCategoryCache | null) {
   const total = segments.reduce((sum, segment) => sum + segmentSeconds(segment), 0);
   const byCategory = new Map<string, number>();
-  const byApp = new Map<string, { seconds: number; segment: ScreenTimeTimelineSegment; host: string }>();
+  const byApp = new Map<string, { seconds: number; segment: ScreenTimeTimelineSegment; host: string; category: string }>();
 
   for (const segment of segments) {
     const seconds = segmentSeconds(segment);
-    byCategory.set(segment.category, (byCategory.get(segment.category) ?? 0) + seconds);
-    const host = websiteHostname(segment.url);
     const key = appBreakdownKey(segment);
+    const category = overlayCategory(segment.category, key, categoryCache);
+    byCategory.set(category, (byCategory.get(category) ?? 0) + seconds);
+    const host = websiteHostname(segment.url);
     const existing = byApp.get(key);
-    byApp.set(key, { seconds: (existing?.seconds ?? 0) + seconds, segment, host });
+    byApp.set(key, { seconds: (existing?.seconds ?? 0) + seconds, segment, host, category });
   }
 
   const categories: ScreenTimeCategoryBreakdown[] = Array.from(byCategory.entries())
@@ -639,8 +641,8 @@ export function buildBreakdowns(segments: ScreenTimeTimelineSegment[]) {
     .map(([key, value]) => ({
       key,
       label: value.host || value.segment.appName || value.segment.label,
-      subtitle: value.host ? (value.segment.appName || "Browser") : value.segment.category,
-      category: value.segment.category,
+      subtitle: value.host ? (value.segment.appName || "Browser") : value.category,
+      category: value.category,
       seconds: value.seconds,
       percentage: total ? value.seconds / total : 0,
     }))
@@ -762,6 +764,7 @@ export function snapshotFromRange(
     trackedSecondsByDay?: Record<string, number>;
   },
   bucketSpec?: { period: InsightsPeriod; anchor: Date },
+  categoryCache?: JevCategoryCache | null,
 ): ScreenTimeSnapshot {
   const inRange = entries.filter((entry) => {
     const start = new Date(entry.startTimeUTC).getTime();
@@ -769,8 +772,11 @@ export function snapshotFromRange(
     return end > bounds.start.getTime() && start < bounds.end.getTime();
   });
   const segments = clipSegmentsToBounds(inRange.map(segmentFromEntry), bounds);
-  const breakdowns = buildBreakdowns(segments);
-  const categories = serverSummary?.categories?.length
+  const breakdowns = buildBreakdowns(segments, categoryCache);
+  const useOverlaidCategories = Boolean(categoryCache && Object.keys(categoryCache).length && breakdowns.categories.length);
+  const categories = useOverlaidCategories
+    ? breakdowns.categories
+    : serverSummary?.categories?.length
     ? serverSummary.categories.map((category) => ({
         ...category,
         percentage: category.percentage > 1 ? category.percentage / 100 : category.percentage,
@@ -817,8 +823,9 @@ export function snapshotFromEntries(
     apps?: ScreenTimeAppBreakdown[];
     trackedSecondsByDay?: Record<string, number>;
   },
+  categoryCache?: JevCategoryCache | null,
 ): ScreenTimeSnapshot {
-  return snapshotFromRange(entries, periodBounds(period, anchor), serverSummary, { period, anchor });
+  return snapshotFromRange(entries, periodBounds(period, anchor), serverSummary, { period, anchor }, categoryCache);
 }
 
 export { resolvedDeviceName };

@@ -2,9 +2,10 @@ import { powerMonitor, powerSaveBlocker } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
-import { resolveCategory } from "@shared/categories";
+import { isUnresolvedCategory, resolveCategory } from "@shared/categories";
+import { acceptedJevCategory, overlayCategory, type JevCategoryCache, type JevCategoryCacheEntry } from "@shared/jev";
 import { entryToPayload, persistenceKey } from "@shared/payload";
-import { entryFromSession } from "@shared/timeline";
+import { appBreakdownKey, entryFromSession } from "@shared/timeline";
 import { currentDevicePlatform, localTimeZone } from "@shared/platform";
 import type {
   DeviceRow,
@@ -19,7 +20,9 @@ import { contextEquals } from "./collectors/types";
 import { loadCheckpoint, saveCheckpoint } from "./checkpoint";
 import { logObservability } from "./logger";
 import { PendingUploadStore } from "./outbox";
-import { deviceName, localDeviceIdPath } from "./paths";
+import { JevClassifier } from "./jev-classifier";
+import { deviceName, jevCategoriesPath, localDeviceIdPath } from "./paths";
+import { resolveTypesafeApiKey } from "./typesafe-key-store";
 import type { StopScrollingAPI } from "./api-client";
 
 const IDLE_THRESHOLD_SECONDS = 60;
@@ -52,12 +55,19 @@ export class ScreenTimeTracker {
   private openContext: ForegroundContext | null = null;
   private lastCheckpoint = 0;
   private idle = false;
+  readonly classifier: JevClassifier;
 
   constructor(
     private readonly api: StopScrollingAPI,
     private readonly onChange: () => void,
     private readonly syncReady: () => boolean,
+    classifier?: JevClassifier,
   ) {
+    this.classifier = classifier ?? new JevClassifier({
+      getApiKey: resolveTypesafeApiKey,
+      cachePath: jevCategoriesPath(),
+    });
+    this.classifier.onResolved = (key, entry) => this.applyClassification(key, entry);
     this.pendingUploadCount = this.outbox.count();
     this.recoverCheckpoint();
     powerMonitor.on("lock-screen", () => {
@@ -66,6 +76,10 @@ export class ScreenTimeTracker {
     powerMonitor.on("suspend", () => {
       void this.closeOpenSession("sleep");
     });
+  }
+
+  categoryCache(): JevCategoryCache {
+    return this.classifier.cache;
   }
 
   capabilities(): TrackingCapabilities {
@@ -324,14 +338,40 @@ export class ScreenTimeTracker {
     this.pendingUploadCount = this.outbox.count();
   }
 
+  private contextKey(context: Pick<ForegroundContext, "url" | "appName" | "title">) {
+    return appBreakdownKey({ url: context.url, appName: context.appName, label: context.title });
+  }
+
   private toContext(snapshot: ActivitySnapshot): ForegroundContext {
+    const resolved = resolveCategory(snapshot.bundleID, snapshot.url, snapshot.title, snapshot.appName);
+    const key = this.contextKey({ url: snapshot.url, appName: snapshot.appName, title: snapshot.title });
+    const category = overlayCategory(resolved, key, this.classifier.cache);
+    if (isUnresolvedCategory(category)) {
+      this.classifier.enqueue({
+        key,
+        appName: snapshot.appName,
+        bundleID: snapshot.bundleID,
+        url: snapshot.url,
+      });
+    }
     return {
       title: snapshot.title,
       url: snapshot.url,
       appName: snapshot.appName,
       bundleID: snapshot.bundleID,
-      category: resolveCategory(snapshot.bundleID, snapshot.url, snapshot.title, snapshot.appName),
+      category,
     };
+  }
+
+  private applyClassification(key: string, entry: JevCategoryCacheEntry) {
+    const category = acceptedJevCategory(entry.category, entry.confidence);
+    if (!category) return;
+    if (this.openContext && this.contextKey(this.openContext) === key) {
+      this.openContext = { ...this.openContext, category };
+      this.currentContext = this.openContext;
+      this.maybeCheckpoint(true);
+    }
+    this.onChange();
   }
 
   private liveEntry(start: Date, context: ForegroundContext, end: Date): ScreenTimeEntry {

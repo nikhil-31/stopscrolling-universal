@@ -196,6 +196,27 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
                   data-testid="settings-backend-api-url"
                 />
               </div>
+              <div className="setting-row">
+                <TextField
+                  label="Typesafe API key"
+                  type="password"
+                  autoComplete="off"
+                  placeholder={state.typesafeApiKeyConfigured ? "Key saved — paste to replace" : "Paste your Typesafe key"}
+                  onChange={(event) => {
+                    const value = event.target.value.trim();
+                    if (value) window.stopscrolling.setTypesafeApiKey(value);
+                  }}
+                  hint="Stored encrypted on this device. Unknown apps and websites are classified with Jev."
+                  data-testid="settings-typesafe-api-key"
+                />
+              </div>
+              {state.typesafeApiKeyConfigured ? (
+                <div className="form-actions">
+                  <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.setTypesafeApiKey("")}>
+                    Remove Typesafe key
+                  </Button>
+                </div>
+              ) : null}
               {settings.apiBaseUrl.trim().toLowerCase().startsWith("http://") ? (
                 <div data-testid="settings-backend-http-warning">
                   <Banner tone="warning">HTTP is suitable for local development only. Use HTTPS in production.</Banner>
