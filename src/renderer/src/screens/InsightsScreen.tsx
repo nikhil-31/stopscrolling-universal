@@ -6,6 +6,8 @@ import {
   filterSegmentsForApp,
   filterTimelinesForApp,
   formatDuration,
+  formatPeriod,
+  formatTodayPeriod,
   normalizeInsightsDeviceKey,
   normalizeInsightsTab,
   percentLabel,
@@ -68,19 +70,25 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
   const clearFilter = () => setSelectedAppKey(null);
   return (
     <div>
-      <header className="page-header">
-        <div>
-          <div className="page-eyebrow">Patterns</div>
-          <h2>Understand your attention</h2>
-          <p>Zoom out from individual sessions to see the habits shaping your screen time.</p>
+      <header className="today-chrome">
+        <h2 className="today-chrome-title">
+          <span>Activity</span>
+          <span className="today-chrome-slash">/</span>
+          <span>
+            {state.insightsPeriod === "day"
+              ? formatTodayPeriod("day", new Date(state.insightsAnchor))
+              : formatPeriod(state.insightsPeriod, new Date(state.insightsAnchor))}
+          </span>
+        </h2>
+        <div className="today-chrome-controls">
+          <DevicePicker
+            devices={state.devices}
+            hiddenDeviceKeys={state.hiddenDeviceKeys}
+            value={state.insightsDeviceKey}
+            onChange={(key) => window.stopscrolling.setInsightsDevice(key)}
+            ariaLabel="Insights devices"
+          />
         </div>
-        <DevicePicker
-          devices={state.devices}
-          hiddenDeviceKeys={state.hiddenDeviceKeys}
-          value={state.insightsDeviceKey}
-          onChange={(key) => window.stopscrolling.setInsightsDevice(key)}
-          ariaLabel="Insights devices"
-        />
       </header>
       <section className="stats">
         <MetricCard

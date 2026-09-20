@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockSegments, durationAxisTicks, entriesToTimelines, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds } from "./timeline";
+import { blockSegments, durationAxisTicks, entriesToTimelines, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, weekNumber } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 
@@ -625,6 +625,13 @@ describe("periodBounds", () => {
       end: new Date(2026, 9, 1),
     });
     expect(formatPeriod("month", anchor)).toBe("September 2026");
+  });
+
+  it("labels a week with its week number", () => {
+    const sunday = new Date(2026, 8, 20, 15);
+    expect(weekNumber(sunday)).toBe(39);
+    expect(formatPeriod("week", sunday)).toBe("Week 39 · Sun, Sep 20 – Sat, Sep 26");
+    expect(weekNumber(new Date(2026, 8, 9, 15))).toBe(37);
   });
 
   it("builds one insights bucket per day of the month", () => {

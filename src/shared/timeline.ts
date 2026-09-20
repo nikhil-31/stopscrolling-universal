@@ -267,11 +267,22 @@ export function formatDayLabel(date: Date) {
   }).format(date);
 }
 
+export function weekNumber(anchor: Date) {
+  const { start } = periodBounds("week", anchor);
+  const thursday = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 4);
+  const utc = new Date(Date.UTC(thursday.getFullYear(), thursday.getMonth(), thursday.getDate()));
+  const dayNum = utc.getUTCDay() || 7;
+  utc.setUTCDate(utc.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+  return Math.ceil(((utc.getTime() - yearStart.getTime()) / dayMs + 1) / 7);
+}
+
 export function formatPeriod(period: InsightsPeriod, anchor: Date) {
   const bounds = periodBounds(period, anchor);
   if (period === "day") return formatDayLabel(anchor);
   if (period === "week") {
-    return `${formatDayLabel(bounds.start)} – ${formatDayLabel(new Date(bounds.end.getTime() - dayMs))}`;
+    const last = new Date(bounds.end.getTime() - dayMs);
+    return `Week ${weekNumber(anchor)} · ${formatDayLabel(bounds.start)} – ${formatDayLabel(last)}`;
   }
   if (period === "month") return formatMonthLabel(anchor);
   return `${anchor.getFullYear()}`;
