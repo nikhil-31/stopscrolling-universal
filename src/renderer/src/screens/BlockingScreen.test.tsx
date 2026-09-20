@@ -15,7 +15,18 @@ const desktop = {
   updateBlocklist: vi.fn(),
   createBlockingSchedule: vi.fn(),
   updateBlockingSchedule: vi.fn(),
+  deleteBlockingSchedule: vi.fn(),
   selectInspector: vi.fn(),
+  refreshBlockingStatus: vi.fn().mockResolvedValue(undefined),
+  refreshBlockingInventory: vi.fn().mockResolvedValue(undefined),
+  activateNativeBlocking: vi.fn().mockResolvedValue({
+    helperRegistered: false,
+    networkFilterApproved: false,
+    endpointSecurityApproved: false,
+    lastError: "signed-host-unavailable",
+  }),
+  cancelNormalSession: vi.fn().mockResolvedValue({}),
+  redeemBlockingBypass: vi.fn().mockResolvedValue({ redeemed: true }),
 };
 
 const device: DeviceListEntry = {
@@ -85,6 +96,30 @@ const namedSchedule: BlockingSchedule = {
   updated_at: "2026-09-10T00:00:00Z",
 };
 
+const activeOccurrence = {
+  occurrence_id: "occurrence-1",
+  schedule_id: "sched-1",
+  schedule_name: "Deep work",
+  strict_mode: false,
+  start_at: "2026-09-14T16:00:00Z",
+  end_at: "2026-09-15T18:00:00Z",
+  entries: [{ entry_type: "website" as const, identifier: "instagram.com", label: "Instagram" }],
+};
+
+const connectedEnforcement = {
+  available: true,
+  connected: true,
+  protocolVersion: 1,
+  policyVersion: 3,
+  activeOccurrenceIDs: ["occurrence-1"],
+  strictOccurrenceIDs: [] as string[],
+  activeOccurrenceID: "occurrence-1",
+  strictMode: false,
+  policyExpiresAt: null,
+  lastError: null,
+  checkedAt: "2026-09-14T16:00:00Z",
+};
+
 function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
   return {
     navigation: "blocking",
@@ -122,7 +157,7 @@ describe("BlockingScreen", () => {
     expect(screen.queryByText("This Mac")).toBeNull();
   });
 
-  it("renders synced sessions, blocklists, and devices", async () => {
+  it("renders synced sessions and blocklists", async () => {
     render(
       <BlockingScreen
         state={snapshot({
@@ -137,34 +172,20 @@ describe("BlockingScreen", () => {
         })}
       />,
     );
-    expect(screen.getByRole("status")).toHaveTextContent(/does not enforce blocks yet/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/blocking helper unavailable/i);
+    expect(screen.getByTestId("blocking-setup-checklist")).toHaveTextContent(/Helper registered/);
+    expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
+    expect(desktop.activateNativeBlocking).toHaveBeenCalled();
     expect(screen.getByText(/Deep work/)).toBeVisible();
     expect(screen.getByText("Social")).toBeVisible();
-    expect(screen.getByText("Studio Mac")).toBeVisible();
-    await userEvent.setup().click(screen.getByRole("button", { name: /Deep work/ }));
+    expect(screen.queryByText("My Devices")).toBeNull();
+    expect(screen.queryByText("Studio Mac")).toBeNull();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Deep work session" }));
     expect(desktop.selectInspector).toHaveBeenCalledWith(expect.objectContaining({
       kind: "schedule",
       schedule: namedSchedule,
     }));
-  });
-
-  it("shows a device nickname instead of the hostname", () => {
-    render(
-      <BlockingScreen
-        state={snapshot({
-          isAuthenticated: true,
-          devices: [{ ...device, nickname: "Work Mac" }],
-          blocking: {
-            schedules: [namedSchedule],
-            blocklists: [blocklist],
-            statusMessage: "",
-            loading: false,
-          },
-        })}
-      />,
-    );
-    expect(screen.getByText("Work Mac")).toBeVisible();
-    expect(screen.queryByText("Studio Mac")).toBeNull();
   });
 
   it("marks the inspected session as selected", () => {
@@ -183,10 +204,10 @@ describe("BlockingScreen", () => {
         })}
       />,
     );
-    expect(screen.getByRole("button", { name: /Deep work/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Deep work session" })).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("toggles locked mode and submits create forms", async () => {
+  it("submits create forms without a preview lock", async () => {
     const user = userEvent.setup();
     render(
       <BlockingScreen
@@ -202,11 +223,6 @@ describe("BlockingScreen", () => {
         })}
       />,
     );
-
-    const locked = screen.getByTestId("blocking-locked-mode");
-    expect(locked).not.toBeChecked();
-    await user.click(locked);
-    expect(locked).toBeChecked();
 
     await user.click(screen.getByRole("button", { name: "Add Blocklist" }));
     await user.type(screen.getByPlaceholderText("Name your blocklist"), "News");
@@ -238,6 +254,7 @@ describe("BlockingScreen", () => {
       blocklist_ids: ["list-1"],
       device_ids: ["device-id-1"],
       days_of_week: [0, 1, 2, 3, 4],
+      strict_mode: false,
     }));
   });
 
@@ -418,6 +435,7 @@ describe("BlockingScreen", () => {
       blocklist_ids: ["list-1"],
       device_ids: ["device-id-1", "phone-1"],
       is_active: true,
+      strict_mode: false,
     });
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -447,5 +465,197 @@ describe("BlockingScreen", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("complementary", { name: "Session inspector" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Edit session" })).toBeVisible();
+  });
+
+  it("deletes a session from the list", async () => {
+    const user = userEvent.setup();
+    render(
+      <BlockingScreen
+        state={snapshot({
+          isAuthenticated: true,
+          devices: [device],
+          blocking: {
+            schedules: [namedSchedule],
+            blocklists: [blocklist],
+            statusMessage: "",
+            loading: false,
+          },
+        })}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Delete Deep work" }));
+    expect(desktop.deleteBlockingSchedule).toHaveBeenCalledWith("sched-1");
+    expect(desktop.selectInspector).not.toHaveBeenCalled();
+  });
+
+  it("deletes a session from the inspector", async () => {
+    const user = userEvent.setup();
+    render(
+      <BlockingWithInspector
+        state={snapshot({
+          isAuthenticated: true,
+          devices: [device],
+          inspector: { kind: "schedule", segment: null, block: null, schedule: namedSchedule },
+          blocking: {
+            schedules: [namedSchedule],
+            blocklists: [blocklist],
+            statusMessage: "",
+            loading: false,
+          },
+        })}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Delete session" }));
+    expect(desktop.deleteBlockingSchedule).toHaveBeenCalledWith("sched-1");
+    expect(desktop.selectInspector).toHaveBeenCalledWith({ kind: "none" });
+  });
+
+  it("selects helper inventory apps and persists stable identifiers", async () => {
+    const user = userEvent.setup();
+    render(
+      <BlockingScreen
+        state={snapshot({
+          isAuthenticated: true,
+          blocking: {
+            schedules: [],
+            blocklists: [],
+            installedApplications: [{
+              displayName: "Slack",
+              executablePath: "/Applications/Slack.app/Contents/MacOS/Slack",
+              bundleIdentifier: "com.tinyspeck.slackmacgap",
+              signingIdentifier: "com.tinyspeck.slackmacgap",
+              packageFamilyName: null,
+              publisherThumbprint: null,
+            }],
+            statusMessage: "",
+            loading: false,
+          },
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add Blocklist" }));
+    await user.type(screen.getByPlaceholderText("Name your blocklist"), "Apps");
+    await user.type(screen.getByPlaceholderText("Search installed applications"), "Slack");
+    await user.click(screen.getByRole("checkbox", { name: /Slack/ }));
+    await user.click(screen.getByRole("button", { name: "Create blocklist" }));
+
+    expect(desktop.createBlocklist).toHaveBeenCalledWith({
+      name: "Apps",
+      entries: [{
+        entry_type: "app",
+        identifier: "com.tinyspeck.slackmacgap",
+        label: "Slack",
+      }],
+    });
+  });
+
+  it("requires explicit Strict Mode confirmation", async () => {
+    const user = userEvent.setup();
+    render(
+      <BlockingScreen
+        state={snapshot({
+          isAuthenticated: true,
+          devices: [device],
+          blocking: { schedules: [], blocklists: [blocklist], statusMessage: "", loading: false },
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add Session" }));
+    await user.type(screen.getByLabelText("Session name"), "No escape");
+    await user.click(screen.getByRole("checkbox", { name: /Social/ }));
+    await user.click(screen.getByRole("checkbox", { name: /Strict Mode/ }));
+    const submit = screen.getByRole("button", { name: "Create blocking session" });
+    expect(submit).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: /I understand that while this Strict Mode session is active/ }));
+    expect(submit).toBeEnabled();
+    await user.click(submit);
+    expect(desktop.createBlockingSchedule).toHaveBeenCalledWith(expect.objectContaining({ strict_mode: true }));
+  });
+
+  it("locks controls only for helper-confirmed active Strict Mode", async () => {
+    const user = userEvent.setup();
+    const strictState = snapshot({
+      isAuthenticated: true,
+      devices: [device],
+      inspector: { kind: "schedule", segment: null, block: null, schedule: { ...namedSchedule, strict_mode: true } },
+      blocking: {
+        schedules: [{ ...namedSchedule, strict_mode: true }],
+        blocklists: [blocklist],
+        activeOccurrence: { ...activeOccurrence, strict_mode: true },
+        enforcement: {
+          ...connectedEnforcement,
+          strictOccurrenceIDs: ["occurrence-1"],
+          strictMode: true,
+        },
+        statusMessage: "",
+        loading: false,
+      },
+    });
+    const { unmount } = render(<BlockingWithInspector state={strictState} />);
+    expect(screen.getByRole("button", { name: "End session" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Edit session" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete session" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete Deep work" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /Social.*custom filters/ }));
+    expect(screen.getByRole("button", { name: "Edit blocklist" })).toBeDisabled();
+    unmount();
+
+    render(
+      <BlockingWithInspector
+        state={snapshot({
+          ...strictState,
+          inspector: { kind: "schedule", segment: null, block: null, schedule: namedSchedule },
+          blocking: {
+            ...strictState.blocking,
+            schedules: [namedSchedule],
+            activeOccurrence,
+            enforcement: connectedEnforcement,
+          },
+        })}
+      />,
+    );
+    const end = screen.getByRole("button", { name: "End session" });
+    expect(end).toBeVisible();
+    expect(end).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Edit session" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Edit session" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Delete session" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Delete session" })).toBeEnabled();
+    await user.click(end);
+    expect(desktop.cancelNormalSession).toHaveBeenCalledWith({
+      scheduleID: "sched-1",
+      occurrenceID: "occurrence-1",
+    });
+  });
+
+  it("submits a server-signed support token through diagnostics", async () => {
+    const user = userEvent.setup();
+    render(
+      <BlockingScreen
+        state={snapshot({
+          isAuthenticated: true,
+          blocking: {
+            schedules: [namedSchedule],
+            blocklists: [blocklist],
+            activeOccurrence,
+            enforcement: connectedEnforcement,
+            statusMessage: "",
+            loading: false,
+          },
+        })}
+      />,
+    );
+    await user.click(screen.getByText("Support diagnostics"));
+    await user.type(screen.getByLabelText("Signed support token"), "server.signed.token");
+    await user.type(screen.getByLabelText("Device ID"), "device-id-1");
+    await user.click(screen.getByRole("button", { name: "Redeem signed token" }));
+    expect(desktop.redeemBlockingBypass).toHaveBeenCalledWith({
+      token: "server.signed.token",
+      device_id: "device-id-1",
+      occurrence_id: "occurrence-1",
+      action: "end",
+    });
   });
 });

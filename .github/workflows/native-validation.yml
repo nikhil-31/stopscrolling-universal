@@ -1,0 +1,46 @@
+name: Native validation
+
+on:
+  pull_request:
+    paths:
+      - "native/**"
+      - "src/main/blocking/**"
+      - "scripts/prepare-native-release.mjs"
+      - "electron-builder.yml"
+      - "electron-builder.mac-signed.yml"
+      - ".github/workflows/native-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos-core:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
+        working-directory: native/macos
+      - run: plutil -lint Resources/**/*.plist
+        working-directory: native/macos
+
+  windows-portable-core:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S native/windows -B out/windows-portable -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build out/windows-portable --parallel
+      - run: ctest --test-dir out/windows-portable --output-on-failure
+
+  unsigned-package-safety:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run native:prepare-release
+      - run: node -e "const f=require('./release-native/UNAVAILABLE.json'); if(f.policyEnforcement!==false) process.exit(1)"
+      - run: test ! -e release-native/macos

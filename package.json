@@ -14,10 +14,17 @@
     "test": "vitest run",
     "test:ui": "playwright test",
     "test:ui:update": "playwright test --update-snapshots",
+    "native:prepare-release": "node scripts/prepare-native-release.mjs",
+    "native:test:macos": "cd native/macos && swift test",
+    "native:test:windows-portable": "cmake -S native/windows -B out/windows-portable && cmake --build out/windows-portable --parallel && ctest --test-dir out/windows-portable --output-on-failure",
+    "prepack": "npm run native:prepare-release",
     "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder"
+    "predist": "npm run native:prepare-release",
+    "dist": "npm run build && electron-builder",
+    "dist:mac-signed": "npm run native:prepare-release && npm run build && electron-builder --config electron-builder.mac-signed.yml"
   },
   "dependencies": {
+    "koffi": "^3.2.1",
     "lucide-react": "^1.43.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

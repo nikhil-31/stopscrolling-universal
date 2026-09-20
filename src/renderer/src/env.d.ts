@@ -44,6 +44,14 @@ interface StopScrollingDesktop {
   updateBlocklist: (input: import("@shared/types").BlocklistUpdatePayload) => void;
   createBlockingSchedule: (input: import("@shared/types").BlockingScheduleWritePayload) => void;
   updateBlockingSchedule: (input: import("@shared/types").BlockingScheduleUpdatePayload) => void;
+  deleteBlockingSchedule: (scheduleId: string) => void;
+  refreshBlockingStatus: () => Promise<void>;
+  refreshBlockingInventory: () => Promise<void>;
+  activateNativeBlocking: () => Promise<import("@shared/types").BlockingHostSetup>;
+  cancelNormalSession: (payload: { scheduleID: string; occurrenceID: string }) =>
+    Promise<import("@shared/types").EndNormalOccurrenceResponse>;
+  redeemBlockingBypass: (input: import("@shared/types").BypassRedeemInput) =>
+    Promise<{ redeemed: boolean; nonce: string; redeemed_at: string }>;
   googleConnect: () => void;
   googleDisconnect: () => void;
   setCalendarView: (view: import("@shared/calendar-workspace").CalendarView) => void;

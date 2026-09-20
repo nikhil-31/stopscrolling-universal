@@ -24,6 +24,11 @@ import type {
   TrackingCapabilities,
   Blocklist,
   BlockingSchedule,
+  BlockingCapabilities,
+  BlockingEnforcementStatus,
+  BlockingHostSetup,
+  BlockingPolicyOccurrence,
+  InstalledApplication,
 } from "./types";
 
 export interface InspectorState {
@@ -81,6 +86,11 @@ export interface LeaderboardUiState {
 export interface BlockingUiState {
   schedules: BlockingSchedule[];
   blocklists: Blocklist[];
+  enforcement?: BlockingEnforcementStatus;
+  installedApplications?: InstalledApplication[];
+  activeOccurrence?: BlockingPolicyOccurrence | null;
+  capabilities?: BlockingCapabilities;
+  hostSetup?: BlockingHostSetup;
   statusMessage: string;
   loading: boolean;
 }

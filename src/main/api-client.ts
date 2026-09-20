@@ -19,6 +19,11 @@ import type {
   BlockingSchedule,
   BlockingScheduleUpdatePayload,
   BlockingScheduleWritePayload,
+  BlockingPolicyResponse,
+  BlockingPublicKey,
+  EndNormalOccurrenceResponse,
+  BypassRedeemInput,
+  BypassIssueInput,
 } from "@shared/types";
 import { logNetwork } from "./logger";
 
@@ -37,8 +42,14 @@ function isMfa(body: LoginResponse): body is MFAPendingResponse {
   return Boolean((body as MFAPendingResponse).mfa_required);
 }
 
-function apiMessage(body: unknown) {
-  if (typeof body === "string" && body.trim()) return body;
+function apiMessage(body: unknown, status?: number) {
+  if (typeof body === "string" && body.trim()) {
+    const trimmed = body.trim();
+    if (/^\s*</.test(trimmed) || trimmed.length > 280) {
+      return `Request failed (${status ?? "error"}).`;
+    }
+    return trimmed;
+  }
   if (body && typeof body === "object") {
     const record = body as Record<string, unknown>;
     if (typeof record.detail === "string") return record.detail;
@@ -112,7 +123,7 @@ export class StopScrollingAPI {
     }
 
     if (!response.ok) {
-      throw new APIError(apiMessage(body), response.status, body);
+      throw new APIError(apiMessage(body, response.status), response.status, body);
     }
     return body as T;
   }
@@ -331,6 +342,47 @@ export class StopScrollingAPI {
       method: "PATCH",
       body: JSON.stringify(input),
     });
+  }
+
+  async deleteBlockingSchedule(id: string) {
+    await this.request<unknown>(`api/blocking-schedules/${id}/`, { method: "DELETE" });
+  }
+
+  async deviceBlockingPolicy(deviceId: string) {
+    return this.request<BlockingPolicyResponse>(`api/blocking-policy/devices/${deviceId}/`);
+  }
+
+  async blockingPublicKey() {
+    return this.request<BlockingPublicKey>("api/blocking-policy/keys/current/", { token: null });
+  }
+
+  async endNormalOccurrence(scheduleId: string, deviceId: string) {
+    return this.request<EndNormalOccurrenceResponse>(`api/blocking-schedules/${scheduleId}/end/`, {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId }),
+    });
+  }
+
+  async issueBypass(input: BypassIssueInput) {
+    return this.request<{
+      token: string;
+      nonce: string;
+      device_id: string;
+      occurrence_id: string;
+      action: string;
+      expires_at: string;
+      kid: string;
+    }>("api/blocking-policy/bypass-tokens/", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  async redeemBypass(input: BypassRedeemInput) {
+    return this.request<{ redeemed: boolean; nonce: string; redeemed_at: string }>(
+      "api/blocking-policy/bypass-tokens/redeem/",
+      { method: "POST", body: JSON.stringify(input) },
+    );
   }
 }
 

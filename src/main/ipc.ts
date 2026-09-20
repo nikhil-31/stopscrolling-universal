@@ -1,10 +1,30 @@
-import { BrowserWindow, Menu, app, ipcMain, shell } from "electron";
+import { BrowserWindow, Menu, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
+import { dirname, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { IPC } from "@shared/ipc";
 import type { AppSettings, InsightsPeriod, LeaderboardPeriod, NavigationItem, TodayPeriod, TodayTab, BlocklistWritePayload, BlocklistUpdatePayload, BlockingScheduleUpdatePayload, BlockingScheduleWritePayload } from "@shared/types";
 import type { CalendarView } from "@shared/calendar-workspace";
 import type { AppController } from "./app-controller";
 import { refreshTray } from "./tray";
 import { createSettingsWindow } from "./windows";
+import { quitApp } from "./lifecycle";
+
+function assertTrustedRenderer(event: IpcMainInvokeEvent) {
+  if (!event.senderFrame) throw new Error("Untrusted renderer IPC caller");
+  const url = new URL(event.senderFrame.url);
+  if (url.protocol === "file:") {
+    const rendererRoot = resolve(__dirname, "../renderer");
+    const callerPath = resolve(dirname(fileURLToPath(url)), ".");
+    if (callerPath === rendererRoot || callerPath.startsWith(`${rendererRoot}${sep}`)) return;
+    throw new Error("Untrusted renderer IPC caller");
+  }
+  const developmentOrigin = process.env.ELECTRON_RENDERER_URL
+    ? new URL(process.env.ELECTRON_RENDERER_URL).origin
+    : null;
+  if (!developmentOrigin || url.origin !== developmentOrigin) {
+    throw new Error("Untrusted renderer IPC caller");
+  }
+}
 
 export function installIpc(controller: AppController) {
   const broadcast = () => {
@@ -144,6 +164,32 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.updateBlockingSchedule, (_event, input: BlockingScheduleUpdatePayload) => {
     void controller.updateBlockingSchedule(input);
   });
+  ipcMain.on(IPC.deleteBlockingSchedule, (_event, scheduleId: string) => {
+    void controller.deleteBlockingSchedule(scheduleId);
+  });
+  ipcMain.handle(IPC.refreshBlockingStatus, (event) => {
+    assertTrustedRenderer(event);
+    return controller.refreshBlockingHelper(true);
+  });
+  ipcMain.handle(IPC.refreshBlockingInventory, (event) => {
+    assertTrustedRenderer(event);
+    return controller.refreshBlockingInventory();
+  });
+  ipcMain.handle(IPC.activateNativeBlocking, (event) => {
+    assertTrustedRenderer(event);
+    return controller.activateNativeBlocking();
+  });
+  ipcMain.handle(
+    IPC.cancelNormalSession,
+    (event, payload: { scheduleID: string; occurrenceID: string }) => {
+      assertTrustedRenderer(event);
+      return controller.cancelNormalSession(payload);
+    },
+  );
+  ipcMain.handle(IPC.redeemBlockingBypass, (event, input) => {
+    assertTrustedRenderer(event);
+    return controller.redeemBlockingBypass(input);
+  });
   ipcMain.on(IPC.googleConnect, () => {
     void controller.google.connect(controller.settings.googleClientId).then(() => {
       controller.settings.showGoogleCalendarEvents = true;
@@ -207,10 +253,39 @@ export function installApplicationMenu(controller: AppController) {
               click: () => createSettingsWindow(controller),
             },
             { type: "separator" as const },
-            { role: "quit" as const },
+            { role: "hide" as const },
+            { role: "hideOthers" as const },
+            { role: "unhide" as const },
+            { type: "separator" as const },
+            {
+              label: "Quit Stop Scrolling",
+              accelerator: "CmdOrCtrl+Q",
+              enabled: !controller.hasHelperConfirmedStrictMode(),
+              click: () => {
+                void quitApp(
+                  () => controller.shutdown(),
+                  controller.hasHelperConfirmedStrictMode(),
+                  () => controller.helper.requestRelaunchAfterForcedExit(),
+                );
+              },
+            },
           ],
         }]
-      : []),
+      : [{
+          label: "File",
+          submenu: [{
+            label: "Quit Stop Scrolling",
+            accelerator: "Alt+F4",
+            enabled: !controller.hasHelperConfirmedStrictMode(),
+            click: () => {
+              void quitApp(
+                () => controller.shutdown(),
+                controller.hasHelperConfirmedStrictMode(),
+                () => controller.helper.requestRelaunchAfterForcedExit(),
+              );
+            },
+          }],
+        }]),
     {
       label: "View",
       submenu: [

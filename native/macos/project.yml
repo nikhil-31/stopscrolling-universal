@@ -1,0 +1,114 @@
+name: StopScrollingNative
+options:
+  bundleIdPrefix: com.stopscrolling
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+settings:
+  MARKETING_VERSION: 0.1.0
+  CURRENT_PROJECT_VERSION: 1
+  SWIFT_VERSION: "6.0"
+  MACOSX_DEPLOYMENT_TARGET: "13.0"
+  CODE_SIGN_STYLE: Automatic
+  ALWAYS_SEARCH_USER_PATHS: false
+targets:
+  BlockingCore:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: Sources/BlockingCore
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.stopscrolling.BlockingCore
+      GENERATE_INFOPLIST_FILE: true
+      SKIP_INSTALL: true
+  HelperXPC:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: Sources/HelperXPC
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.stopscrolling.HelperXPC
+      GENERATE_INFOPLIST_FILE: true
+      SKIP_INSTALL: true
+  StopScrollingHelper:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Sources/PrivilegedHelper
+    dependencies:
+      - target: BlockingCore
+      - target: HelperXPC
+    info:
+      path: Resources/Helper/Info.plist
+      properties:
+        CFBundleIdentifier: com.stopscrolling.helper
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.stopscrolling.helper
+      PRODUCT_NAME: com.stopscrolling.helper
+      INFOPLIST_FILE: Resources/Helper/Info.plist
+      CODE_SIGN_ENTITLEMENTS: Resources/Helper/Helper.entitlements
+      SKIP_INSTALL: true
+    scheme: {}
+  StopScrollingHostClient:
+    type: library.dynamic
+    platform: macOS
+    sources:
+      - path: Sources/HostClient
+    dependencies:
+      - target: HelperXPC
+      - sdk: ServiceManagement.framework
+      - sdk: SystemExtensions.framework
+      - sdk: NetworkExtension.framework
+    settings:
+      PRODUCT_NAME: StopScrollingHostClient
+      PRODUCT_BUNDLE_IDENTIFIER: com.stopscrolling.HostClient
+      MACH_O_TYPE: mh_dylib
+      SKIP_INSTALL: true
+    scheme: {}
+  NetworkFilter:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Sources/NetworkFilterExtension
+      - path: Sources/NetworkFilterExtensionMain
+    dependencies:
+      - target: BlockingCore
+      - sdk: NetworkExtension.framework
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.stopscrolling.desktop.network-filter
+      PRODUCT_NAME: NetworkFilter
+      PRODUCT_BUNDLE_PACKAGE_TYPE: SYSX
+      INFOPLIST_FILE: Resources/NetworkFilter/Info.plist
+      CODE_SIGN_ENTITLEMENTS: Resources/NetworkFilter/NetworkFilter.entitlements
+      SKIP_INSTALL: true
+      GENERATE_INFOPLIST_FILE: false
+    scheme: {}
+  EndpointSecurity:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Sources/EndpointSecurityExtension
+    dependencies:
+      - target: BlockingCore
+      - sdk: libEndpointSecurity.tbd
+      - sdk: Security.framework
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.stopscrolling.desktop.endpoint-security
+      PRODUCT_NAME: EndpointSecurity
+      PRODUCT_MODULE_NAME: StopScrollingEndpointSecurity
+      PRODUCT_BUNDLE_PACKAGE_TYPE: SYSX
+      INFOPLIST_FILE: Resources/EndpointSecurity/Info.plist
+      CODE_SIGN_ENTITLEMENTS: Resources/EndpointSecurity/EndpointSecurity.entitlements
+      SKIP_INSTALL: true
+      GENERATE_INFOPLIST_FILE: false
+    scheme: {}
+schemes:
+  StopScrollingNative:
+    build:
+      targets:
+        BlockingCore: all
+        HelperXPC: all
+        StopScrollingHelper: all
+        StopScrollingHostClient: all
+        NetworkFilter: all
+        EndpointSecurity: all

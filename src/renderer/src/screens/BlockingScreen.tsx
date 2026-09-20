@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   emptySessionDraft,
   formatRemaining,
@@ -7,18 +7,19 @@ import {
   scheduleWhen,
 } from "@shared/blocking";
 import type { AppSnapshot } from "@shared/snapshot";
-import { deviceDisplayName } from "@shared/device";
 import type { Blocklist, BlockingSchedule, DeviceListEntry } from "@shared/types";
 import { BlocklistComposer } from "../components/blocking/BlocklistComposer";
 import { BlocklistDetailDialog } from "../components/blocking/BlocklistDetailDialog";
 import { SessionComposer } from "../components/blocking/SessionComposer";
 import { SessionEditDialog } from "../components/blocking/SessionEditDialog";
 import {
-  Laptop2,
-  MonitorSmartphone,
   Plus,
+  RefreshCw,
   Shield,
+  ShieldAlert,
+  ShieldCheck,
   ShieldOff,
+  Trash2,
 } from "lucide-react";
 import {
   Badge,
@@ -26,9 +27,9 @@ import {
   Button,
   EmptyState,
   Grouped,
+  IconButton,
   LoadingState,
   Tabs,
-  Toggle,
 } from "../components/ui";
 
 type SessionTab = "sessions" | "history";
@@ -49,16 +50,82 @@ export function BlockingScreen({
   editingSchedule?: BlockingSchedule | null;
   onCloseEdit?: () => void;
 }) {
-  const [lockedMode, setLockedMode] = useState(false);
   const [tab, setTab] = useState<SessionTab>("sessions");
   const [showCreateSession, setShowCreateSession] = useState(false);
   const [showCreateBlocklist, setShowCreateBlocklist] = useState(false);
   const [selectedBlocklist, setSelectedBlocklist] = useState<Blocklist | null>(null);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [supportToken, setSupportToken] = useState("");
+  const [supportDeviceID, setSupportDeviceID] = useState("");
+  const [diagnosticsStatus, setDiagnosticsStatus] = useState<string | null>(null);
 
   const blocking = state.blocking ?? { schedules: [], blocklists: [], statusMessage: "", loading: false };
-  const devices = state.devices ?? [];
-  const registeredDevices = devices.filter((device): device is DeviceListEntry & { deviceID: string } => Boolean(device.deviceID));
+  const registeredDevices = (state.devices ?? []).filter(
+    (device): device is DeviceListEntry & { deviceID: string } => Boolean(device.deviceID),
+  );
   const now = useMemo(() => new Date(), [blocking.schedules]);
+  const occurrence = blocking.activeOccurrence ?? null;
+  const strictActive = Boolean(
+    occurrence
+    && blocking.enforcement?.strictOccurrenceIDs?.includes(occurrence.occurrence_id),
+  );
+  const activeSchedule = occurrence
+    ? blocking.schedules.find((schedule) => schedule.schedule_id === occurrence.schedule_id) ?? null
+    : null;
+  const strictBlocklistIds = new Set(
+    strictActive ? activeSchedule?.blocklists.map((list) => list.blocklist_id) ?? [] : [],
+  );
+  const enforcement = blocking.enforcement;
+  const capabilities = blocking.capabilities;
+  const enforcementTone = !enforcement?.available
+    ? "danger"
+    : enforcement.connected && !enforcement.lastError
+      ? "success"
+      : "warning";
+  const enforcementLabel = !enforcement?.available
+    ? "Blocking helper unavailable"
+    : enforcement.connected && !enforcement.lastError
+      ? occurrence
+        ? "Blocking is enforced"
+        : "Blocking helper ready"
+      : "Blocking enforcement degraded";
+  const inventoryUnavailableReason = capabilities?.applicationInventory === false
+    ? capabilities.reason || "The blocking helper does not provide application inventory."
+    : null;
+
+  async function deleteSession(schedule: BlockingSchedule) {
+    if (strictActive && schedule.schedule_id === occurrence?.schedule_id) return;
+    window.stopscrolling.deleteBlockingSchedule(schedule.schedule_id);
+    if (editingSchedule?.schedule_id === schedule.schedule_id) onCloseEdit?.();
+  }
+
+  async function refreshInventory() {
+    setInventoryLoading(true);
+    try {
+      await window.stopscrolling.refreshBlockingInventory();
+    } finally {
+      setInventoryLoading(false);
+    }
+  }
+
+  async function redeemSupportToken(event: FormEvent) {
+    event.preventDefault();
+    if (!occurrence || !supportToken.trim() || !supportDeviceID.trim()) return;
+    setDiagnosticsStatus("Submitting signed support token…");
+    try {
+      await window.stopscrolling.redeemBlockingBypass({
+        token: supportToken.trim(),
+        device_id: supportDeviceID.trim(),
+        occurrence_id: occurrence.occurrence_id,
+        action: "end",
+      });
+      setSupportToken("");
+      setDiagnosticsStatus("Support token redeemed.");
+    } catch (error) {
+      setDiagnosticsStatus(error instanceof Error ? error.message : "Support token redemption failed.");
+    }
+  }
 
   useEffect(() => {
     setSelectedBlocklist((current) => {
@@ -82,8 +149,13 @@ export function BlockingScreen({
 
   return (
     <div className="blocking-page" data-testid="blocking-page">
-      <Banner tone="info">
-        Sessions and blocklists sync to your account. This desktop app does not enforce blocks yet.
+      <Banner tone={enforcementTone}>
+        <strong>{enforcementLabel}.</strong>{" "}
+        {enforcement?.lastError || capabilities?.reason || (
+          occurrence
+            ? `${occurrence.schedule_name} is active until ${new Date(occurrence.end_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`
+            : "Permissions and native helper setup are complete."
+        )}
       </Banner>
       {blocking.statusMessage ? <p className="muted">{blocking.statusMessage}</p> : null}
       <div className="blocking-layout">
@@ -135,24 +207,38 @@ export function BlockingScreen({
                 const kind = scheduleRowKind(schedule, now);
                 const selected = state.inspector.kind === "schedule"
                   && state.inspector.schedule?.schedule_id === schedule.schedule_id;
+                const locked = strictActive && schedule.schedule_id === occurrence?.schedule_id;
                 return (
-                  <button
+                  <div
                     key={schedule.schedule_id}
-                    type="button"
-                    className={`blocking-session ${kind === "current" ? "blocking-session-current" : ""} ${selected ? "is-selected" : ""}`}
-                    aria-pressed={selected}
-                    onClick={() => window.stopscrolling.selectInspector({ kind: "schedule", schedule })}
+                    className={`blocking-session-row ${kind === "current" ? "blocking-session-current" : ""} ${selected ? "is-selected" : ""}`}
                   >
-                    <span>
-                      <span className="blocking-session-title">{kind === "current" ? "Current Session" : schedule.name}</span>
-                      <span className="blocking-session-meta">{scheduleWhen(schedule, { today: kind === "current" })}</span>
-                    </span>
-                    <span className={kind === "named" ? "blocking-session-meta" : "blocking-session-status"}>
-                      {kind === "current"
-                        ? `${schedule.name} · ${scheduleDetail(schedule, kind, now)}`
-                        : scheduleDetail(schedule, kind, now)}
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      className="blocking-session"
+                      aria-pressed={selected}
+                      aria-label={`${schedule.name} session`}
+                      onClick={() => window.stopscrolling.selectInspector({ kind: "schedule", schedule })}
+                    >
+                      <span>
+                        <span className="blocking-session-title">{kind === "current" ? "Current Session" : schedule.name}</span>
+                        <span className="blocking-session-meta">{scheduleWhen(schedule, { today: kind === "current" })}</span>
+                      </span>
+                      <span className={kind === "named" ? "blocking-session-meta" : "blocking-session-status"}>
+                        {kind === "current"
+                          ? `${schedule.name} · ${scheduleDetail(schedule, kind, now)}`
+                          : scheduleDetail(schedule, kind, now)}
+                        {schedule.strict_mode ? " · Strict Mode" : ""}
+                      </span>
+                    </button>
+                    <IconButton
+                      label={`Delete ${schedule.name}`}
+                      icon={Trash2}
+                      disabled={locked}
+                      title={locked ? "Active Strict Mode sessions cannot be deleted." : `Delete ${schedule.name}`}
+                      onClick={() => deleteSession(schedule)}
+                    />
+                  </div>
                 );
               })}
             </div>
@@ -165,7 +251,10 @@ export function BlockingScreen({
               <Button
                 size="sm"
                 icon={Plus}
-                onClick={() => setShowCreateBlocklist((open) => !open)}
+                onClick={() => {
+                  setShowCreateBlocklist((open) => !open);
+                  if (!showCreateBlocklist) void refreshInventory();
+                }}
               >
                 Add Blocklist
               </Button>
@@ -175,6 +264,10 @@ export function BlockingScreen({
               <BlocklistComposer
                 submitLabel="Create blocklist"
                 loading={blocking.loading}
+                installedApplications={blocking.installedApplications}
+                inventoryLoading={inventoryLoading}
+                inventoryUnavailableReason={inventoryUnavailableReason}
+                onRefreshInventory={() => void refreshInventory()}
                 onSubmit={(payload) => {
                   window.stopscrolling.createBlocklist(payload);
                   setShowCreateBlocklist(false);
@@ -190,7 +283,10 @@ export function BlockingScreen({
                 type="button"
                 className="blocking-list-row"
                 key={list.blocklist_id}
-                onClick={() => setSelectedBlocklist(list)}
+                onClick={() => {
+                  setSelectedBlocklist(list);
+                  void refreshInventory();
+                }}
               >
                 <span className="blocking-list-icon"><Shield size={14} aria-hidden="true" /></span>
                 <span className="row-copy">
@@ -205,38 +301,116 @@ export function BlockingScreen({
 
         <div className="blocking-column">
           <Grouped
-            className="blocking-devices"
-            title="My Devices"
-            description="Devices that can join a session"
-            action={<Badge>{devices.length}</Badge>}
+            title="Blocking Status"
+            description="Native helper permissions and enforcement"
+            action={(
+              <Badge tone={enforcementTone} dot={enforcementTone === "success"}>
+                {enforcementLabel.replace("Blocking ", "")}
+              </Badge>
+            )}
           >
-            <div className="device-grid">
-              {devices.map((device) => (
-                <div className="device-card" key={device.visibilityKey}>
-                  <div className="device-card-top">
-                    <span className="device-icon">
-                      {device.devicePlatform === "windows" ? <MonitorSmartphone size={15} /> : <Laptop2 size={15} />}
-                    </span>
-                    <span className="row-copy">
-                      <span className="row-title">{deviceDisplayName(device.devicePlatform, device.deviceName, device.nickname)}</span>
-                      <span className="row-subtitle">{device.devicePlatform}</span>
-                    </span>
-                    <span className={`dot ${device.isOnline ? "online" : ""}`} title={device.isOnline ? "Online" : "Offline"} />
-                  </div>
-                </div>
-              ))}
+            <div className="blocking-helper-status">
+              {enforcementTone === "success"
+                ? <ShieldCheck size={20} aria-hidden="true" />
+                : <ShieldAlert size={20} aria-hidden="true" />}
+              <span className="row-copy">
+                <strong>{enforcementLabel}</strong>
+                <span className="row-subtitle">
+                  {enforcement?.connected
+                    ? `Helper protocol ${enforcement.protocolVersion} connected`
+                    : capabilities?.reason || enforcement?.lastError || "Complete helper installation and required system permissions."}
+                </span>
+              </span>
             </div>
-            {!devices.length ? <p className="muted">Devices appear here after your first sync.</p> : null}
-          </Grouped>
-
-          <Grouped title="Options" description="Session behavior on this device">
-            <Toggle
-              label="Locked Mode"
-              description="Keeps the session from ending early. Preview only."
-              checked={lockedMode}
-              onChange={setLockedMode}
-              testId="blocking-locked-mode"
-            />
+            <ol className="blocking-setup-checklist" data-testid="blocking-setup-checklist">
+              <li data-complete={blocking.hostSetup?.helperRegistered ? "true" : "false"}>
+                Helper registered
+              </li>
+              <li data-complete={blocking.hostSetup?.networkFilterApproved ? "true" : "false"}>
+                Network Filter approved
+              </li>
+              <li data-complete={blocking.hostSetup?.endpointSecurityApproved ? "true" : "false"}>
+                Endpoint Security / Full Disk Access approved
+              </li>
+            </ol>
+            {occurrence ? (
+              <div className="blocking-occurrence" aria-label="Active blocking occurrence">
+                <div className="inspector-kicker">Active occurrence</div>
+                <strong>{occurrence.schedule_name}</strong>
+                <span className="muted">
+                  {new Date(occurrence.start_at).toLocaleString()} – {new Date(occurrence.end_at).toLocaleString()}
+                </span>
+                <span className="muted">{occurrence.entries.length} enforced {occurrence.entries.length === 1 ? "entry" : "entries"}</span>
+                {strictActive ? <Badge tone="danger">Strict Mode locked</Badge> : <Badge tone="success">Normal session</Badge>}
+              </div>
+            ) : null}
+            <div className="form-actions">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                icon={RefreshCw}
+                onClick={() => void window.stopscrolling.activateNativeBlocking()}
+              >
+                Retry
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => void window.stopscrolling.refreshBlockingStatus()}
+              >
+                Check setup
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => void refreshInventory()}
+                disabled={inventoryLoading || capabilities?.applicationInventory === false}
+              >
+                {inventoryLoading ? "Loading apps…" : "Refresh apps"}
+              </Button>
+            </div>
+            <details
+              className="blocking-diagnostics"
+              open={diagnosticsOpen}
+              onToggle={(event) => setDiagnosticsOpen(event.currentTarget.open)}
+            >
+              <summary>Support diagnostics</summary>
+              <p className="muted">For server-signed support tokens supplied by Stop Scrolling support.</p>
+              {!occurrence ? (
+                <p className="muted">No active occurrence is available for diagnostics.</p>
+              ) : (
+                <form className="form" onSubmit={(event) => void redeemSupportToken(event)}>
+                  <label className="field">
+                    <span>Signed support token</span>
+                    <textarea
+                      value={supportToken}
+                      onChange={(event) => setSupportToken(event.target.value)}
+                      required
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Device ID</span>
+                    <input
+                      value={supportDeviceID}
+                      onChange={(event) => setSupportDeviceID(event.target.value)}
+                      required
+                    />
+                  </label>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="secondary"
+                    disabled={!supportToken.trim() || !supportDeviceID.trim() || capabilities?.bypassRedemption === false}
+                  >
+                    Redeem signed token
+                  </Button>
+                </form>
+              )}
+              {diagnosticsStatus ? <p role="status">{diagnosticsStatus}</p> : null}
+            </details>
           </Grouped>
         </div>
       </div>
@@ -244,10 +418,17 @@ export function BlockingScreen({
         <BlocklistDetailDialog
           blocklist={selectedBlocklist}
           loading={blocking.loading}
+          installedApplications={blocking.installedApplications}
+          inventoryLoading={inventoryLoading}
+          inventoryUnavailableReason={inventoryUnavailableReason}
+          onRefreshInventory={() => void refreshInventory()}
+          editingDisabledReason={strictBlocklistIds.has(selectedBlocklist.blocklist_id)
+            ? "This blocklist cannot be edited while its Strict Mode session is active."
+            : undefined}
           onClose={() => setSelectedBlocklist(null)}
         />
       ) : null}
-      {editingSchedule ? (
+      {editingSchedule && !(strictActive && editingSchedule.schedule_id === occurrence?.schedule_id) ? (
         <SessionEditDialog
           schedule={editingSchedule}
           blocklists={blocking.blocklists}

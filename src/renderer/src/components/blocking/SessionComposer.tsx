@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { defaultTimeZone, scheduleDeviceLabel, WEEKDAYS, type SessionComposerDraft } from "@shared/blocking";
 import { deviceDisplayName } from "@shared/device";
 import type {
@@ -22,6 +22,7 @@ export function SessionComposer({
   loading = false,
   onSubmit,
   onCancel,
+  extraActions,
 }: {
   initialDraft: SessionComposerDraft;
   blocklists: Blocklist[];
@@ -32,6 +33,7 @@ export function SessionComposer({
   loading?: boolean;
   onSubmit: (payload: BlockingScheduleWritePayload) => void;
   onCancel?: () => void;
+  extraActions?: ReactNode;
 }) {
   const [name, setName] = useState(initialDraft.name);
   const [startTime, setStartTime] = useState(initialDraft.startTime);
@@ -40,6 +42,8 @@ export function SessionComposer({
   const [selectedDays, setSelectedDays] = useState(initialDraft.selectedDays);
   const [selectedBlocklistIds, setSelectedBlocklistIds] = useState(initialDraft.selectedBlocklistIds);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState(initialDraft.selectedDeviceIds);
+  const [strictMode, setStrictMode] = useState(initialDraft.strictMode);
+  const [strictConfirmed, setStrictConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const registeredIdKey = devices.map((device) => device.deviceID).join("|");
@@ -61,7 +65,8 @@ export function SessionComposer({
     && endTime
     && selectedDays.length
     && selectedBlocklistIds.length
-    && selectedDeviceIds.length,
+    && selectedDeviceIds.length
+    && (!strictMode || strictConfirmed),
   );
 
   function toggleDay(day: number) {
@@ -89,6 +94,7 @@ export function SessionComposer({
       time_zone: timeZone.trim() || defaultTimeZone(),
       blocklist_ids: selectedBlocklistIds,
       device_ids: selectedDeviceIds,
+      strict_mode: strictMode,
     };
     if (initialDraft.isActive !== undefined) payload.is_active = initialDraft.isActive;
     onSubmit(payload);
@@ -213,6 +219,36 @@ export function SessionComposer({
           </div>
         )}
       </fieldset>
+      <fieldset className="blocking-fieldset">
+        <legend>Session protection</legend>
+        <label className="blocking-check-row">
+          <input
+            type="checkbox"
+            checked={strictMode}
+            onChange={(event) => {
+              setStrictMode(event.target.checked);
+              setStrictConfirmed(false);
+            }}
+          />
+          <span>
+            <strong>Strict Mode</strong>
+            <span className="row-subtitle">Prevent ending or editing this session while it is active.</span>
+          </span>
+        </label>
+        {strictMode ? (
+          <label className="blocking-strict-confirmation">
+            <input
+              type="checkbox"
+              checked={strictConfirmed}
+              onChange={(event) => setStrictConfirmed(event.target.checked)}
+            />
+            <span>
+              I understand that while this Strict Mode session is active, it cannot be ended or edited
+              and Stop Scrolling cannot quit until the session ends.
+            </span>
+          </label>
+        ) : null}
+      </fieldset>
       <Button variant="primary" type="submit" disabled={!canSubmit || loading}>
         {submitLabel}
       </Button>
@@ -221,6 +257,7 @@ export function SessionComposer({
           Cancel
         </Button>
       ) : null}
+      {extraActions}
     </form>
   );
 }

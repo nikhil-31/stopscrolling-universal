@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!-- MSI-ready fragment. Product/Package identity, upgrade policy, signing,
+       and Electron feature wiring belong in the top-level installer project. -->
+  <Fragment>
+    <DirectoryRef Id="ProgramFiles64Folder">
+      <Directory Id="StopScrollingInstallFolder" Name="StopScrolling">
+        <Component Id="NativeBlockingService" Guid="*" Bitness="always64">
+          <File Id="BlockingServiceExe"
+                Source="$(var.NativeBin)\StopScrollingService.exe"
+                KeyPath="yes" Checksum="yes" />
+          <ServiceInstall Id="BlockingServiceInstall"
+                          Name="StopScrollingService"
+                          DisplayName="Stop Scrolling Blocking Service"
+                          Type="ownProcess" Start="auto" Account="LocalSystem"
+                          ErrorControl="normal" Vital="yes" />
+          <ServiceControl Id="BlockingServiceControl"
+                          Name="StopScrollingService"
+                          Start="install" Stop="both" Remove="uninstall"
+                          Wait="yes" />
+        </Component>
+        <Component Id="NativeStrictWatchdog" Guid="*" Bitness="always64">
+          <File Id="StrictWatchdogExe"
+                Source="$(var.NativeBin)\StopScrollingStrictWatchdog.exe"
+                KeyPath="yes" Checksum="yes" />
+          <ServiceInstall Id="WatchdogServiceInstall"
+                          Name="StopScrollingStrictWatchdog"
+                          DisplayName="Stop Scrolling Strict Watchdog"
+                          Type="ownProcess" Start="auto" Account="LocalSystem"
+                          ErrorControl="normal" Vital="yes"
+                          Arguments="" />
+          <ServiceControl Id="WatchdogServiceControl"
+                          Name="StopScrollingStrictWatchdog"
+                          Start="install" Stop="both" Remove="uninstall"
+                          Wait="yes" />
+        </Component>
+      </Directory>
+    </DirectoryRef>
+    <ComponentGroup Id="StopScrollingNativeWindows">
+      <ComponentRef Id="NativeBlockingService" />
+      <ComponentRef Id="NativeStrictWatchdog" />
+    </ComponentGroup>
+
+    <CustomAction Id="CleanupNativeEnforcement"
+                  FileRef="BlockingServiceExe"
+                  ExeCommand="--cleanup"
+                  Execute="deferred" Impersonate="no" Return="check" />
+    <InstallExecuteSequence>
+      <Custom Action="CleanupNativeEnforcement"
+              After="StopServices"
+              Condition="REMOVE~=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+  </Fragment>
+</Wix>

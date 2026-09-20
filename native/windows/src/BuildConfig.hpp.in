@@ -1,0 +1,10 @@
+#pragma once
+
+// Generated only from signed build/provisioning inputs. Runtime environment
+// variables, command-line overrides, and local key files are intentionally unsupported.
+namespace stopscrolling::windows::build {
+inline constexpr char kKeyID[] = "@STOPSCROLLING_KEY_ID@";
+inline constexpr char kPublicKeyBase64[] = "@STOPSCROLLING_PUBLIC_KEY_BASE64@";
+inline constexpr wchar_t kClientCertificateSha256[] = L"@STOPSCROLLING_CLIENT_CERT_SHA256@";
+inline constexpr char kDeviceID[] = "@STOPSCROLLING_DEVICE_ID@";
+}  // namespace stopscrolling::windows::build

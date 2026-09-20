@@ -1,29 +1,31 @@
-import { Menu, Tray, app, nativeImage, BrowserWindow } from "electron";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { Menu, Tray, nativeImage } from "electron";
 import type { AppController } from "./app-controller";
-import { createMainWindow } from "./windows";
-
-function showMain(controller: AppController) {
-  const existing = BrowserWindow.getAllWindows().find((window) => window.getTitle() !== "Settings");
-  if (existing) {
-    existing.show();
-    existing.focus();
-    return existing;
-  }
-  return createMainWindow(controller);
-}
+import { quitApp } from "./lifecycle";
+import { showMainWindow } from "./windows";
 
 let tray: Tray | null = null;
 
-function icon() {
-  const image = nativeImage.createEmpty();
+export function trayIconPath() {
+  return [
+    join(__dirname, "../../resources/trayTemplate.png"),
+    join(process.resourcesPath, "trayTemplate.png"),
+  ].find((path) => existsSync(path));
+}
+
+function statusBarIcon() {
+  const path = trayIconPath();
+  const image = path ? nativeImage.createFromPath(path) : nativeImage.createEmpty();
+  image.setTemplateImage(true);
   return image;
 }
 
 export function installTray(controller: AppController) {
   if (tray) return tray;
-  tray = new Tray(nativeImage.createFromDataURL(
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAsSAAASLQEsoQAAAEhJREFUOI3N0rENwCAQxNDvf0lGYYSswQgpKSlS8J+UKLIfvLPsvb0AImI2s4jYq+oKwMyjqr6Z+QRgZqeq3wG89w9mfgI4AXgDeABw+gC2syMZc7QfWQAAAABJRU5ErkJggg==",
-  ));
+  tray = new Tray(statusBarIcon());
+  tray.setIgnoreDoubleClickEvents(true);
+  tray.on("click", () => showMainWindow(controller));
   refreshTray(controller);
   return tray;
 }
@@ -47,12 +49,8 @@ export function refreshTray(controller: AppController) {
       },
     },
     {
-      label: "Open Today",
-      click: () => {
-        const win = showMain(controller);
-        win.show();
-        controller.selectNavigation("today");
-      },
+      label: "Open Stop Scrolling",
+      click: () => showMainWindow(controller),
     },
     ...(pending > 0 || controller.auth.user
       ? [
@@ -72,19 +70,22 @@ export function refreshTray(controller: AppController) {
       : {
           label: "Sign in",
           click: () => {
-            showMain(controller).show();
+            showMainWindow(controller);
             controller.selectNavigation("account");
           },
         },
     { type: "separator" },
     {
       label: "Quit Stop Scrolling",
+      enabled: !controller.hasHelperConfirmedStrictMode(),
       click: () => {
-        void controller.tracker.shutdown().then(() => app.quit());
+        void quitApp(
+          () => controller.shutdown(),
+          controller.hasHelperConfirmedStrictMode(),
+          () => controller.helper.requestRelaunchAfterForcedExit(),
+        );
       },
     },
   ];
   tray.setContextMenu(Menu.buildFromTemplate(template));
 }
-
-void icon;

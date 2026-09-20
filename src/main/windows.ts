@@ -1,6 +1,7 @@
 import { BrowserWindow, shell } from "electron";
 import { join } from "node:path";
 import { AppController } from "./app-controller";
+import { shouldHideWindowOnClose } from "./lifecycle";
 
 export function preloadPath() {
   return join(__dirname, "../preload/index.js");
@@ -29,6 +30,11 @@ export function createMainWindow(controller: AppController) {
     },
   });
   win.on("ready-to-show", () => win.show());
+  win.on("close", (event) => {
+    if (!shouldHideWindowOnClose()) return;
+    event.preventDefault();
+    win.hide();
+  });
   win.webContents.setWindowOpenHandler((details) => {
     void shell.openExternal(details.url);
     return { action: "deny" };
@@ -40,6 +46,17 @@ export function createMainWindow(controller: AppController) {
   }
   controller.addWindow(win);
   return win;
+}
+
+export function showMainWindow(controller: AppController) {
+  const existing = BrowserWindow.getAllWindows().find((window) => window.getTitle() !== "Settings");
+  if (existing) {
+    if (existing.isMinimized()) existing.restore();
+    existing.show();
+    existing.focus();
+    return existing;
+  }
+  return createMainWindow(controller);
 }
 
 export function createSettingsWindow(controller: AppController, parent?: BrowserWindow) {

@@ -268,7 +268,7 @@ export class ScreenTimeTracker {
     this.onChange();
   }
 
-  private async registerLocalDevice() {
+  async registerLocalDevice() {
     if (this.localDeviceId) return this.localDeviceId;
     const row = await this.api.registerDevice({
       device_platform: currentDevicePlatform(),

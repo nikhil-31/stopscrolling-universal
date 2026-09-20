@@ -1,0 +1,64 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { StopScrollingAPI } from "./api-client";
+
+vi.mock("./logger", () => ({ logNetwork: vi.fn() }));
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("blocking API client", () => {
+  it("ends a normal occurrence using the backend contract", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      occurrence_id: "occurrence",
+      schedule_id: "schedule",
+      device_id: "device",
+      occurrence_start: "2026-09-14T00:00:00Z",
+      occurrence_end: "2026-09-14T01:00:00Z",
+      canceled_at: "2026-09-14T00:30:00Z",
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetch);
+    const api = new StopScrollingAPI(
+      "https://example.test/",
+      { access: "access", refresh: "refresh" },
+      () => undefined,
+    );
+
+    const result = await api.endNormalOccurrence("schedule", "device");
+
+    expect(result.occurrence_id).toBe("occurrence");
+    expect(fetch).toHaveBeenCalledWith(
+      "https://example.test/api/blocking-schedules/schedule/end/",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ device_id: "device" }) }),
+    );
+  });
+
+  it("deletes a blocking schedule", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetch);
+    const api = new StopScrollingAPI(
+      "https://example.test/",
+      { access: "access", refresh: "refresh" },
+      () => undefined,
+    );
+
+    await api.deleteBlockingSchedule("schedule");
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://example.test/api/blocking-schedules/schedule/",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("does not surface HTML error pages as the API message", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response("<!DOCTYPE html><html><body>column missing</body></html>", {
+      status: 500,
+      headers: { "Content-Type": "text/html" },
+    }));
+    vi.stubGlobal("fetch", fetch);
+    const api = new StopScrollingAPI("https://example.test/", { access: "access", refresh: "refresh" }, () => undefined);
+
+    await expect(api.deviceBlockingPolicy("device")).rejects.toMatchObject({
+      status: 500,
+      message: "Request failed (500).",
+    });
+  });
+});

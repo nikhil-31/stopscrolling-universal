@@ -66,6 +66,14 @@ const api = {
   updateBlocklist: (input: import("@shared/types").BlocklistUpdatePayload) => ipcRenderer.send(IPC.updateBlocklist, input),
   createBlockingSchedule: (input: import("@shared/types").BlockingScheduleWritePayload) => ipcRenderer.send(IPC.createBlockingSchedule, input),
   updateBlockingSchedule: (input: import("@shared/types").BlockingScheduleUpdatePayload) => ipcRenderer.send(IPC.updateBlockingSchedule, input),
+  deleteBlockingSchedule: (scheduleId: string) => ipcRenderer.send(IPC.deleteBlockingSchedule, scheduleId),
+  refreshBlockingStatus: () => ipcRenderer.invoke(IPC.refreshBlockingStatus),
+  refreshBlockingInventory: () => ipcRenderer.invoke(IPC.refreshBlockingInventory),
+  activateNativeBlocking: () => ipcRenderer.invoke(IPC.activateNativeBlocking),
+  cancelNormalSession: (payload: { scheduleID: string; occurrenceID: string }) =>
+    ipcRenderer.invoke(IPC.cancelNormalSession, payload),
+  redeemBlockingBypass: (input: import("@shared/types").BypassRedeemInput) =>
+    ipcRenderer.invoke(IPC.redeemBlockingBypass, input),
   googleConnect: () => ipcRenderer.send(IPC.googleConnect),
   googleDisconnect: () => ipcRenderer.send(IPC.googleDisconnect),
   setCalendarView: (view: CalendarView) => ipcRenderer.send(IPC.setCalendarView, view),

@@ -59,8 +59,10 @@ import type {
   BlocklistUpdatePayload,
   BlockingScheduleUpdatePayload,
   BlockingScheduleWritePayload,
+  BypassRedeemInput,
 } from "@shared/types";
 import { isMfa, StopScrollingAPI } from "./api-client";
+import { BlockingHelperBridge } from "./blocking/bridge";
 import { loadCalendarWorkspace, saveCalendarWorkspace } from "./calendar-workspace-store";
 import { GoogleCalendarService } from "./google-calendar";
 import { logObservability } from "./logger";
@@ -109,9 +111,14 @@ const defaultLeaderboard = (): LeaderboardUiState => ({
   loading: false,
 });
 
-const defaultBlocking = (): BlockingUiState => ({
+const defaultBlocking = (helper: BlockingHelperBridge): BlockingUiState => ({
   schedules: [],
   blocklists: [],
+  enforcement: helper.status,
+  installedApplications: helper.inventory,
+  activeOccurrence: null,
+  capabilities: helper.capabilities,
+  hostSetup: helper.hostSetup,
   statusMessage: "",
   loading: false,
 });
@@ -137,7 +144,7 @@ export class AppController {
   hiddenDeviceKeys = loadHiddenKeys();
   auth = defaultAuth();
   leaderboard = defaultLeaderboard();
-  blocking = defaultBlocking();
+  blocking: BlockingUiState;
   calendarEvents: CalendarOverlayEvent[] = [];
   commandPaletteOpen = false;
   serverSummary: PeriodSummaryResponse | null = null;
@@ -155,9 +162,22 @@ export class AppController {
 
   private windows = new Set<BrowserWindow>();
   private timelineTimer: NodeJS.Timeout | null = null;
+  private helperTimer: NodeJS.Timeout | null = null;
+  private helperBoundaryTimer: NodeJS.Timeout | null = null;
+  private lastPolicySignature: string | null = null;
+  readonly helper: BlockingHelperBridge;
+  onBlockingStateChanged: (() => void) | null = null;
+
+  constructor(helper = new BlockingHelperBridge()) {
+    this.helper = helper;
+    this.blocking = defaultBlocking(helper);
+  }
 
   async boot() {
     await this.restoreSession();
+    await this.helper.initialize();
+    await this.refreshBlockingHelper(true);
+    this.startHelperRefresh();
     if (this.settings.startScreenTimeOnLaunch && process.env.STOPSCROLLING_UI_TEST !== "1") {
       await this.tracker.startTracking();
     }
@@ -357,6 +377,15 @@ export class AppController {
     }, 60_000);
   }
 
+  startHelperRefresh() {
+    if (this.helperTimer) clearInterval(this.helperTimer);
+    let ticks = 0;
+    this.helperTimer = setInterval(() => {
+      ticks += 1;
+      void this.refreshBlockingHelper(ticks % 4 === 0);
+    }, 15_000);
+  }
+
   async restoreSession() {
     const tokens = this.api.getTokens();
     if (!tokens) return;
@@ -444,6 +473,7 @@ export class AppController {
       this.auth.statusMessage = `Signed in as ${this.auth.user.email}`;
       await this.tracker.flushOutbox();
       await this.refreshVisibleRange();
+      await this.refreshBlockingHelper(true);
     } catch (error) {
       this.auth.statusMessage = error instanceof Error ? error.message : "Verification failed.";
     } finally {
@@ -466,7 +496,7 @@ export class AppController {
   logout() {
     this.api.setTokens(null);
     this.auth = { ...defaultAuth(), email: this.auth.email };
-    this.blocking = defaultBlocking();
+    this.blocking = defaultBlocking(this.helper);
     this.statusMessage = "Signed out";
     this.broadcast();
   }
@@ -598,11 +628,117 @@ export class AppController {
     this.broadcast();
   }
 
+  async refreshBlockingHelper(fetchPolicy = false) {
+    if (!this.auth.user || !this.api.getTokens()) {
+      await this.helper.refreshStatus();
+      this.syncHelperSnapshot();
+      return;
+    }
+    try {
+      if (fetchPolicy) {
+        const deviceID = await this.tracker.registerLocalDevice();
+        const [policy, publicKey] = await Promise.all([
+          this.api.deviceBlockingPolicy(deviceID),
+          this.api.blockingPublicKey(),
+        ]);
+        if (policy.algorithm !== "Ed25519" || publicKey.algorithm !== "Ed25519" || policy.kid !== publicKey.kid) {
+          throw new Error("Blocking policy signing key does not match the advertised public key.");
+        }
+        if (policy.signature !== this.lastPolicySignature) {
+          await this.helper.applyPolicy(policy);
+          this.lastPolicySignature = policy.signature;
+        } else {
+          await this.helper.refreshStatus();
+        }
+        const activeID = this.helper.status.activeOccurrenceID;
+        this.blocking.activeOccurrence =
+          policy.occurrences.find((occurrence) => occurrence.occurrence_id === activeID) ?? null;
+        this.scheduleBoundaryRefresh(policy.occurrences);
+      } else {
+        await this.helper.refreshStatus();
+      }
+    } catch (error) {
+      logObservability(`Blocking policy refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    this.syncHelperSnapshot();
+  }
+
+  async refreshBlockingInventory() {
+    await this.helper.refreshInventory();
+    this.syncHelperSnapshot();
+  }
+
+  async cancelNormalSession(payload: { scheduleID: string; occurrenceID: string }) {
+    if (!this.auth.user) throw new Error("Sign in to end a blocking session.");
+    if (this.helper.status.strictOccurrenceIDs.includes(payload.occurrenceID)) {
+      throw new Error("Strict Mode sessions cannot be ended normally.");
+    }
+    const deviceID = await this.tracker.registerLocalDevice();
+    const result = await this.api.endNormalOccurrence(payload.scheduleID, deviceID);
+    try {
+      await this.helper.cancelNormal(result.occurrence_id);
+    } catch (error) {
+      logObservability(`Native normal cancellation failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    this.lastPolicySignature = null;
+    await this.refreshBlockingHelper(true);
+    return result;
+  }
+
+  async redeemBlockingBypass(input: BypassRedeemInput) {
+    await this.helper.redeemBypass(input.token);
+    const result = await this.api.redeemBypass(input);
+    this.syncHelperSnapshot();
+    return result;
+  }
+
+  hasHelperConfirmedStrictMode() {
+    if (!this.helper.status.strictMode) return false;
+    const end = this.blocking.activeOccurrence ? Date.parse(this.blocking.activeOccurrence.end_at) : Number.POSITIVE_INFINITY;
+    return end > Date.now();
+  }
+
+  async shutdown() {
+    if (this.helperTimer) clearInterval(this.helperTimer);
+    if (this.helperBoundaryTimer) clearTimeout(this.helperBoundaryTimer);
+    await Promise.all([this.tracker.shutdown(), this.helper.close()]);
+  }
+
+  private syncHelperSnapshot() {
+    this.blocking.enforcement = this.helper.status;
+    this.blocking.installedApplications = this.helper.inventory;
+    this.blocking.capabilities = this.helper.capabilities;
+    this.blocking.hostSetup = this.helper.hostSetup;
+    if (!this.helper.status.activeOccurrenceID) this.blocking.activeOccurrence = null;
+    this.onBlockingStateChanged?.();
+    this.broadcast();
+  }
+
+  async activateNativeBlocking() {
+    await this.helper.activateNativeSetup();
+    await this.refreshBlockingHelper(true);
+    return this.helper.hostSetup;
+  }
+
+  private scheduleBoundaryRefresh(occurrences: Array<{ start_at: string; end_at: string }>) {
+    if (this.helperBoundaryTimer) clearTimeout(this.helperBoundaryTimer);
+    const now = Date.now();
+    const boundary = occurrences
+      .flatMap((occurrence) => [Date.parse(occurrence.start_at), Date.parse(occurrence.end_at)])
+      .filter((value) => Number.isFinite(value) && value >= now - 1_000)
+      .sort((a, b) => a - b)[0];
+    if (boundary === undefined) return;
+    this.helperBoundaryTimer = setTimeout(
+      () => void this.refreshBlockingHelper(true),
+      Math.max(0, Math.min(boundary - now + 500, 2_147_483_647)),
+    );
+  }
+
   async refreshBlocking() {
     if (!this.auth.user) {
       if (this.inspector.kind === "schedule") this.inspector = emptyInspector();
       this.blocking = {
-        ...defaultBlocking(),
+        ...defaultBlocking(this.helper),
         statusMessage: "Sign in on the Account screen to manage sessions and blocklists.",
       };
       this.broadcast();
@@ -630,6 +766,7 @@ export class AppController {
       } catch (error) {
         logObservability(`Blocking device refresh failed: ${error instanceof Error ? error.message : String(error)}`);
       }
+      await this.refreshBlockingHelper(true);
     } catch (error) {
       this.blocking.statusMessage = error instanceof Error ? error.message : "Blocking data unavailable.";
     } finally {
@@ -704,6 +841,23 @@ export class AppController {
     }
   }
 
+  async deleteBlockingSchedule(scheduleId: string) {
+    if (!this.auth.user) {
+      this.blocking.statusMessage = "Sign in on the Account screen to delete sessions.";
+      this.broadcast();
+      return;
+    }
+    try {
+      await this.api.deleteBlockingSchedule(scheduleId);
+      this.statusMessage = "Session deleted.";
+      this.lastPolicySignature = null;
+      await this.refreshBlocking();
+    } catch (error) {
+      this.blocking.statusMessage = error instanceof Error ? error.message : "Could not delete session.";
+      this.broadcast();
+    }
+  }
+
   async refreshLeaderboard() {
     if (!this.auth.user) {
       this.leaderboard.statusMessage = "Sign in on the Account screen to view the friends leaderboard.";
@@ -742,6 +896,7 @@ export class AppController {
     this.auth.statusMessage = `${success} as ${this.auth.user.email}`;
     await this.tracker.flushOutbox();
     await this.refreshVisibleRange();
+    await this.refreshBlockingHelper(true);
   }
 
   private deviceEntries(): DeviceListEntry[] {

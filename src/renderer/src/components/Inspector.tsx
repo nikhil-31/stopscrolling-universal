@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   clockLabel,
   formatRemaining,
@@ -37,15 +38,49 @@ function WeekStrip({ days }: { days: number[] }) {
 
 function ScheduleInspector({
   schedule,
+  state,
   onEdit,
 }: {
   schedule: BlockingSchedule;
+  state: AppSnapshot;
   onEdit?: (schedule: BlockingSchedule) => void;
 }) {
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [ending, setEnding] = useState(false);
   const now = new Date();
   const kind = scheduleRowKind(schedule, now);
   const status = scheduleStatusLabel(kind);
   const remaining = kind === "current" ? formatRemaining(remainingUntilEnd(schedule, now)) : null;
+  const occurrence = state.blocking?.activeOccurrence?.schedule_id === schedule.schedule_id
+    ? state.blocking.activeOccurrence
+    : null;
+  const strictActive = Boolean(
+    occurrence
+    && state.blocking?.enforcement?.strictOccurrenceIDs?.includes(occurrence.occurrence_id),
+  );
+
+  async function endSession() {
+    if (!occurrence || strictActive) return;
+    setEnding(true);
+    setActionError(null);
+    try {
+      await window.stopscrolling.cancelNormalSession({
+        scheduleID: schedule.schedule_id,
+        occurrenceID: occurrence.occurrence_id,
+      });
+      closeInspector();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not end this session.");
+    } finally {
+      setEnding(false);
+    }
+  }
+
+  function deleteSession() {
+    if (strictActive) return;
+    window.stopscrolling.deleteBlockingSchedule(schedule.schedule_id);
+    closeInspector();
+  }
 
   return (
     <aside className="inspector" aria-label="Session inspector">
@@ -61,14 +96,46 @@ function ScheduleInspector({
           <h2>{kind === "current" ? "Current Session" : schedule.name}</h2>
           <p className="muted">{kind === "current" ? schedule.name : scheduleWhen(schedule)}</p>
         </span>
-        <Button type="button" size="sm" variant="primary" onClick={() => onEdit?.(schedule)}>
-          Edit session
-        </Button>
+        <div className="inspector-actions">
+          {occurrence ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={strictActive || ending}
+              title={strictActive ? "Active Strict Mode sessions cannot be ended." : undefined}
+              onClick={() => void endSession()}
+            >
+              {ending ? "Ending…" : "End session"}
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="primary"
+            disabled={strictActive}
+            title={strictActive ? "Active Strict Mode sessions cannot be edited." : undefined}
+            onClick={() => onEdit?.(schedule)}
+          >
+            Edit session
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="danger"
+            disabled={strictActive}
+            title={strictActive ? "Active Strict Mode sessions cannot be deleted." : undefined}
+            onClick={deleteSession}
+          >
+            Delete session
+          </Button>
+        </div>
       </div>
       <div className="inspector-meta">
         <Badge tone={kind === "current" ? "success" : kind === "schedule" ? "accent" : "neutral"} dot={kind === "current"}>
           {status}
         </Badge>
+        {strictActive ? <Badge tone="danger">Strict Mode locked</Badge> : null}
         <Badge><Clock3 size={11} aria-hidden="true" />{clockLabel(schedule.start_time)} – {clockLabel(schedule.end_time)}</Badge>
       </div>
       <WeekStrip days={schedule.days_of_week} />
@@ -95,7 +162,10 @@ function ScheduleInspector({
           </span>
         </div>
       )) : <p className="muted">No devices</p>}
-      <p className="muted">This desktop app does not enforce blocks yet.</p>
+      {strictActive ? (
+        <p className="muted">This active Strict Mode session cannot be ended, edited, or deleted until it finishes.</p>
+      ) : null}
+      {actionError ? <p className="muted" role="alert">{actionError}</p> : null}
     </aside>
   );
 }
@@ -109,7 +179,7 @@ export function Inspector({
 }) {
   if (state.inspector.kind === "none") return null;
   if (state.inspector.kind === "schedule" && state.inspector.schedule) {
-    return <ScheduleInspector schedule={state.inspector.schedule} onEdit={onEditSchedule} />;
+    return <ScheduleInspector schedule={state.inspector.schedule} state={state} onEdit={onEditSchedule} />;
   }
   if (state.inspector.kind === "segment" && state.inspector.segment) {
     const segment = state.inspector.segment;

@@ -25,6 +25,7 @@ function schedule(patch: Partial<BlockingSchedule> = {}): BlockingSchedule {
     days_of_week: [0, 1, 2, 3, 4],
     time_zone: "UTC",
     is_active: true,
+    strict_mode: false,
     blocklists: [],
     devices: [],
     blocklist_count: 0,
@@ -104,6 +105,7 @@ describe("blocking helpers", () => {
       selectedBlocklistIds: ["list-1"],
       selectedDeviceIds: ["d1"],
       isActive: true,
+      strictMode: false,
     });
   });
 

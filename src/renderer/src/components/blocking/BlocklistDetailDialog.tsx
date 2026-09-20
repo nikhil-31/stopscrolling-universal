@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { decomposeBlocklistEntries } from "@shared/blocking";
-import type { Blocklist, BlocklistEntry } from "@shared/types";
+import type { Blocklist, BlocklistEntry, InstalledApplication } from "@shared/types";
 import { AppWindow, Globe2, Shield, X } from "lucide-react";
 import { Button, EmptyState, IconButton } from "../ui";
 import { BlocklistComposer } from "./BlocklistComposer";
@@ -38,10 +38,20 @@ function EntrySection({ title, entries }: { title: string; entries: BlocklistEnt
 export function BlocklistDetailDialog({
   blocklist,
   loading = false,
+  installedApplications,
+  inventoryLoading = false,
+  inventoryUnavailableReason = null,
+  onRefreshInventory,
+  editingDisabledReason,
   onClose,
 }: {
   blocklist: Blocklist;
   loading?: boolean;
+  installedApplications?: InstalledApplication[];
+  inventoryLoading?: boolean;
+  inventoryUnavailableReason?: string | null;
+  onRefreshInventory?: () => void;
+  editingDisabledReason?: string;
   onClose: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -92,6 +102,10 @@ export function BlocklistDetailDialog({
               initialDraft={decomposeBlocklistEntries(blocklist.entries)}
               submitLabel="Save blocklist"
               loading={loading}
+              installedApplications={installedApplications}
+              inventoryLoading={inventoryLoading}
+              inventoryUnavailableReason={inventoryUnavailableReason}
+              onRefreshInventory={onRefreshInventory}
               onCancel={() => setEditing(false)}
               onSubmit={(payload) => {
                 window.stopscrolling.updateBlocklist({
@@ -113,10 +127,18 @@ export function BlocklistDetailDialog({
                   {count} {count === 1 ? "entry" : "entries"}
                 </p>
               </span>
-              <Button type="button" size="sm" variant="primary" onClick={() => setEditing(true)}>
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                disabled={Boolean(editingDisabledReason)}
+                title={editingDisabledReason}
+                onClick={() => setEditing(true)}
+              >
                 Edit blocklist
               </Button>
             </div>
+            {editingDisabledReason ? <p className="muted" role="status">{editingDisabledReason}</p> : null}
             <div className="data-row">
               <span className="row-title">Created</span>
               <span className="row-value muted">{formatTimestamp(blocklist.created_at)}</span>

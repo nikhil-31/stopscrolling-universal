@@ -7,8 +7,8 @@ import {
   normalizeWebsite,
   parseWebsiteList,
 } from "@shared/blocking";
-import type { BlocklistWritePayload } from "@shared/types";
-import { Check, CircleHelp, Plus, X } from "lucide-react";
+import type { BlocklistWritePayload, InstalledApplication } from "@shared/types";
+import { AppWindow, Check, CircleHelp, Plus, RefreshCw, Search, X } from "lucide-react";
 import { Button } from "../ui";
 
 type ComposerDraft = ReturnType<typeof decomposeBlocklistEntries>;
@@ -20,11 +20,23 @@ const emptyDraft: ComposerDraft = {
   appEntries: [],
 };
 
+function installedApplicationIdentifier(application: InstalledApplication) {
+  return application.signingIdentifier
+    || application.bundleIdentifier
+    || application.packageFamilyName
+    || application.publisherThumbprint
+    || application.executablePath;
+}
+
 export function BlocklistComposer({
   initialName = "",
   initialDraft = emptyDraft,
   submitLabel,
   loading = false,
+  installedApplications,
+  inventoryLoading = false,
+  inventoryUnavailableReason = null,
+  onRefreshInventory,
   onSubmit,
   onCancel,
 }: {
@@ -32,6 +44,10 @@ export function BlocklistComposer({
   initialDraft?: ComposerDraft;
   submitLabel: string;
   loading?: boolean;
+  installedApplications?: InstalledApplication[];
+  inventoryLoading?: boolean;
+  inventoryUnavailableReason?: string | null;
+  onRefreshInventory?: () => void;
   onSubmit: (payload: BlocklistWritePayload) => void;
   onCancel?: () => void;
 }) {
@@ -39,10 +55,26 @@ export function BlocklistComposer({
   const [customWebsites, setCustomWebsites] = useState(initialDraft.customWebsites);
   const [selectedCommonIds, setSelectedCommonIds] = useState(initialDraft.commonFilterIds);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState(initialDraft.categoryIds);
+  const [selectedApps, setSelectedApps] = useState(() => {
+    const entries = new Map<string, ComposerDraft["appEntries"][number]>();
+    for (const entry of initialDraft.appEntries) entries.set(entry.identifier, entry);
+    return [...entries.values()];
+  });
+  const [appSearch, setAppSearch] = useState("");
   const [websiteDraft, setWebsiteDraft] = useState("");
   const [multipleSitesText, setMultipleSitesText] = useState("");
   const [showMultipleSites, setShowMultipleSites] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const applicationOptions = [...new Map(
+    (installedApplications ?? [])
+      .map((application) => [installedApplicationIdentifier(application), application] as const)
+      .filter(([identifier]) => Boolean(identifier)),
+  ).values()];
+  const normalizedAppSearch = appSearch.trim().toLocaleLowerCase();
+  const visibleApplications = applicationOptions.filter((application) => (
+    application.displayName.toLocaleLowerCase().includes(normalizedAppSearch)
+    || installedApplicationIdentifier(application).toLocaleLowerCase().includes(normalizedAppSearch)
+  ));
 
   function toggleId(id: string, selected: string[], setSelected: (next: string[]) => void) {
     setSelected(selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id]);
@@ -65,10 +97,10 @@ export function BlocklistComposer({
         commonFilterIds: selectedCommonIds,
         categoryIds: selectedCategoryIds,
       }),
-      ...initialDraft.appEntries,
+      ...selectedApps,
     ];
     if (!name.trim() || !entries.length) {
-      setError("Add a name and at least one website or filter.");
+      setError("Add a name and at least one website, app, or filter.");
       return;
     }
     setError(null);
@@ -164,6 +196,90 @@ export function BlocklistComposer({
               Add multiple sites
             </Button>
           </>
+        )}
+      </section>
+
+      <section className="blocking-composer-panel">
+        <h3>
+          Applications
+          <span className="blocking-filter-help" title="Apps are stored using a stable helper-provided identifier.">
+            <CircleHelp size={13} aria-hidden="true" />
+            <span className="sr-only">Apps are stored using a stable helper-provided identifier.</span>
+          </span>
+        </h3>
+        {selectedApps.length ? (
+          <div className="blocking-site-chips" aria-label="Selected applications">
+            {selectedApps.map((app) => (
+              <button
+                type="button"
+                className="blocking-site-chip"
+                key={app.identifier}
+                onClick={() => setSelectedApps((current) => current.filter((item) => item.identifier !== app.identifier))}
+                aria-label={`Remove ${app.label || app.identifier}`}
+              >
+                <AppWindow size={12} aria-hidden="true" />
+                {app.label || app.identifier}
+                <X size={12} aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {inventoryLoading || installedApplications === undefined ? (
+          <p className="muted" role="status">Loading installed applications…</p>
+        ) : inventoryUnavailableReason ? (
+          <div>
+            <p className="muted">Application inventory unavailable: {inventoryUnavailableReason}</p>
+            {onRefreshInventory ? (
+              <Button type="button" size="sm" variant="secondary" icon={RefreshCw} onClick={onRefreshInventory}>
+                Try again
+              </Button>
+            ) : null}
+          </div>
+        ) : applicationOptions.length ? (
+          <>
+            <label className="blocking-app-search">
+              <Search size={14} aria-hidden="true" />
+              <span className="sr-only">Search installed applications</span>
+              <input
+                type="search"
+                value={appSearch}
+                onChange={(event) => setAppSearch(event.target.value)}
+                placeholder="Search installed applications"
+              />
+            </label>
+            <div className="blocking-check-list blocking-app-list">
+              {visibleApplications.map((application) => {
+                  const identifier = installedApplicationIdentifier(application);
+                  const selected = selectedApps.some((entry) => entry.identifier === identifier);
+                  return (
+                    <label className="blocking-check-row" key={identifier}>
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => setSelectedApps((current) => (
+                          selected
+                            ? current.filter((entry) => entry.identifier !== identifier)
+                            : [...current, {
+                                entry_type: "app",
+                                identifier,
+                                label: application.displayName,
+                              }]
+                        ))}
+                      />
+                      <span>
+                        <strong>{application.displayName}</strong>
+                        <span className="row-subtitle">{identifier}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+            </div>
+            {appSearch && !visibleApplications.length
+              ? <p className="muted">No installed applications match “{appSearch}”.</p>
+              : null}
+          </>
+        ) : (
+          <p className="muted">No installed applications were found.</p>
         )}
       </section>
 

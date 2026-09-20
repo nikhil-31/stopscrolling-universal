@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { scheduleToComposerDraft } from "@shared/blocking";
 import type { Blocklist, BlockingSchedule, DeviceListEntry } from "@shared/types";
 import { X } from "lucide-react";
-import { IconButton } from "../ui";
+import { Button, IconButton } from "../ui";
 import { SessionComposer } from "./SessionComposer";
 
 export function SessionEditDialog({
@@ -63,6 +63,19 @@ export function SessionEditDialog({
             });
             onClose();
           }}
+          extraActions={(
+            <Button
+              type="button"
+              size="sm"
+              variant="danger"
+              onClick={() => {
+                window.stopscrolling.deleteBlockingSchedule(schedule.schedule_id);
+                onClose();
+              }}
+            >
+              Delete session
+            </Button>
+          )}
         />
       </div>
     </div>

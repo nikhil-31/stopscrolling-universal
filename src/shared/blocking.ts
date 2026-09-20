@@ -271,6 +271,7 @@ export function emptySessionDraft() {
     selectedBlocklistIds: [] as string[],
     selectedDeviceIds: [] as string[],
     isActive: undefined as boolean | undefined,
+    strictMode: false,
   };
 }
 
@@ -279,7 +280,7 @@ export type SessionComposerDraft = ReturnType<typeof emptySessionDraft>;
 export function scheduleToComposerDraft(
   schedule: Pick<
     BlockingSchedule,
-    "name" | "start_time" | "end_time" | "days_of_week" | "time_zone" | "blocklists" | "devices" | "is_active"
+    "name" | "start_time" | "end_time" | "days_of_week" | "time_zone" | "blocklists" | "devices" | "is_active" | "strict_mode"
   >,
 ): SessionComposerDraft {
   return {
@@ -291,5 +292,6 @@ export function scheduleToComposerDraft(
     selectedBlocklistIds: schedule.blocklists.map((list) => list.blocklist_id),
     selectedDeviceIds: schedule.devices.map((device) => device.device_id),
     isActive: schedule.is_active,
+    strictMode: schedule.strict_mode ?? false,
   };
 }

@@ -1,43 +1,51 @@
 import { app, BrowserWindow } from "electron";
 import { AppController } from "./app-controller";
 import { installApplicationMenu, installIpc } from "./ipc";
+import { isQuitting, markQuitting } from "./lifecycle";
 import { installTray, refreshTray } from "./tray";
-import { createMainWindow } from "./windows";
+import { createMainWindow, showMainWindow } from "./windows";
 
 app.setName("Stop Scrolling");
 
 const controller = new AppController();
-let quitting = false;
 
 app.whenReady().then(async () => {
   installIpc(controller);
   installApplicationMenu(controller);
   await controller.boot();
-  const win = createMainWindow(controller);
+  createMainWindow(controller);
   installTray(controller);
   refreshTray(controller);
-
-  win.on("close", (event) => {
-    if (quitting) return;
-    event.preventDefault();
-    win.hide();
-  });
+  controller.onBlockingStateChanged = () => {
+    refreshTray(controller);
+    installApplicationMenu(controller);
+  };
 
   app.on("activate", () => {
-    const existing = BrowserWindow.getAllWindows()[0];
-    if (existing) existing.show();
-    else createMainWindow(controller);
+    showMainWindow(controller);
+    controller.broadcast();
   });
+  app.on("browser-window-focus", () => {
+    controller.broadcast();
+  });
+  if (process.platform === "darwin") {
+    app.on("did-become-active", () => {
+      controller.broadcast();
+    });
+  }
 });
 
-app.on("before-quit", () => {
-  quitting = true;
-  void controller.tracker.shutdown();
+app.on("before-quit", (event) => {
+  if (controller.hasHelperConfirmedStrictMode()) {
+    event.preventDefault();
+    void controller.helper.requestRelaunchAfterForcedExit();
+    return;
+  }
+  markQuitting();
+  void controller.shutdown();
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    quitting = true;
-    void controller.tracker.shutdown().then(() => app.quit());
-  }
+  if (isQuitting()) return;
+  // Stay in the tray/dock until the user chooses Quit.
 });

@@ -4,6 +4,7 @@ import {
   Cloud,
   ExternalLink,
   FileText,
+  Hand,
   Monitor,
   Moon,
   RefreshCw,
@@ -46,6 +47,22 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
                 onChange={(startScreenTimeOnLaunch) => window.stopscrolling.updateSettings({ startScreenTimeOnLaunch })}
                 testId="settings-start-screen-time-on-launch"
               />
+              {state.capabilities.platform === "macos" ? (
+                <div className="connection-row" data-testid="settings-accessibility">
+                  <Hand size={17} aria-hidden="true" />
+                  <div className="connection-copy">
+                    <strong>Accessibility</strong>
+                    <span>{state.capabilities.urlCaptureNote}</span>
+                  </div>
+                  {state.capabilities.accessibilityGranted ? (
+                    <Badge tone="success">Granted</Badge>
+                  ) : (
+                    <Button size="sm" onClick={() => window.stopscrolling.requestAccessibility()}>
+                      Grant access
+                    </Button>
+                  )}
+                </div>
+              ) : null}
             </Grouped>
           </section>
 

@@ -371,6 +371,7 @@ export interface BlockingSchedule {
   days_of_week: number[];
   time_zone: string;
   is_active: boolean;
+  strict_mode?: boolean;
   blocklists: BlockingScheduleBlocklistRef[];
   devices: BlockingScheduleDeviceRef[];
   blocklist_count: number;
@@ -388,8 +389,113 @@ export interface BlockingScheduleWritePayload {
   blocklist_ids: string[];
   device_ids: string[];
   is_active?: boolean;
+  strict_mode?: boolean;
 }
 
 export interface BlockingScheduleUpdatePayload extends BlockingScheduleWritePayload {
   schedule_id: string;
+}
+
+export interface BlockingPolicyEntry {
+  entry_type: "app" | "website";
+  identifier: string;
+  label: string;
+}
+
+export interface BlockingPolicyOccurrence {
+  occurrence_id: string;
+  schedule_id: string;
+  schedule_name: string;
+  strict_mode: boolean;
+  start_at: string;
+  end_at: string;
+  entries: BlockingPolicyEntry[];
+}
+
+export interface BlockingPolicyResponse {
+  policy_version: number;
+  device_id: string;
+  server_time: string;
+  expires_at: string;
+  occurrences: BlockingPolicyOccurrence[];
+  algorithm: string;
+  kid: string;
+  signature: string;
+  /** Exact backend-signed canonical JSON, RFC 4648 base64. */
+  payload?: string;
+}
+
+export interface BlockingHostSetup {
+  helperRegistered: boolean;
+  networkFilterApproved: boolean;
+  endpointSecurityApproved: boolean;
+  lastError: string | null;
+}
+
+export interface BlockingPublicKey {
+  algorithm: string;
+  kid: string;
+  public_key: string;
+}
+
+export interface SignedEnvelope {
+  payload: string;
+  signature: string;
+  keyID: string;
+}
+
+export interface BlockingEnforcementStatus {
+  available: boolean;
+  connected: boolean;
+  protocolVersion: number;
+  policyVersion: number | null;
+  activeOccurrenceIDs: string[];
+  strictOccurrenceIDs: string[];
+  activeOccurrenceID: string | null;
+  strictMode: boolean;
+  policyExpiresAt: number | null;
+  lastError: string | null;
+  checkedAt: string;
+}
+
+export interface InstalledApplication {
+  displayName: string;
+  executablePath: string;
+  bundleIdentifier: string | null;
+  signingIdentifier: string | null;
+  packageFamilyName: string | null;
+  publisherThumbprint: string | null;
+}
+
+export interface BlockingCapabilities {
+  helperAvailable: boolean;
+  policyEnforcement: boolean;
+  applicationInventory: boolean;
+  normalCancellation: boolean;
+  strictMode: boolean;
+  bypassRedemption: boolean;
+  reason: string | null;
+}
+
+export interface EndNormalOccurrenceResponse {
+  occurrence_id: string;
+  schedule_id: string;
+  device_id: string;
+  occurrence_start: string;
+  occurrence_end: string;
+  canceled_at: string;
+}
+
+export interface BypassRedeemInput {
+  token: string;
+  device_id: string;
+  occurrence_id: string;
+  action: string;
+}
+
+export interface BypassIssueInput {
+  device_id: string;
+  occurrence_id: string;
+  action: string;
+  ttl_seconds?: number;
 }
