@@ -72,6 +72,7 @@ export interface DeviceListEntry {
   reportedOnline: boolean | null;
   isOnline: boolean;
   isRegistered: boolean;
+  isLocal?: boolean;
 }
 
 export interface LeaderboardEntry {

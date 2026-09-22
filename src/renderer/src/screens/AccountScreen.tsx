@@ -11,6 +11,7 @@ import {
   MonitorSmartphone,
   Pencil,
   ShieldCheck,
+  Trash2,
   Sparkles,
   UserRound,
 } from "lucide-react";
@@ -177,7 +178,7 @@ export function AccountScreen({ state }: { state: AppSnapshot }) {
 
         <Grouped
           title="Connected devices"
-          description="Choose which devices appear in timeline views"
+          description="Choose which devices appear in timelines, or remove one from this account"
           action={<Badge>{state.devices.length} devices</Badge>}
         >
           <div className="device-grid">
@@ -205,6 +206,7 @@ function DeviceNicknameCard({
 }) {
   const displayName = deviceDisplayName(device.devicePlatform, device.deviceName, device.nickname);
   const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [draft, setDraft] = useState(device.nickname || displayName);
 
   useEffect(() => {
@@ -263,17 +265,44 @@ function DeviceNicknameCard({
                   onClick={() => setEditing(true)}
                 />
               ) : null}
+              {device.deviceID && !device.isLocal ? (
+                <IconButton
+                  className="device-delete"
+                  label={`Remove ${displayName}`}
+                  icon={Trash2}
+                  onClick={() => setConfirmingDelete(true)}
+                />
+              ) : null}
             </span>
             <span className="row-subtitle">{subtitle}</span>
           </span>
         )}
         <span className={`dot ${device.isOnline ? "online" : ""}`} title={device.isOnline ? "Online" : "Offline"} />
       </div>
-      <Toggle
-        label="Show in timelines"
-        checked={visible}
-        onChange={(nextVisible) => window.stopscrolling.setDeviceVisible(device.visibilityKey, nextVisible)}
-      />
+      {confirmingDelete ? (
+        <div className="device-delete-confirm">
+          <p>Remove {displayName} from this account? Its timeline disappears. Recorded screen time stays in your totals.</p>
+          <div className="device-delete-actions">
+            <Button size="sm" variant="ghost" onClick={() => setConfirmingDelete(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => {
+                if (device.deviceID) window.stopscrolling.deleteDevice(device.deviceID);
+                setConfirmingDelete(false);
+              }}
+            >
+              Remove device
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Toggle
+          label="Show in timelines"
+          checked={visible}
+          onChange={(nextVisible) => window.stopscrolling.setDeviceVisible(device.visibilityKey, nextVisible)}
+        />
+      )}
     </div>
   );
 }

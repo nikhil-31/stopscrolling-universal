@@ -53,6 +53,7 @@ const api = {
   setTypesafeApiKey: (key: string) => ipcRenderer.send(IPC.setTypesafeApiKey, key),
   setDeviceVisible: (key: string, visible: boolean) => ipcRenderer.send(IPC.setDeviceVisible, { key, visible }),
   setDeviceNickname: (deviceID: string, nickname: string) => ipcRenderer.send(IPC.setDeviceNickname, { deviceID, nickname }),
+  deleteDevice: (deviceID: string) => ipcRenderer.send(IPC.deleteDevice, deviceID),
   authSetForm: (patch: Partial<AppSnapshot["auth"]>) => ipcRenderer.send(IPC.authSetForm, patch),
   authLogin: () => ipcRenderer.send(IPC.authLogin),
   authRegister: () => ipcRenderer.send(IPC.authRegister),

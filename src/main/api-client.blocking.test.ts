@@ -31,6 +31,23 @@ describe("blocking API client", () => {
     );
   });
 
+  it("deletes a registered device", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetch);
+    const api = new StopScrollingAPI(
+      "https://example.test/",
+      { access: "access", refresh: "refresh" },
+      () => undefined,
+    );
+
+    await api.deleteDevice("device-id");
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://example.test/api/devices/device-id/",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
   it("deletes a blocking schedule", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetch);

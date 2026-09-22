@@ -1671,8 +1671,12 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
 .device-card-top .row-copy { min-width: 0; flex: 1; }
 .device-card-title-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .device-card-title-row .row-title { flex: 1; }
-.device-nickname-edit { width: 22px; height: 22px; flex: 0 0 auto; }
-.device-nickname-edit svg { width: 13px; height: 13px; }
+.device-nickname-edit, .device-delete { width: 22px; height: 22px; flex: 0 0 auto; }
+.device-nickname-edit svg, .device-delete svg { width: 13px; height: 13px; }
+.device-delete { color: var(--danger); }
+.device-delete-confirm { display: grid; gap: 8px; }
+.device-delete-confirm p { margin: 0; color: var(--text-secondary); font-size: 11px; }
+.device-delete-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .device-nickname-field { flex: 1; min-width: 0; }
 .device-nickname-field .field-label { font-size: 10px; }
 .device-icon { display: grid; place-items: center; width: 30px; height: 30px; color: var(--brand); background: var(--brand-soft); border-radius: 9px; }

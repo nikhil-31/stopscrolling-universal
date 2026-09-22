@@ -22,7 +22,7 @@ import {
 } from "@shared/calendar-workspace";
 import { deviceKey, resolvedDeviceName, withComputedOnline } from "@shared/device";
 import { IPC } from "@shared/ipc";
-import { localTimeZone, toDateInput } from "@shared/platform";
+import { currentDevicePlatform, localTimeZone, toDateInput } from "@shared/platform";
 import { TIMER_BONUS_STEP_SECONDS, usesTodayWindow } from "@shared/timer";
 import type { AppSnapshot, AuthUiState, BlockingUiState, InspectorSelection, LeaderboardUiState } from "@shared/snapshot";
 import { emptyInspector, inspectorFromSelection } from "@shared/snapshot";
@@ -67,7 +67,7 @@ import { BlockingHelperBridge } from "./blocking/bridge";
 import { loadCalendarWorkspace, saveCalendarWorkspace } from "./calendar-workspace-store";
 import { GoogleCalendarService } from "./google-calendar";
 import { logObservability } from "./logger";
-import { hiddenDevicesPath, networkLogPath, observabilityLogPath } from "./paths";
+import { deviceName as localDeviceName, hiddenDevicesPath, networkLogPath, observabilityLogPath } from "./paths";
 import { loadSettings, saveSettings } from "./settings-store";
 import { clearTokens, loadTokens, saveTokens } from "./token-store";
 import { clearTypesafeApiKey, hasTypesafeApiKey, saveTypesafeApiKey } from "./typesafe-key-store";
@@ -209,8 +209,16 @@ export class AppController {
 
   snapshot(): AppSnapshot {
     if (this.navigation === "leaderboard" || this.navigation === "timer") this.navigation = "today";
-    const allEntries = this.tracker.mergedEntries();
     const devices = this.deviceEntries();
+    const registeredKeys = new Set(devices.map((device) => device.visibilityKey));
+    const localKey = deviceKey(currentDevicePlatform(), localDeviceName());
+    const mergedEntries = this.tracker.mergedEntries();
+    const allEntries = this.auth.user && registeredKeys.size
+      ? mergedEntries.filter((entry) => {
+        const key = deviceKey(entry.platform, entry.deviceName);
+        return registeredKeys.has(key) || key === localKey;
+      })
+      : mergedEntries;
     const visibleDeviceKeys = devices
       .filter((device) => !this.hiddenDeviceKeys.has(device.visibilityKey))
       .map((device) => device.visibilityKey);
@@ -634,6 +642,33 @@ export class AppController {
     }
   }
 
+  async deleteDevice(deviceID: string) {
+    if (!this.auth.user) {
+      this.statusMessage = "Sign in on the Account screen to remove devices.";
+      this.broadcast();
+      return;
+    }
+    if (deviceID && deviceID === this.tracker.localDeviceId) {
+      this.statusMessage = "This computer is running Stop Scrolling, so it stays connected.";
+      this.broadcast();
+      return;
+    }
+    try {
+      const removed = this.tracker.registeredDevices.find((device) => device.device_id === deviceID);
+      await this.api.deleteDevice(deviceID);
+      if (removed) {
+        this.hiddenDeviceKeys.delete(deviceKey(removed.device_platform, removed.device_name));
+        saveHiddenKeys(this.hiddenDeviceKeys);
+      }
+      this.statusMessage = "Device removed.";
+      await this.refreshVisibleRange();
+      await this.refreshBlocking();
+    } catch (error) {
+      this.statusMessage = error instanceof Error ? error.message : "Could not remove device.";
+      this.broadcast();
+    }
+  }
+
   selectInspector(payload: InspectorSelection) {
     this.inspector = inspectorFromSelection(payload);
     this.broadcast();
@@ -929,6 +964,7 @@ export class AppController {
           lastOnlineAt: status?.last_online_at ?? null,
           reportedOnline: status?.is_online ?? null,
           isRegistered: true,
+          isLocal: device.device_id === this.tracker.localDeviceId,
         }),
       );
     }

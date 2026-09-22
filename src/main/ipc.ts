@@ -126,6 +126,9 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.setDeviceNickname, (_event, payload: { deviceID: string; nickname: string }) => {
     void controller.setDeviceNickname(payload.deviceID, payload.nickname);
   });
+  ipcMain.on(IPC.deleteDevice, (_event, deviceID: string) => {
+    void controller.deleteDevice(deviceID);
+  });
   ipcMain.on(IPC.authSetForm, (_event, patch: Partial<AppController["auth"]>) => {
     controller.auth = { ...controller.auth, ...patch };
     broadcast();

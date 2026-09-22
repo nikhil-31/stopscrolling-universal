@@ -20,6 +20,7 @@ const desktop = {
   selectInspector: vi.fn(),
   setDeviceVisible: vi.fn(),
   setDeviceNickname: vi.fn(),
+  deleteDevice: vi.fn(),
 };
 
 function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
@@ -329,6 +330,67 @@ describe("account states", () => {
     await user.type(field, "Home Mac");
     await user.keyboard("{Enter}");
     expect(desktop.setDeviceNickname).toHaveBeenCalledWith("device-id-1", "Home Mac");
+  });
+
+  it("removes a device after confirmation and keeps this computer", async () => {
+    const user = userEvent.setup();
+    render(
+      <AccountScreen
+        state={snapshot({
+          auth: {
+            ...auth,
+            user: {
+              id: 7,
+              email: "focus@example.com",
+              tracking_id: "tracking-7",
+              totp_enabled: false,
+              phone_number: "",
+              phone_verified: false,
+              mfa_delivery: "email",
+              social_providers: [],
+            },
+          },
+          devices: [
+            {
+              visibilityKey: "macos|Studio Mac",
+              deviceName: "Studio Mac",
+              nickname: "",
+              devicePlatform: "macos",
+              deviceID: "local-device",
+              sessionCount: 2,
+              timeZone: "UTC",
+              lastSeenAt: null,
+              lastOnlineAt: null,
+              reportedOnline: true,
+              isOnline: true,
+              isRegistered: true,
+              isLocal: true,
+            },
+            {
+              visibilityKey: "ios|iPhone",
+              deviceName: "iPhone",
+              nickname: "Phone",
+              devicePlatform: "ios",
+              deviceID: "phone-id",
+              sessionCount: 8,
+              timeZone: "UTC",
+              lastSeenAt: null,
+              lastOnlineAt: null,
+              reportedOnline: false,
+              isOnline: false,
+              isRegistered: true,
+            },
+          ],
+          hiddenDeviceKeys: [],
+        } as Partial<AppSnapshot>)}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Remove Studio Mac" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Remove Phone" }));
+    expect(desktop.deleteDevice).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Remove device" }));
+    expect(desktop.deleteDevice).toHaveBeenCalledWith("phone-id");
   });
 });
 

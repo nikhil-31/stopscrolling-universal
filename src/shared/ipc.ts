@@ -29,6 +29,7 @@ export const IPC = {
   setTypesafeApiKey: "app:set-typesafe-api-key",
   setDeviceVisible: "app:set-device-visible",
   setDeviceNickname: "app:set-device-nickname",
+  deleteDevice: "app:delete-device",
   authLogin: "app:auth-login",
   authRegister: "app:auth-register",
   authVerifyMfa: "app:auth-verify-mfa",

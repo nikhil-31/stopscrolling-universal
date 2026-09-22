@@ -31,6 +31,7 @@ interface StopScrollingDesktop {
   setTypesafeApiKey: (key: string) => void;
   setDeviceVisible: (key: string, visible: boolean) => void;
   setDeviceNickname: (deviceID: string, nickname: string) => void;
+  deleteDevice: (deviceID: string) => void;
   authSetForm: (patch: Partial<import("@shared/snapshot").AppSnapshot["auth"]>) => void;
   authLogin: () => void;
   authRegister: () => void;

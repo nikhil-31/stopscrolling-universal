@@ -220,6 +220,10 @@ export class StopScrollingAPI {
     });
   }
 
+  async deleteDevice(deviceId: string) {
+    await this.request<unknown>(`api/devices/${deviceId}/`, { method: "DELETE" });
+  }
+
   async heartbeat(deviceId: string) {
     return this.request<DeviceStatusRow>(`api/devices/${deviceId}/heartbeat/`, { method: "POST" });
   }
