@@ -69,7 +69,7 @@ import { GoogleCalendarService } from "./google-calendar";
 import { logObservability } from "./logger";
 import { deviceName as localDeviceName, hiddenDevicesPath, networkLogPath, observabilityLogPath } from "./paths";
 import { loadSettings, saveSettings } from "./settings-store";
-import { clearTokens, loadTokens, saveTokens } from "./token-store";
+import { clearTokens, loadSessionUser, loadTokens, saveSessionUser, saveTokens } from "./token-store";
 import { clearTypesafeApiKey, hasTypesafeApiKey, saveTypesafeApiKey } from "./typesafe-key-store";
 import { ScreenTimeTracker } from "./tracker";
 
@@ -152,7 +152,7 @@ export class AppController {
   serverSummary: PeriodSummaryResponse | null = null;
   serverSummaryRange: { start: number; end: number } | null = null;
   google = new GoogleCalendarService();
-  api = new StopScrollingAPI(this.settings.apiBaseUrl, loadTokens(), (tokens) => {
+  api = new StopScrollingAPI(this.settings.apiBaseUrl, null, (tokens) => {
     if (tokens) saveTokens(tokens);
     else clearTokens();
   });
@@ -176,6 +176,15 @@ export class AppController {
   }
 
   async boot() {
+    const stored = loadTokens();
+    if (stored) {
+      this.api.setTokens(stored);
+      const user = loadSessionUser();
+      if (user) {
+        this.auth.user = user;
+        this.auth.statusMessage = `Signed in as ${user.email}`;
+      }
+    }
     await this.restoreSession();
     await this.helper.initialize();
     await this.refreshBlockingHelper(true);
@@ -405,12 +414,18 @@ export class AppController {
     this.broadcast();
     try {
       this.auth.user = await this.api.me();
+      saveSessionUser(this.auth.user);
       this.auth.statusMessage = `Signed in as ${this.auth.user.email}`;
       this.auth.mfaChallenge = null;
     } catch {
-      this.api.setTokens(null);
-      this.auth.user = null;
-      this.auth.statusMessage = "Session expired. Sign in again.";
+      if (!this.api.getTokens()) {
+        this.auth.user = null;
+        this.auth.statusMessage = "Session expired. Sign in again.";
+      } else if (this.auth.user) {
+        this.auth.statusMessage = `Signed in as ${this.auth.user.email}`;
+      } else {
+        this.auth.statusMessage = "Still signed in. The server could not be reached.";
+      }
     } finally {
       this.auth.loading = false;
       this.broadcast();
@@ -482,6 +497,7 @@ export class AppController {
       this.api.setTokens(tokens);
       this.auth.mfaChallenge = null;
       this.auth.user = await this.api.me();
+      saveSessionUser(this.auth.user);
       this.auth.statusMessage = `Signed in as ${this.auth.user.email}`;
       await this.tracker.flushOutbox();
       await this.refreshVisibleRange();
@@ -938,6 +954,7 @@ export class AppController {
     }
     this.api.setTokens(result);
     this.auth.user = await this.api.me();
+    saveSessionUser(this.auth.user);
     this.auth.mfaChallenge = null;
     this.auth.statusMessage = `${success} as ${this.auth.user.email}`;
     await this.tracker.flushOutbox();

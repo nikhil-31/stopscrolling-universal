@@ -31,6 +31,26 @@ describe("blocking API client", () => {
     );
   });
 
+  it("keeps the saved session when refreshing the access token fails offline", async () => {
+    const onTokens = vi.fn();
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }))
+      .mockRejectedValueOnce(new Error("offline"));
+    vi.stubGlobal("fetch", fetch);
+    const api = new StopScrollingAPI(
+      "https://example.test/",
+      { access: "access", refresh: "refresh" },
+      onTokens,
+    );
+
+    await expect(api.me()).rejects.toThrow("unauthorized");
+    expect(onTokens).not.toHaveBeenCalledWith(null);
+    expect(api.getTokens()).toEqual({ access: "access", refresh: "refresh" });
+  });
+
   it("deletes a registered device", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetch);

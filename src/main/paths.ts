@@ -18,6 +18,10 @@ export function tokensPath() {
   return join(userDataDir(), "auth-tokens.dat");
 }
 
+export function sessionUserPath() {
+  return join(userDataDir(), "auth-user.json");
+}
+
 export function outboxPath() {
   return join(userDataDir(), "pending-api-events.bin");
 }

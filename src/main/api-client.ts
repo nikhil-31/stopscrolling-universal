@@ -181,8 +181,10 @@ export class StopScrollingAPI {
       });
       this.setTokens({ ...this.tokens, access: response.access });
       return true;
-    } catch {
-      this.setTokens(null);
+    } catch (error) {
+      if (error instanceof APIError && (error.status === 401 || error.status === 403)) {
+        this.setTokens(null);
+      }
       return false;
     }
   }
