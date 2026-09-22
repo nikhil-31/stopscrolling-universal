@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { ActivityCollector, ActivitySnapshot } from "./types";
+import type { ActivityCollector, ActivitySnapshot, SampleResult } from "./types";
 
 const execFileAsync = promisify(execFile);
 
@@ -30,12 +30,14 @@ export class LinuxCollector implements ActivityCollector {
     };
   }
 
-  async sample(): Promise<ActivitySnapshot | null> {
+  async sample(): Promise<SampleResult> {
     const fromHypr = await this.hyprland();
-    if (fromHypr) return fromHypr;
+    if (fromHypr) return { type: "app", snapshot: fromHypr };
     const fromGnome = await this.gnome();
-    if (fromGnome) return fromGnome;
-    return this.x11();
+    if (fromGnome) return { type: "app", snapshot: fromGnome };
+    const fromX11 = await this.x11();
+    if (!fromX11) return { type: "unavailable" };
+    return { type: "app", snapshot: fromX11 };
   }
 
   private async hyprland(): Promise<ActivitySnapshot | null> {

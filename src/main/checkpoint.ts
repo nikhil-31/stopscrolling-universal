@@ -5,6 +5,8 @@ import { checkpointPath } from "./paths";
 
 export interface OpenSessionCheckpoint {
   start: string;
+  /** Last input while this session was open. Absent on checkpoints written before idle trimming. */
+  lastActive?: string;
   context: ForegroundContext;
   timeZoneIdentifier: string;
 }

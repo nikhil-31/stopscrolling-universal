@@ -12,7 +12,7 @@ import {
 import { logObservability } from "../logger";
 import { readBrowserContext } from "./ax-browser";
 import { isAccessibilityGranted, requestAccessibilityAccess } from "./macos-accessibility";
-import type { ActivityCollector, ActivitySnapshot } from "./types";
+import type { ActivityCollector, SampleResult } from "./types";
 
 const execFileAsync = promisify(execFile);
 
@@ -151,8 +151,8 @@ export class MacCollector implements ActivityCollector {
     };
   }
 
-  async sample(): Promise<ActivitySnapshot | null> {
-    if (!isAccessibilityGranted()) return null;
+  async sample(): Promise<SampleResult> {
+    if (!isAccessibilityGranted()) return { type: "unavailable" };
     try {
       const raw = await osascript(`
         tell application "System Events"
@@ -178,9 +178,9 @@ export class MacCollector implements ActivityCollector {
         snapshot.title = tab.title || snapshot.title;
         snapshot.url = tab.url;
       }
-      return snapshot;
+      return { type: "app", snapshot };
     } catch {
-      return null;
+      return { type: "unavailable" };
     }
   }
 }

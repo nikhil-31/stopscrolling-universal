@@ -3,6 +3,7 @@ import { browserUrlFromCandidates } from "./windows-browser-url";
 import {
   applyBrowserUrl,
   browserUrlForWindow,
+  isShellUiHost,
   resetBrowserUrlCache,
   snapshotFromForeground,
   type WindowIdentity,
@@ -131,5 +132,25 @@ describe("Windows browser websites", () => {
       }),
     );
     expect(applyBrowserUrl(snapshot, "https://example.com/from-a-control").url).toBe("");
+  });
+});
+
+describe("Windows shell windows", () => {
+  it("suppresses the Start menu and other shell UI", () => {
+    for (const exe of [
+      "StartMenuExperienceHost.exe",
+      "ShellExperienceHost.exe",
+      "SearchHost.exe",
+      "SearchApp.exe",
+      "TextInputHost.exe",
+    ]) {
+      expect(isShellUiHost(`C:\\Windows\\SystemApps\\${exe}`)).toBe(true);
+    }
+  });
+
+  it("keeps Notepad and Explorer", () => {
+    expect(isShellUiHost("C:\\Windows\\System32\\notepad.exe")).toBe(false);
+    expect(isShellUiHost("C:\\Windows\\explorer.exe")).toBe(false);
+    expect(isShellUiHost(null)).toBe(false);
   });
 });

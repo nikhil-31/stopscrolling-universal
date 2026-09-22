@@ -2,7 +2,7 @@ import { win32 } from "node:path";
 import koffi from "koffi";
 import { extractUrlFromText, looksLikeBrowser } from "@shared/browser";
 import { readBrowserAddress } from "./windows-browser-url";
-import type { ActivitySnapshot } from "./types";
+import type { ActivitySnapshot, SampleResult } from "./types";
 
 /** Query the image path and package identity without memory-read rights. */
 const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
@@ -11,6 +11,14 @@ const GA_ROOTOWNER = 3;
 const ERROR_INSUFFICIENT_BUFFER = 122;
 const CORE_WINDOW_CLASS = "Windows.UI.Core.CoreWindow";
 const FRAME_HOST_EXE = "applicationframehost.exe";
+/** Windows shell UI. These windows are not apps the user is working in. */
+const SHELL_UI_EXES = new Set([
+  "startmenuexperiencehost.exe",
+  "shellexperiencehost.exe",
+  "searchhost.exe",
+  "searchapp.exe",
+  "textinputhost.exe",
+]);
 const TITLE_CHARS = 2048;
 const PATH_CHARS = 32768;
 
@@ -80,6 +88,12 @@ function exeStem(imagePath: string): string {
 function isApplicationFrameHost(imagePath: string | null): boolean {
   if (!imagePath) return false;
   return exeFileName(imagePath).toLowerCase() === FRAME_HOST_EXE;
+}
+
+/** True for Start menu, search, and the other shell windows that should not be recorded. */
+export function isShellUiHost(imagePath: string | null | undefined): boolean {
+  if (!imagePath) return false;
+  return SHELL_UI_EXES.has(exeFileName(imagePath).toLowerCase());
 }
 
 function hostedIdentity(foreground: WindowIdentity, hosted: WindowIdentity | null): WindowIdentity {
@@ -355,12 +369,15 @@ export function readForegroundWindow(): ForegroundReading | null {
   return readForegroundFromHwnd(bindings, hwnd);
 }
 
-export function sampleForegroundWindow(): ActivitySnapshot | null {
+export function sampleForegroundWindow(): SampleResult {
   const bindings = win32Api();
   const hwnd = bindings.GetForegroundWindow();
-  if (isNullHandle(hwnd)) return null;
+  if (isNullHandle(hwnd)) return { type: "unavailable" };
   const reading = readForegroundFromHwnd(bindings, hwnd);
+  if (isShellUiHost(reading.foreground.imagePath)) return { type: "suppress" };
   const snapshot = snapshotFromForeground(reading.foreground, reading.hosted);
-  if (!looksLikeBrowser(snapshot.appName) && !looksLikeBrowser(snapshot.bundleID)) return snapshot;
-  return applyBrowserUrl(snapshot, browserUrlForWindow(hwnd, snapshot.title));
+  if (!looksLikeBrowser(snapshot.appName) && !looksLikeBrowser(snapshot.bundleID)) {
+    return { type: "app", snapshot };
+  }
+  return { type: "app", snapshot: applyBrowserUrl(snapshot, browserUrlForWindow(hwnd, snapshot.title)) };
 }

@@ -1,6 +1,6 @@
 import { logObservability } from "../logger";
 import { consumeAddressError, sampleForegroundWindow } from "./windows-foreground";
-import type { ActivityCollector, ActivitySnapshot } from "./types";
+import type { ActivityCollector, SampleResult } from "./types";
 
 export class WindowsCollector implements ActivityCollector {
   private loggedFailure = false;
@@ -22,23 +22,23 @@ export class WindowsCollector implements ActivityCollector {
     };
   }
 
-  async sample(): Promise<ActivitySnapshot | null> {
+  async sample(): Promise<SampleResult> {
     try {
-      const snapshot = sampleForegroundWindow();
+      const result = sampleForegroundWindow();
       const addressError = consumeAddressError();
       if (addressError && !this.loggedAddressFailure) {
         this.loggedAddressFailure = true;
         const message = addressError instanceof Error ? addressError.message : String(addressError);
         logObservability(`Windows browser address read failed: ${message}`);
       }
-      return snapshot;
+      return result;
     } catch (error) {
       if (!this.loggedFailure) {
         this.loggedFailure = true;
         const message = error instanceof Error ? error.message : String(error);
         logObservability(`Windows foreground sample failed: ${message}`);
       }
-      return null;
+      return { type: "unavailable" };
     }
   }
 }

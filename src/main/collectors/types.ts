@@ -7,10 +7,16 @@ export interface ActivitySnapshot {
   url: string;
 }
 
+/** Foreground reading for one sample. `suppress` is a shell window that is not an app. */
+export type SampleResult =
+  | { type: "app"; snapshot: ActivitySnapshot }
+  | { type: "suppress" }
+  | { type: "unavailable" };
+
 export interface ActivityCollector {
   start(): Promise<void>;
   stop(): Promise<void>;
-  sample(): Promise<ActivitySnapshot | null>;
+  sample(): Promise<SampleResult>;
   capabilities(): TrackingCapabilities;
   requestPermission(): boolean;
 }

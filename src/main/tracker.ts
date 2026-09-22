@@ -18,6 +18,7 @@ import { createCollector } from "./collectors";
 import type { ActivityCollector, ActivitySnapshot } from "./collectors/types";
 import { contextEquals } from "./collectors/types";
 import { loadCheckpoint, saveCheckpoint } from "./checkpoint";
+import { decideIdle, IDLE_THRESHOLD_SECONDS, recoveredSessionEnd } from "./idle-session";
 import { logObservability } from "./logger";
 import { PendingUploadStore } from "./outbox";
 import { JevClassifier } from "./jev-classifier";
@@ -25,7 +26,6 @@ import { deviceName, jevCategoriesPath, localDeviceIdPath } from "./paths";
 import { resolveTypesafeApiKey } from "./typesafe-key-store";
 import type { StopScrollingAPI } from "./api-client";
 
-const IDLE_THRESHOLD_SECONDS = 60;
 const SAMPLE_MS = 1000;
 const FLUSH_MS = 60_000;
 const HEARTBEAT_MS = 60_000;
@@ -55,6 +55,7 @@ export class ScreenTimeTracker {
   private openContext: ForegroundContext | null = null;
   private lastCheckpoint = 0;
   private idle = false;
+  private lastActiveAt: Date | null = null;
   readonly classifier: JevClassifier;
 
   constructor(
@@ -71,10 +72,10 @@ export class ScreenTimeTracker {
     this.pendingUploadCount = this.outbox.count();
     this.recoverCheckpoint();
     powerMonitor.on("lock-screen", () => {
-      void this.closeOpenSession("lock");
+      void this.closeForPower("lock");
     });
     powerMonitor.on("suspend", () => {
-      void this.closeOpenSession("sleep");
+      void this.closeForPower("sleep");
     });
   }
 
@@ -93,7 +94,7 @@ export class ScreenTimeTracker {
   mergedEntries(): ScreenTimeEntry[] {
     const live: ScreenTimeEntry[] = [];
     if (this.isTracking && this.openStart && this.openContext) {
-      live.push(this.liveEntry(this.openStart, this.openContext, new Date()));
+      live.push(this.liveEntry(this.openStart, this.openContext, this.liveEnd()));
     }
     const byKey = new Map<string, ScreenTimeEntry>();
     for (const entry of this.serverEntries) byKey.set(persistenceKey(entry), entry);
@@ -127,7 +128,7 @@ export class ScreenTimeTracker {
 
   async stopTracking() {
     if (!this.isTracking) return;
-    await this.closeOpenSession("stop");
+    await this.closeOpenSession("stop", this.lastActiveAt ?? new Date());
     this.isTracking = false;
     this.currentContext = null;
     if (this.sampleTimer) clearInterval(this.sampleTimer);
@@ -149,24 +150,39 @@ export class ScreenTimeTracker {
 
   async sample() {
     if (!this.isTracking) return;
-    const idleSeconds = powerMonitor.getSystemIdleTime();
-    if (idleSeconds >= IDLE_THRESHOLD_SECONDS) {
-      if (!this.idle) {
-        this.idle = true;
-        await this.closeOpenSession("idle");
+    const decision = decideIdle({
+      nowMs: Date.now(),
+      idleSeconds: powerMonitor.getSystemIdleTime(),
+      lastActiveAt: this.lastActiveAt,
+      openStart: this.openStart,
+    });
+    if (decision.close && decision.end) {
+      await this.closeOpenSession(decision.stillAway ? "idle" : "gap", decision.end);
+      this.currentContext = null;
+      this.onChange();
+    }
+    if (decision.stillAway) {
+      this.idle = true;
+      return;
+    }
+    this.idle = false;
+    this.lastActiveAt = decision.activeAt;
+    const result = await this.collector.sample();
+    if (result.type === "unavailable") return;
+    if (result.type === "suppress") {
+      if (this.openStart) {
+        await this.closeOpenSession("shell", this.lastActiveAt);
         this.currentContext = null;
         this.onChange();
       }
       return;
     }
-    this.idle = false;
-    const snapshot = await this.collector.sample();
-    if (!snapshot) return;
+    const snapshot = result.snapshot;
     if (contextEquals(this.currentContext, snapshot)) {
       this.maybeCheckpoint();
       return;
     }
-    await this.closeOpenSession("switch");
+    await this.closeOpenSession("switch", this.lastActiveAt ?? new Date());
     this.openContext = this.toContext(snapshot);
     this.openStart = new Date();
     this.currentContext = this.openContext;
@@ -295,14 +311,28 @@ export class ScreenTimeTracker {
     return row.device_id;
   }
 
-  private async closeOpenSession(_reason: string) {
+  private liveEnd(): Date {
+    if (!this.openStart) return new Date();
+    if (!this.lastActiveAt || this.lastActiveAt.getTime() <= this.openStart.getTime()) return this.openStart;
+    return this.lastActiveAt;
+  }
+
+  private async closeForPower(reason: string) {
+    const end = this.lastActiveAt ?? new Date();
+    await this.closeOpenSession(reason, end);
+    this.currentContext = null;
+    this.idle = true;
+    this.onChange();
+  }
+
+  private async closeOpenSession(_reason: string, end = new Date()) {
     if (!this.openStart || !this.openContext) {
       saveCheckpoint(null);
       return;
     }
-    const end = new Date();
-    if (end.getTime() - this.openStart.getTime() >= 1000) {
-      const entry = this.liveEntry(this.openStart, this.openContext, end);
+    const bounded = end.getTime() < this.openStart.getTime() ? this.openStart : end;
+    if (bounded.getTime() - this.openStart.getTime() >= 1000) {
+      const entry = this.liveEntry(this.openStart, this.openContext, bounded);
       entry.source = "local";
       this.outbox.append(entry);
       this.pendingUploadCount = this.outbox.count();
@@ -317,8 +347,13 @@ export class ScreenTimeTracker {
     if (!this.openStart || !this.openContext) return;
     if (!force && Date.now() - this.lastCheckpoint < CHECKPOINT_MS) return;
     this.lastCheckpoint = Date.now();
+    const lastActive =
+      this.lastActiveAt && this.lastActiveAt.getTime() >= this.openStart.getTime()
+        ? this.lastActiveAt
+        : this.openStart;
     saveCheckpoint({
       start: this.openStart.toISOString(),
+      lastActive: lastActive.toISOString(),
       context: this.openContext,
       timeZoneIdentifier: localTimeZone(),
     });
@@ -328,7 +363,7 @@ export class ScreenTimeTracker {
     const checkpoint = loadCheckpoint();
     if (!checkpoint) return;
     const start = new Date(checkpoint.start);
-    const end = new Date();
+    const end = recoveredSessionEnd(checkpoint);
     if (end.getTime() - start.getTime() >= 1000) {
       const entry = this.liveEntry(start, checkpoint.context, end);
       entry.source = "local";
