@@ -68,7 +68,7 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
     calendarDayStats: {
       workSeconds: 3600,
       pendingSeconds: 600,
-      trackedSeconds: 3600,
+      trackedSeconds: 5400,
       targetSeconds: 28800,
       percentOfTarget: 12,
       labelTotals: [{ labelId: "label-research", name: "Research", color: "#1fb894", seconds: 3600 }],
@@ -101,7 +101,10 @@ describe("CalendarScreen", () => {
 
     expect(screen.getByText("Time Entries")).toBeVisible();
     expect(screen.getByText("Calendar")).toBeVisible();
-    expect(screen.getByText("Work Hours")).toBeVisible();
+    const summary = screen.getByRole("complementary", { name: "Day summary" });
+    expect(within(summary).getByText("Day total")).toBeVisible();
+    expect(summary.querySelector(".calendar-work-value")).toHaveTextContent("1 hr 30 min");
+    expect(within(summary).getByText("Work Hours").nextElementSibling).toHaveTextContent("1 hr");
     expect(screen.queryByText("Labels")).toBeNull();
     expect(screen.queryByText("Tasks")).toBeNull();
     expect(screen.queryByText("Write PR")).toBeNull();

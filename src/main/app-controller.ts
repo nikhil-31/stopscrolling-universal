@@ -446,7 +446,7 @@ export class AppController {
       todayDeviceKey,
       insightsDeviceKey,
       snapshot: this.navigation === "calendar"
-        ? { ...snapshot, trackedSecondsByDay: trackedSecondsByDay(entries, this.calendarMonth) }
+        ? { ...snapshot, trackedSecondsByDay: trackedSecondsByDay(entries, this.calendarMonth, zone) }
         : snapshot,
       timelines,
       calendarDayStats,

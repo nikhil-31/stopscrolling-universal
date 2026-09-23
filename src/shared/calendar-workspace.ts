@@ -257,6 +257,36 @@ export function buildCalendarDayStats(
   );
 }
 
+/** Each activity inside a block, clipped to the day. Gaps between activities are left out. */
+function trackedSessionIntervals(
+  blocks: ScreenTimeSessionBlock[],
+  rangeStart: Date,
+  rangeEnd: Date,
+): Array<[number, number]> {
+  const intervals: Array<[number, number]> = [];
+  for (const block of blocks) {
+    for (const item of block.items) {
+      const clipped = clipInterval(item.start, item.end, rangeStart, rangeEnd);
+      if (clipped) intervals.push(clipped);
+    }
+  }
+  return intervals;
+}
+
+/** Seconds of `sessions` that overlap any label, counting each device's time separately. */
+function secondsCoveredByLabels(sessions: Array<[number, number]>, labels: Array<[number, number]>) {
+  const merged = mergeIntervals(labels);
+  let ms = 0;
+  for (const [start, end] of sessions) {
+    for (const [labelStart, labelEnd] of merged) {
+      if (labelEnd <= start) continue;
+      if (labelStart >= end) break;
+      ms += overlapMs(start, end, labelStart, labelEnd);
+    }
+  }
+  return ms / 1000;
+}
+
 export function buildCalendarRangeStats(
   workspace: CalendarWorkspace,
   blocks: ScreenTimeSessionBlock[],
@@ -264,20 +294,13 @@ export function buildCalendarRangeStats(
   rangeEnd: Date,
   targetSeconds: number,
 ): CalendarDayStats {
-  const trackedIntervals = blocks
-    .map((block) => clipInterval(block.start, block.end, rangeStart, rangeEnd))
-    .filter((interval): interval is [number, number] => Boolean(interval));
-  const trackedSeconds = intervalSeconds(trackedIntervals);
+  const trackedIntervals = trackedSessionIntervals(blocks, rangeStart, rangeEnd);
+  const trackedSeconds = trackedIntervals.reduce((sum, [start, end]) => sum + (end - start) / 1000, 0);
 
   const labeledIntervals = workspace.assignments
     .map((assignment) => clipInterval(assignment.start, assignment.end, rangeStart, rangeEnd))
     .filter((interval): interval is [number, number] => Boolean(interval));
-  const labeledSeconds = intervalSeconds(
-    trackedIntervals.flatMap((tracked) => labeledIntervals.map((labeled) => [
-      Math.max(tracked[0], labeled[0]),
-      Math.min(tracked[1], labeled[1]),
-    ] as [number, number])),
-  );
+  const labeledSeconds = secondsCoveredByLabels(trackedIntervals, labeledIntervals);
   const pendingSeconds = Math.max(0, trackedSeconds - labeledSeconds);
 
   const workIntervals = workspace.assignments.flatMap((assignment) => {

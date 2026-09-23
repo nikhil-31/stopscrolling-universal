@@ -4,6 +4,7 @@ import {
   PRODUCTIVITY_COLORS,
   type ProductivityBucket,
 } from "@shared/calendar-workspace";
+import { effectiveTimeZone, toDateInput } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
 import { CircleHelp, Settings2 } from "lucide-react";
 import { IconButton } from "../ui";
@@ -23,7 +24,8 @@ export function SummarySidebar({
   onEditTarget: () => void;
 }) {
   const stats = state.calendarDayStats;
-  const isToday = sameDay(new Date(state.calendarAnchor), new Date());
+  const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
+  const isToday = toDateInput(new Date(state.calendarAnchor), timeZone) === toDateInput(new Date(), timeZone);
   const totalProductivity = PRODUCTIVITY_BUCKETS.reduce((sum, bucket) => sum + stats.productivity[bucket], 0);
 
   return (
@@ -35,9 +37,13 @@ export function SummarySidebar({
 
       <section className="calendar-summary-card">
         <div className="calendar-work-hours">
-          <div className="calendar-work-value">{formatHourMinute(stats.workSeconds)}</div>
-          <div className="calendar-work-label">Work Hours</div>
+          <div className="calendar-work-value">{formatHourMinute(stats.trackedSeconds)}</div>
+          <div className="calendar-work-label">Day total</div>
           <div className="calendar-work-pending">{formatHourMinute(stats.pendingSeconds)} pending</div>
+        </div>
+        <div className="calendar-target-row">
+          <span>Work Hours</span>
+          <strong>{formatHourMinute(stats.workSeconds)}</strong>
         </div>
         <div className="calendar-target-row">
           <span>Percent of Target</span>
@@ -77,8 +83,4 @@ export function SummarySidebar({
       </section>
     </aside>
   );
-}
-
-function sameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }

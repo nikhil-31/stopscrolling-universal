@@ -22,14 +22,25 @@ import type { ScreenTimeSessionBlock, ScreenTimeTimelineSegment } from "./types"
 
 function block(partial: Partial<ScreenTimeSessionBlock> & Pick<ScreenTimeSessionBlock, "id" | "start" | "end">): ScreenTimeSessionBlock {
   const durationSeconds = Math.max(0, (new Date(partial.end).getTime() - new Date(partial.start).getTime()) / 1000);
+  const category = partial.category ?? "Development";
   return {
     title: partial.title ?? "Block",
     subtitle: "",
-    category: partial.category ?? "Development",
+    category,
     devicePlatform: "macos",
     deviceName: "Mac",
     durationSeconds,
-    items: [],
+    items: [{
+      id: `${partial.id}-item`,
+      title: partial.title ?? "Block",
+      subtitle: "",
+      url: "",
+      category,
+      appName: partial.title ?? "Block",
+      start: partial.start,
+      end: partial.end,
+      durationSeconds,
+    }],
     ...partial,
   };
 }
@@ -91,6 +102,77 @@ describe("calendar workspace math", () => {
     expect(stats.productivity.other).toBe(3600);
     expect(stats.reviewCount).toBe(1);
     expect(stats.labelTotals[0]?.name).toBe("Research");
+    expect(stats.trackedSeconds).toBe(3 * 3600);
+  });
+
+  it("sums session time inside a block and leaves out gaps", () => {
+    const stats = buildCalendarDayStats(defaultWorkspace(), [
+      block({
+        id: "gap",
+        start: "2026-09-09T09:00:00",
+        end: "2026-09-09T10:00:00",
+        items: [
+          {
+            id: "gap-a",
+            title: "Cursor",
+            subtitle: "",
+            url: "",
+            category: "Development",
+            appName: "Cursor",
+            start: "2026-09-09T09:00:00",
+            end: "2026-09-09T09:30:00",
+            durationSeconds: 30 * 60,
+          },
+          {
+            id: "gap-b",
+            title: "Cursor",
+            subtitle: "",
+            url: "",
+            category: "Development",
+            appName: "Cursor",
+            start: "2026-09-09T09:35:00",
+            end: "2026-09-09T10:00:00",
+            durationSeconds: 25 * 60,
+          },
+        ],
+      }),
+    ], day, 8 * 3600);
+    expect(stats.trackedSeconds).toBe(55 * 60);
+  });
+
+  it("counts only the part of a session that falls on the selected day", () => {
+    const crossing = block({
+      id: "midnight",
+      start: "2026-09-09T23:30:00+05:30",
+      end: "2026-09-10T00:30:00+05:30",
+      items: [{
+        id: "midnight-item",
+        title: "Cursor",
+        subtitle: "",
+        url: "",
+        category: "Development",
+        appName: "Cursor",
+        start: "2026-09-09T23:30:00+05:30",
+        end: "2026-09-10T00:30:00+05:30",
+        durationSeconds: 60 * 60,
+      }],
+    });
+    const beforeMidnight = buildCalendarDayStats(
+      defaultWorkspace(),
+      [crossing],
+      new Date("2026-09-09T12:00:00+05:30"),
+      8 * 3600,
+      "Asia/Kolkata",
+    );
+    const afterMidnight = buildCalendarDayStats(
+      defaultWorkspace(),
+      [crossing],
+      new Date("2026-09-10T12:00:00+05:30"),
+      8 * 3600,
+      "Asia/Kolkata",
+    );
+    expect(beforeMidnight.trackedSeconds).toBe(30 * 60);
+    expect(afterMidnight.trackedSeconds).toBe(30 * 60);
   });
 
   it("suggests a label from the block category", () => {
