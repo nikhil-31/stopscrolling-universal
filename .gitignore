@@ -1,10 +1,58 @@
+# Dependencies
 node_modules
+
+# Electron / Vite build output
 out
 dist
 release-native
-.DS_Store
-*.log
 .vite
+
+# TypeScript incremental build
+*.tsbuildinfo
+
+# Tests
+coverage
+test-results
+playwright-report
+blob-report
+playwright/.cache
+
+# Generated knowledge graph
+graphify-out
+
+# Native build output
 .derivedData
+DerivedData
 **/.build
-out/windows-portable
+.swiftpm
+xcuserdata
+*.xcuserstate
+vcpkg_installed
+CMakeCache.txt
+CMakeFiles
+cmake-build-*/
+CMakeUserPresets.json
+
+# Secrets and signing material
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.mobileprovision
+*.provisionprofile
+
+# OS and editor junk
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+.idea
+*.log
+*.swp
+*~
+
+# Accidental nested repo
+Untitled
