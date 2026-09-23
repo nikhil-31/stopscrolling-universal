@@ -253,12 +253,19 @@ export interface ScreenTimeAppBreakdown {
   colorIndex?: number;
 }
 
+export interface ScreenTimeBucketDevice {
+  key: string;
+  seconds: number;
+}
+
 export interface ScreenTimePeriodBucket {
   id: string;
   label: string;
   start: string;
   end: string;
   seconds: number;
+  /** Per-device time inside this bucket. Empty when the total is not split. */
+  devices?: ScreenTimeBucketDevice[];
 }
 
 export interface ScreenTimeSnapshot {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { blockSegments, colorForCategory, durationAxisTicks, entriesToTimelines, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, weekNumber } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
+import { toDateInput } from "./platform";
 import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 
 function entry(partial: Partial<ScreenTimeEntry> & Pick<ScreenTimeEntry, "startTimeUTC" | "endTimeUTC" | "appName">): ScreenTimeEntry {
@@ -666,6 +667,52 @@ describe("periodBounds", () => {
     expect(snapshot.buckets[0].seconds).toBe(3600);
     expect(snapshot.buckets[29].label).toBe("30");
     expect(snapshot.buckets[29].seconds).toBe(1800);
+    expect(snapshot.buckets[0].devices).toEqual([]);
+    expect(snapshot.buckets[29].devices).toEqual([]);
+  });
+
+  it("splits a bucket across devices and scales a month total to those sessions", () => {
+    const anchor = new Date(2026, 5, 22, 15);
+    const dayStart = periodBounds("day", anchor).start;
+    const at = (hours: number) => new Date(dayStart.getTime() + hours * 3600 * 1000).toISOString();
+    const mac = entry({
+      startTimeUTC: at(9),
+      endTimeUTC: at(10),
+      appName: "Code",
+      platform: "macos",
+      deviceName: "Studio Mac",
+    });
+    const phone = entry({
+      startTimeUTC: at(9),
+      endTimeUTC: at(9.5),
+      appName: "Safari",
+      platform: "ios",
+      deviceName: "iPhone",
+    });
+    const day = snapshotFromEntries([mac, phone], "day", anchor);
+    expect(day.buckets[9].seconds).toBe(5400);
+    expect(day.buckets[9].devices).toEqual([
+      { key: "ios|iPhone", seconds: 1800 },
+      { key: "macos|Studio Mac", seconds: 3600 },
+    ]);
+
+    const monthAnchor = new Date(2026, 8, 9, 15);
+    const monthStart = periodBounds("month", monthAnchor).start;
+    const onFirst = (hours: number) => new Date(monthStart.getTime() + hours * 3600 * 1000).toISOString();
+    const month = snapshotFromEntries(
+      [
+        entry({ ...mac, startTimeUTC: onFirst(9), endTimeUTC: onFirst(10) }),
+        entry({ ...phone, startTimeUTC: onFirst(9), endTimeUTC: onFirst(10) }),
+      ],
+      "month",
+      monthAnchor,
+      { trackedSecondsByDay: { [toDateInput(monthStart)]: 4000 } },
+    );
+    expect(month.buckets[0].seconds).toBe(4000);
+    expect(month.buckets[0].devices).toEqual([
+      { key: "ios|iPhone", seconds: 2000 },
+      { key: "macos|Studio Mac", seconds: 2000 },
+    ]);
   });
 });
 

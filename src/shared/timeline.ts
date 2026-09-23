@@ -729,7 +729,11 @@ export function buildPeriodBuckets(
           ? monthLength
           : 12;
   const bucketMs = (bounds.end.getTime() - bounds.start.getTime()) / count;
-  const intervals = segments.map((segment) => [Date.parse(segment.start), Date.parse(segment.end)] as const);
+  const intervals = segments.map((segment) => ({
+    start: Date.parse(segment.start),
+    end: Date.parse(segment.end),
+    key: deviceKey(segment.devicePlatform, segment.deviceName),
+  }));
   return Array.from({ length: count }, (_, index) => {
     const start = period === "month"
       ? addCalendarDays(bounds.start, index, timeZone)
@@ -740,15 +744,18 @@ export function buildPeriodBuckets(
     const startMs = start.getTime();
     const endMs = end.getTime();
     let segmentSecondsTotal = 0;
-    for (const [segStart, segEnd] of intervals) {
-      const overlapStart = segStart > startMs ? segStart : startMs;
-      const overlapEnd = segEnd < endMs ? segEnd : endMs;
-      if (overlapEnd > overlapStart) segmentSecondsTotal += (overlapEnd - overlapStart) / 1000;
+    const byDevice = new Map<string, number>();
+    for (const interval of intervals) {
+      const overlapStart = interval.start > startMs ? interval.start : startMs;
+      const overlapEnd = interval.end < endMs ? interval.end : endMs;
+      if (overlapEnd <= overlapStart) continue;
+      const overlapSeconds = (overlapEnd - overlapStart) / 1000;
+      segmentSecondsTotal += overlapSeconds;
+      byDevice.set(interval.key, (byDevice.get(interval.key) ?? 0) + overlapSeconds);
     }
-    const seconds =
-      period === "month"
-        ? trackedSecondsByDay?.[toDateInput(start, timeZone)] ?? segmentSecondsTotal
-        : segmentSecondsTotal;
+    const dayKey = toDateInput(start, timeZone);
+    const dailyTotal = period === "month" ? trackedSecondsByDay?.[dayKey] : undefined;
+    const seconds = dailyTotal ?? segmentSecondsTotal;
     return {
       id: `${period}-${index}`,
       label:
@@ -762,8 +769,27 @@ export function buildPeriodBuckets(
       start: start.toISOString(),
       end: end.toISOString(),
       seconds,
+      devices: scaleDeviceShares(byDevice, seconds, dailyTotal !== undefined),
     };
   });
+}
+
+function scaleDeviceShares(
+  byDevice: Map<string, number>,
+  seconds: number,
+  fromDailyTotal: boolean,
+) {
+  const shares = [...byDevice.entries()]
+    .filter(([, value]) => value > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => ({ key, seconds: value }));
+  if (!fromDailyTotal) return shares;
+  const shareSum = shares.reduce((sum, share) => sum + share.seconds, 0);
+  if (shareSum <= 0) return [];
+  if (shareSum === seconds) return shares;
+  return shares
+    .map((share) => ({ key: share.key, seconds: (share.seconds / shareSum) * seconds }))
+    .filter((share) => share.seconds > 0);
 }
 
 export function trackedSecondsByDay(

@@ -147,7 +147,7 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
 
           {tab === "overview" ? (
             <div className="stack">
-              <TrendCard buckets={filteredBuckets} period={state.insightsPeriod} />
+              <TrendCard buckets={filteredBuckets} period={state.insightsPeriod} devices={visibleDevices} />
               {state.insightsPeriod === "day" ? (
                 <TimelineCard
                   timelines={filteredTimelines}

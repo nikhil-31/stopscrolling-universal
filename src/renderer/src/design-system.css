@@ -39,6 +39,14 @@
   --category-application: #3f6212;
   --category-utilities: #44403c;
   --category-email: #1e3a8a;
+  --device-0: #2f5be0;
+  --device-1: #e14f00;
+  --device-2: #7b2cbf;
+  --device-3: #0b8a6a;
+  --device-4: #a87b00;
+  --device-5: #1a7ca8;
+  --device-6: #d10a68;
+  --device-7: #a2148c;
   --category-spectrum-0: var(--category-development);
   --category-spectrum-1: var(--category-productivity);
   --category-spectrum-2: var(--category-social);
@@ -108,6 +116,14 @@
     --category-application: #a3e635;
     --category-utilities: #d6d3d1;
     --category-email: #60a5fa;
+    --device-0: #8cb4ff;
+    --device-1: #ff7a4a;
+    --device-2: #c9a6ff;
+    --device-3: #4edeae;
+    --device-4: #f6d56a;
+    --device-5: #5dccf2;
+    --device-6: #ff6ba8;
+    --device-7: #f08ae0;
     --focus: 0 0 0 3px rgba(11, 217, 169, 0.35);
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.45);
@@ -155,6 +171,14 @@
   --category-application: #a3e635;
   --category-utilities: #d6d3d1;
   --category-email: #60a5fa;
+  --device-0: #8cb4ff;
+  --device-1: #ff7a4a;
+  --device-2: #c9a6ff;
+  --device-3: #4edeae;
+  --device-4: #f6d56a;
+  --device-5: #5dccf2;
+  --device-6: #ff6ba8;
+  --device-7: #f08ae0;
   --focus: 0 0 0 3px rgba(11, 217, 169, 0.35);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.45);
@@ -1201,6 +1225,16 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
   border-radius: 6px 6px 2px 2px;
   transition: filter 120ms var(--ease), transform 120ms var(--ease);
 }
+.bar-column.is-stacked {
+  display: flex;
+  flex-direction: column-reverse;
+  background: transparent;
+  overflow: hidden;
+}
+.bar-device { width: 100%; min-height: 1px; }
+.bar-column.is-stacked .bar-device:first-child { border-radius: 0 0 2px 2px; }
+.bar-column.is-stacked .bar-device:last-child { border-radius: 6px 6px 0 0; }
+.bar-column.is-stacked .bar-device:only-child { border-radius: 6px 6px 2px 2px; }
 .bar-chart-month .bar-column { width: min(84%, 14px); border-radius: 3px 3px 1px 1px; }
 .bar-item:hover .bar-column { filter: brightness(1.1); transform: translateY(-2px); }
 .bar-label { position: absolute; top: calc(100% + 7px); overflow: hidden; width: 100%; color: var(--text-tertiary); font-size: 8px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
