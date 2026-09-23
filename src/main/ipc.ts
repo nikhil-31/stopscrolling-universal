@@ -124,10 +124,7 @@ export function installIpc(controller: AppController) {
     void controller.setTimeZone(typeof timeZone === "string" ? timeZone : "");
   });
   ipcMain.on(IPC.updateSettings, (_event, patch: Partial<AppSettings>) => {
-    const start = patch.startScreenTimeOnLaunch;
     controller.updateSettings(patch);
-    if (start === true) void controller.tracker.startTracking();
-    if (start === false) void controller.tracker.stopTracking();
   });
   ipcMain.on(IPC.setTypesafeApiKey, (_event, key: string) => {
     controller.setTypesafeApiKey(typeof key === "string" ? key : "");

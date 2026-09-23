@@ -71,10 +71,11 @@ export function Toolbar({ state }: { state: AppSnapshot }) {
         <Button
           className={`record-button ${state.isTracking ? "is-active" : ""}`}
           variant="secondary"
-          onClick={() => window.stopscrolling.toggleTracking()}
+          aria-label={state.isTracking ? "Stop Recording" : "Start recording"}
+          onClick={() => (state.isTracking ? window.stopscrolling.stopTracking() : window.stopscrolling.startTracking())}
         >
           <span className="record-dot" aria-hidden="true" />
-          <span className="button-label-optional">{state.isTracking ? "Recording" : "Start"}</span>
+          <span className="button-label-optional">{state.isTracking ? "Stop Recording" : "Start"}</span>
         </Button>
         <Tooltip label="Settings">
           <IconButton label="Settings" icon={Settings} onClick={() => window.stopscrolling.openSettings()} />

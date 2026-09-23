@@ -11,11 +11,11 @@ The app tracks the frontmost application (and, on macOS, the active browser tab)
 - **Insights** — charts and session breakdowns over longer periods
 - **Blocking** — create blocklists and schedules, then sync them to your account (enforcement is not implemented in this client)
 - **Account** — sign in, register, MFA, and linked devices
-- **Settings** — appearance, tracking on launch, backend URL, sync, diagnostics, and Google Calendar
+- **Settings** — appearance, backend URL, sync, diagnostics, and Google Calendar
 - **System tray** — closing the main window hides the app; tracking can continue in the background
 - **Command palette** (`⌘K` / `Ctrl+K`) for navigation and tracking actions
 
-Local tracking works without an account. Sign in to sync timelines, devices, and blocking data with the backend.
+Local tracking works without an account. Recording starts when the app opens and continues until you stop it from the toolbar. Sign in to sync timelines, devices, and blocking data with the backend.
 
 ## Requirements
 

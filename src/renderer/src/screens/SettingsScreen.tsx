@@ -43,14 +43,7 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
         </nav>
         <div>
           <section id="general" className="settings-section">
-            <Grouped title="General" description="Control the tracking lifecycle">
-              <Toggle
-                label="Record screen time on launch"
-                description="Begin a private local session whenever Stop Scrolling opens."
-                checked={settings.startScreenTimeOnLaunch}
-                onChange={(startScreenTimeOnLaunch) => window.stopscrolling.updateSettings({ startScreenTimeOnLaunch })}
-                testId="settings-start-screen-time-on-launch"
-              />
+            <Grouped title="General" description="Time zone and system access">
               <label className="field">
                 <span className="field-label">Time zone</span>
                 <select

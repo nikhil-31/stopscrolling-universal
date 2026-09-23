@@ -7,6 +7,7 @@ import type { AppSnapshot } from "@shared/snapshot";
 import { CommandPalette } from "./CommandPalette";
 import { Inspector } from "./Inspector";
 import { Sidebar } from "./Sidebar";
+import { Toolbar } from "./Toolbar";
 import { AccountScreen } from "../screens/AccountScreen";
 import { TimelineGroup } from "./timeline";
 import { Banner, Button, EmptyState, LoadingState, Tabs, Toggle } from "./ui";
@@ -15,6 +16,8 @@ const desktop = {
   navigate: vi.fn(),
   setCommandPalette: vi.fn(),
   toggleTracking: vi.fn(),
+  startTracking: vi.fn(),
+  stopTracking: vi.fn(),
   openSettings: vi.fn(),
   refresh: vi.fn(),
   selectInspector: vi.fn(),
@@ -77,6 +80,29 @@ describe("UI primitives", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Sync failed");
     expect(screen.getByRole("button", { name: "Start" })).toBeVisible();
     expect(screen.getByRole("status")).toHaveTextContent("Loading timeline");
+  });
+});
+
+describe("record button", () => {
+  const chrome = {
+    navigation: "today" as const,
+    capabilities: { platform: "macos", accessibilityGranted: true },
+  };
+
+  it("starts recording only when tracking is paused", async () => {
+    const user = userEvent.setup();
+    render(<Toolbar state={snapshot(chrome)} />);
+    await user.click(screen.getByRole("button", { name: "Start recording" }));
+    expect(desktop.startTracking).toHaveBeenCalledOnce();
+    expect(desktop.stopTracking).not.toHaveBeenCalled();
+  });
+
+  it("stops recording when the button is clicked", async () => {
+    const user = userEvent.setup();
+    render(<Toolbar state={snapshot({ ...chrome, isTracking: true })} />);
+    await user.click(screen.getByRole("button", { name: "Stop Recording" }));
+    expect(desktop.stopTracking).toHaveBeenCalledOnce();
+    expect(desktop.startTracking).not.toHaveBeenCalled();
   });
 });
 

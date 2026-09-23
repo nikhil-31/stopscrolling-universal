@@ -231,7 +231,7 @@ export class AppController {
     await this.helper.initialize();
     await this.refreshBlockingHelper(true);
     this.startHelperRefresh();
-    if (this.settings.startScreenTimeOnLaunch && process.env.STOPSCROLLING_UI_TEST !== "1") {
+    if (process.env.STOPSCROLLING_UI_TEST !== "1") {
       await this.tracker.startTracking();
     }
     this.startTimelineRefresh();
