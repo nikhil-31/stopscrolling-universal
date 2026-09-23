@@ -2,7 +2,18 @@ import { websiteHostname } from "./browser";
 import { overlayCategory, type JevCategoryCache } from "./jev";
 import { deviceKey, resolvedDeviceName } from "./device";
 import { persistenceKey } from "./payload";
-import { endOfDay, startOfDay, toDateInput } from "./platform";
+import {
+  addCalendarDays,
+  endOfDay,
+  endOfMonth,
+  localTimeZone,
+  startOfDay,
+  startOfMonth,
+  toDateInput,
+  weekdayIndex,
+  zonedDateTime,
+  zonedParts,
+} from "./platform";
 import type {
   InsightsPeriod,
   InsightsTab,
@@ -21,31 +32,24 @@ import type {
 export const fiveMinutes = 5 * 60 * 1000;
 const dayMs = 24 * 60 * 60 * 1000;
 
-export const categoryColors: Record<string, string> = {
-  Development: "#6b78fa",
-  Productivity: "#1fb894",
-  Communication: "#478ff5",
-  Entertainment: "#9e6bf0",
-  Video: "#f05c94",
-  Social: "#fa8047",
-  Web: "#2eaddb",
-  Application: "#52bd85",
-  Utilities: "#858fa3",
-  Email: "#4d8aea",
-};
+const CATEGORY_ORDER = [
+  "Development",
+  "Productivity",
+  "Communication",
+  "Entertainment",
+  "Video",
+  "Social",
+  "Web",
+  "Application",
+  "Utilities",
+  "Email",
+] as const;
 
-const spectrum = [
-  "#6b78fa",
-  "#1fb894",
-  "#fa8047",
-  "#9e6bf0",
-  "#f05c94",
-  "#2eaddb",
-  "#db9433",
-  "#5cad70",
-  "#8a70e6",
-  "#e66b5c",
-];
+export const categoryColors: Record<string, string> = Object.fromEntries(
+  CATEGORY_ORDER.map((name) => [name, `var(--category-${name.toLowerCase()})`]),
+);
+
+const spectrum = CATEGORY_ORDER.map((_, index) => `var(--category-spectrum-${index})`);
 
 function stableIndex(key: string) {
   let hash = 0;
@@ -57,74 +61,75 @@ export function colorForCategory(key: string) {
   return categoryColors[key] ?? spectrum[stableIndex(key) % spectrum.length];
 }
 
-export function startOfMonth(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
+export { endOfMonth, startOfMonth };
+
+export function formatMonthLabel(date: Date, timeZone = localTimeZone()) {
+  return new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric", timeZone }).format(date);
 }
 
-export function endOfMonth(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 1);
-}
-
-export function formatMonthLabel(date: Date) {
-  return new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(date);
-}
-
-export function monthGridDays(month: Date) {
-  const start = startOfMonth(month);
-  const end = endOfMonth(month);
-  const gridStart = new Date(start);
-  gridStart.setDate(start.getDate() - start.getDay());
+export function monthGridDays(month: Date, timeZone = localTimeZone()) {
+  const start = startOfMonth(month, timeZone);
+  const end = endOfMonth(month, timeZone);
+  const gridStart = addCalendarDays(start, -weekdayIndex(start, timeZone), timeZone);
   const days: Date[] = [];
-  const cursor = new Date(gridStart);
+  let cursor = gridStart;
   while (cursor < end || days.length % 7 !== 0) {
-    days.push(new Date(cursor));
-    cursor.setDate(cursor.getDate() + 1);
+    days.push(cursor);
+    cursor = addCalendarDays(cursor, 1, timeZone);
     if (days.length >= 42) break;
   }
   return days;
 }
 
-export function periodBounds(period: InsightsPeriod, anchor: Date) {
+export function periodBounds(period: InsightsPeriod, anchor: Date, timeZone = localTimeZone()) {
   if (period === "day") {
-    return { start: startOfDay(anchor), end: endOfDay(anchor) };
+    return { start: startOfDay(anchor, timeZone), end: endOfDay(anchor, timeZone) };
   }
   if (period === "week") {
-    const start = startOfDay(anchor);
-    const day = start.getDay();
-    start.setDate(start.getDate() - day);
-    return { start, end: new Date(start.getTime() + 7 * dayMs) };
+    const startDay = startOfDay(anchor, timeZone);
+    const start = addCalendarDays(startDay, -weekdayIndex(startDay, timeZone), timeZone);
+    return { start, end: addCalendarDays(start, 7, timeZone) };
   }
   if (period === "month") {
-    return { start: startOfMonth(anchor), end: endOfMonth(anchor) };
+    return { start: startOfMonth(anchor, timeZone), end: endOfMonth(anchor, timeZone) };
   }
-  const start = new Date(anchor.getFullYear(), 0, 1);
-  return { start, end: new Date(anchor.getFullYear() + 1, 0, 1) };
+  const { year } = zonedParts(anchor, timeZone);
+  return {
+    start: zonedDateTime(year, 1, 1, timeZone),
+    end: zonedDateTime(year + 1, 1, 1, timeZone),
+  };
 }
 
-export function todayPeriodBounds(period: TodayPeriod, anchor: Date) {
-  if (period === "month") return { start: startOfMonth(anchor), end: endOfMonth(anchor) };
-  return periodBounds(period, anchor);
+export function todayPeriodBounds(period: TodayPeriod, anchor: Date, timeZone = localTimeZone()) {
+  if (period === "month") return { start: startOfMonth(anchor, timeZone), end: endOfMonth(anchor, timeZone) };
+  return periodBounds(period, anchor, timeZone);
 }
 
-export function shiftTodayAnchor(period: TodayPeriod, anchor: Date, direction: number) {
-  const next = new Date(anchor);
-  if (period === "week") next.setDate(next.getDate() + direction * 7);
-  else if (period === "month") next.setMonth(next.getMonth() + direction);
-  else next.setDate(next.getDate() + direction);
-  return next;
+export function shiftTodayAnchor(period: TodayPeriod, anchor: Date, direction: number, timeZone = localTimeZone()) {
+  const parts = zonedParts(anchor, timeZone);
+  if (period === "week") return addCalendarDays(anchor, direction * 7, timeZone);
+  if (period === "month") {
+    const shifted = new Date(Date.UTC(parts.year, parts.month - 1 + direction, 1));
+    const year = shifted.getUTCFullYear();
+    const month = shifted.getUTCMonth() + 1;
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return zonedDateTime(year, month, Math.min(parts.day, lastDay), timeZone, parts.hour, parts.minute, parts.second);
+  }
+  return addCalendarDays(anchor, direction, timeZone);
 }
 
-export function formatTodayPeriod(period: TodayPeriod, anchor: Date) {
+export function formatTodayPeriod(period: TodayPeriod, anchor: Date, timeZone = localTimeZone()) {
   if (period === "day") {
     return new Intl.DateTimeFormat(undefined, {
       weekday: "long",
       month: "long",
       day: "numeric",
       year: "numeric",
+      timeZone,
     }).format(anchor);
   }
-  if (period === "week") return formatPeriod("week", anchor);
-  return formatMonthLabel(anchor);
+  if (period === "week") return formatPeriod("week", anchor, timeZone);
+  return formatMonthLabel(anchor, timeZone);
 }
 
 export function normalizeTodayTab(tab: string): "timeline" | "eventLog" {
@@ -259,33 +264,34 @@ export function formatClock(value: string | Date) {
   return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
 }
 
-export function formatDayLabel(date: Date) {
+export function formatDayLabel(date: Date, timeZone = localTimeZone()) {
   return new Intl.DateTimeFormat(undefined, {
     weekday: "short",
     month: "short",
     day: "numeric",
+    timeZone,
   }).format(date);
 }
 
-export function weekNumber(anchor: Date) {
-  const { start } = periodBounds("week", anchor);
-  const thursday = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 4);
-  const utc = new Date(Date.UTC(thursday.getFullYear(), thursday.getMonth(), thursday.getDate()));
-  const dayNum = utc.getUTCDay() || 7;
-  utc.setUTCDate(utc.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
-  return Math.ceil(((utc.getTime() - yearStart.getTime()) / dayMs + 1) / 7);
+export function weekNumber(anchor: Date, timeZone = localTimeZone()) {
+  const { start } = periodBounds("week", anchor, timeZone);
+  const parts = zonedParts(start, timeZone);
+  const thursday = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + 4));
+  const dayNum = thursday.getUTCDay() || 7;
+  thursday.setUTCDate(thursday.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1));
+  return Math.ceil(((thursday.getTime() - yearStart.getTime()) / dayMs + 1) / 7);
 }
 
-export function formatPeriod(period: InsightsPeriod, anchor: Date) {
-  const bounds = periodBounds(period, anchor);
-  if (period === "day") return formatDayLabel(anchor);
+export function formatPeriod(period: InsightsPeriod, anchor: Date, timeZone = localTimeZone()) {
+  const bounds = periodBounds(period, anchor, timeZone);
+  if (period === "day") return formatDayLabel(anchor, timeZone);
   if (period === "week") {
-    const last = new Date(bounds.end.getTime() - dayMs);
-    return `Week ${weekNumber(anchor)} · ${formatDayLabel(bounds.start)} – ${formatDayLabel(last)}`;
+    const last = addCalendarDays(bounds.end, -1, timeZone);
+    return `Week ${weekNumber(anchor, timeZone)} · ${formatDayLabel(bounds.start, timeZone)} – ${formatDayLabel(last, timeZone)}`;
   }
-  if (period === "month") return formatMonthLabel(anchor);
-  return `${anchor.getFullYear()}`;
+  if (period === "month") return formatMonthLabel(anchor, timeZone);
+  return `${zonedParts(anchor, timeZone).year}`;
 }
 
 export function hourLabel(hour: number) {
@@ -478,17 +484,21 @@ export function segmentFromEntry(entry: ScreenTimeEntry): ScreenTimeTimelineSegm
 }
 
 export function blockSegments(segments: ScreenTimeTimelineSegment[]): ScreenTimeSessionBlock[] {
-  const sorted = [...segments].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  const sorted = segments
+    .map((segment) => ({ segment, startMs: Date.parse(segment.start), endMs: Date.parse(segment.end) }))
+    .sort((a, b) => a.startMs - b.startMs);
   const blocks: ScreenTimeSessionBlock[] = [];
   let current: ScreenTimeTimelineSegment[] = [];
+  let previousEnd = Number.NEGATIVE_INFINITY;
 
-  for (const segment of sorted) {
-    const previous = current[current.length - 1];
-    if (!previous || new Date(segment.start).getTime() - new Date(previous.end).getTime() <= fiveMinutes) {
-      current.push(segment);
+  for (const item of sorted) {
+    if (!current.length || item.startMs - previousEnd <= fiveMinutes) {
+      current.push(item.segment);
+      previousEnd = item.endMs;
     } else {
       blocks.push(createBlock(current));
-      current = [segment];
+      current = [item.segment];
+      previousEnd = item.endMs;
     }
   }
   if (current.length) blocks.push(createBlock(current));
@@ -533,10 +543,14 @@ export function entriesToTimelines(
   bounds?: { start: Date; end: Date },
 ): ScreenTimeDeviceTimeline[] {
   const window = bounds ?? periodBounds("day", anchor);
+  const windowStart = window.start.getTime();
+  const windowEnd = window.end.getTime();
   const byKey = new Map<string, ScreenTimeTimelineSegment[]>();
   for (const entry of entries) {
-    if (new Date(entry.endTimeUTC).getTime() <= window.start.getTime()) continue;
-    if (new Date(entry.startTimeUTC).getTime() >= window.end.getTime()) continue;
+    const end = Date.parse(entry.endTimeUTC);
+    if (end <= windowStart) continue;
+    const start = Date.parse(entry.startTimeUTC);
+    if (start >= windowEnd) continue;
     const key = deviceKey(entry.platform, entry.deviceName);
     const list = byKey.get(key) ?? [];
     list.push(segmentFromEntry(entry));
@@ -566,7 +580,7 @@ export function filterVisibleTimelines(timelines: ScreenTimeDeviceTimeline[], hi
 }
 
 export function segmentSeconds(segment: ScreenTimeTimelineSegment) {
-  return Math.max(0, (new Date(segment.end).getTime() - new Date(segment.start).getTime()) / 1000);
+  return Math.max(0, (Date.parse(segment.end) - Date.parse(segment.start)) / 1000);
 }
 
 export function appBreakdownKey(segment: Pick<ScreenTimeTimelineSegment, "url" | "appName" | "label">) {
@@ -700,45 +714,50 @@ export function buildPeriodBuckets(
   period: InsightsPeriod,
   anchor: Date,
   trackedSecondsByDay?: Record<string, number>,
+  timeZone = localTimeZone(),
 ): ScreenTimePeriodBucket[] {
-  const bounds = periodBounds(period, anchor);
+  const bounds = periodBounds(period, anchor, timeZone);
+  const anchorParts = zonedParts(anchor, timeZone);
+  const monthLength = new Date(Date.UTC(anchorParts.year, anchorParts.month, 0)).getUTCDate();
   const count =
     period === "day"
       ? 24
       : period === "week"
         ? 7
         : period === "month"
-          ? new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate()
+          ? monthLength
           : 12;
   const bucketMs = (bounds.end.getTime() - bounds.start.getTime()) / count;
+  const intervals = segments.map((segment) => [Date.parse(segment.start), Date.parse(segment.end)] as const);
   return Array.from({ length: count }, (_, index) => {
-    const start = new Date(bounds.start.getTime() + index * bucketMs);
-    const end = new Date(start.getTime() + bucketMs);
-    if (period === "month") {
-      start.setTime(bounds.start.getTime());
-      start.setDate(start.getDate() + index);
-      end.setTime(start.getTime());
-      end.setDate(end.getDate() + 1);
+    const start = period === "month"
+      ? addCalendarDays(bounds.start, index, timeZone)
+      : new Date(bounds.start.getTime() + index * bucketMs);
+    const end = period === "month"
+      ? addCalendarDays(start, 1, timeZone)
+      : new Date(start.getTime() + bucketMs);
+    const startMs = start.getTime();
+    const endMs = end.getTime();
+    let segmentSecondsTotal = 0;
+    for (const [segStart, segEnd] of intervals) {
+      const overlapStart = segStart > startMs ? segStart : startMs;
+      const overlapEnd = segEnd < endMs ? segEnd : endMs;
+      if (overlapEnd > overlapStart) segmentSecondsTotal += (overlapEnd - overlapStart) / 1000;
     }
-    const segmentSeconds = segments.reduce((sum, segment) => {
-      const overlapStart = Math.max(start.getTime(), new Date(segment.start).getTime());
-      const overlapEnd = Math.min(end.getTime(), new Date(segment.end).getTime());
-      return sum + Math.max(0, (overlapEnd - overlapStart) / 1000);
-    }, 0);
     const seconds =
       period === "month"
-        ? trackedSecondsByDay?.[toDateInput(start)] ?? segmentSeconds
-        : segmentSeconds;
+        ? trackedSecondsByDay?.[toDateInput(start, timeZone)] ?? segmentSecondsTotal
+        : segmentSecondsTotal;
     return {
       id: `${period}-${index}`,
       label:
         period === "year"
-          ? new Intl.DateTimeFormat(undefined, { month: "short" }).format(start)
+          ? new Intl.DateTimeFormat(undefined, { month: "short", timeZone }).format(start)
           : period === "day"
             ? hourLabel(index)
             : period === "month"
-              ? `${start.getDate()}`
-              : formatDayLabel(start),
+              ? `${zonedParts(start, timeZone).day}`
+              : formatDayLabel(start, timeZone),
       start: start.toISOString(),
       end: end.toISOString(),
       seconds,
@@ -749,33 +768,67 @@ export function buildPeriodBuckets(
 export function trackedSecondsByDay(
   entries: ScreenTimeEntry[],
   range: Date | { start: Date; end: Date },
+  timeZone = localTimeZone(),
 ): Record<string, number> {
-  const start = range instanceof Date ? startOfMonth(range).getTime() : range.start.getTime();
-  const end = range instanceof Date ? endOfMonth(range).getTime() : range.end.getTime();
+  const start = range instanceof Date ? startOfMonth(range, timeZone).getTime() : range.start.getTime();
+  const end = range instanceof Date ? endOfMonth(range, timeZone).getTime() : range.end.getTime();
   const totals: Record<string, number> = {};
+  if (end <= start) return totals;
+  const days = dayBoundaries(start, end, timeZone);
   for (const entry of entries) {
-    let slice = Math.max(new Date(entry.startTimeUTC).getTime(), start);
-    const limit = Math.min(new Date(entry.endTimeUTC).getTime(), end);
-    while (slice < limit) {
-      const nextDay = startOfDay(new Date(slice)).getTime() + dayMs;
-      const sliceEnd = Math.min(limit, nextDay);
-      const key = toDateInput(new Date(slice));
+    let slice = Math.max(Date.parse(entry.startTimeUTC), start);
+    const limit = Math.min(Date.parse(entry.endTimeUTC), end);
+    if (slice >= limit) continue;
+    let index = dayIndexAt(days.starts, slice);
+    while (slice < limit && index < days.keys.length) {
+      const sliceEnd = Math.min(limit, days.starts[index + 1]);
+      const key = days.keys[index];
       totals[key] = (totals[key] ?? 0) + (sliceEnd - slice) / 1000;
       slice = sliceEnd;
+      index += 1;
     }
   }
   return totals;
 }
 
+/** Zoned day starts covering [start, end]; `starts` has one more item than `keys`. */
+function dayBoundaries(start: number, end: number, timeZone: string) {
+  const starts: number[] = [];
+  const keys: string[] = [];
+  let cursor = startOfDay(new Date(start), timeZone);
+  while (cursor.getTime() < end) {
+    starts.push(cursor.getTime());
+    keys.push(toDateInput(cursor, timeZone));
+    const next = addCalendarDays(cursor, 1, timeZone);
+    cursor = next.getTime() > cursor.getTime() ? next : new Date(cursor.getTime() + dayMs);
+  }
+  starts.push(cursor.getTime());
+  return { starts, keys };
+}
+
+function dayIndexAt(starts: number[], at: number) {
+  let low = 0;
+  let high = starts.length - 2;
+  while (low < high) {
+    const mid = (low + high + 1) >> 1;
+    if (starts[mid] <= at) low = mid;
+    else high = mid - 1;
+  }
+  return low;
+}
+
 export function sumTrackedSecondsInBounds(
   totals: Record<string, number>,
   bounds: { start: Date; end: Date },
+  timeZone = localTimeZone(),
 ) {
   let sum = 0;
-  const cursor = startOfDay(bounds.start);
+  let cursor = startOfDay(bounds.start, timeZone);
   while (cursor.getTime() < bounds.end.getTime()) {
-    sum += totals[toDateInput(cursor)] ?? 0;
-    cursor.setDate(cursor.getDate() + 1);
+    sum += totals[toDateInput(cursor, timeZone)] ?? 0;
+    const next = addCalendarDays(cursor, 1, timeZone);
+    if (next.getTime() <= cursor.getTime()) break;
+    cursor = next;
   }
   return sum;
 }
@@ -804,13 +857,27 @@ export function snapshotFromRange(
   },
   bucketSpec?: { period: InsightsPeriod; anchor: Date },
   categoryCache?: JevCategoryCache | null,
+  timeZone = localTimeZone(),
 ): ScreenTimeSnapshot {
-  const inRange = entries.filter((entry) => {
-    const start = new Date(entry.startTimeUTC).getTime();
-    const end = new Date(entry.endTimeUTC).getTime();
-    return end > bounds.start.getTime() && start < bounds.end.getTime();
-  });
-  const segments = clipSegmentsToBounds(inRange.map(segmentFromEntry), bounds);
+  const startMs = bounds.start.getTime();
+  const endMs = bounds.end.getTime();
+  const inRange: ScreenTimeEntry[] = [];
+  const segments: ScreenTimeTimelineSegment[] = [];
+  for (const entry of entries) {
+    const entryStart = Date.parse(entry.startTimeUTC);
+    const entryEnd = Date.parse(entry.endTimeUTC);
+    if (!(entryEnd > startMs && entryStart < endMs)) continue;
+    const clipStart = entryStart < startMs ? startMs : entryStart;
+    const clipEnd = entryEnd > endMs ? endMs : entryEnd;
+    if (clipEnd <= clipStart) continue;
+    inRange.push(entry);
+    const segment = segmentFromEntry(entry);
+    segments.push(
+      clipStart === entryStart && clipEnd === entryEnd
+        ? segment
+        : { ...segment, start: new Date(clipStart).toISOString(), end: new Date(clipEnd).toISOString() },
+    );
+  }
   const breakdowns = buildBreakdowns(segments, categoryCache);
   const useOverlaidCategories = Boolean(categoryCache && Object.keys(categoryCache).length && breakdowns.categories.length);
   const categories = useOverlaidCategories
@@ -822,12 +889,12 @@ export function snapshotFromRange(
       }))
     : breakdowns.categories;
   const dailyTotals = {
-    ...trackedSecondsByDay(inRange, bounds),
+    ...trackedSecondsByDay(inRange, bounds, timeZone),
     ...serverSummary?.trackedSecondsByDay,
   };
-  const dailySum = sumTrackedSecondsInBounds(dailyTotals, bounds);
+  const dailySum = sumTrackedSecondsInBounds(dailyTotals, bounds, timeZone);
   const buckets = bucketSpec
-    ? buildPeriodBuckets(segments, bucketSpec.period, bucketSpec.anchor, dailyTotals)
+    ? buildPeriodBuckets(segments, bucketSpec.period, bucketSpec.anchor, dailyTotals, timeZone)
     : [];
   const bucketSum = buckets.reduce((sum, bucket) => sum + bucket.seconds, 0);
   const totalSeconds = serverSummary?.trackedSecondsByDay
@@ -863,8 +930,16 @@ export function snapshotFromEntries(
     trackedSecondsByDay?: Record<string, number>;
   },
   categoryCache?: JevCategoryCache | null,
+  timeZone = localTimeZone(),
 ): ScreenTimeSnapshot {
-  return snapshotFromRange(entries, periodBounds(period, anchor), serverSummary, { period, anchor }, categoryCache);
+  return snapshotFromRange(
+    entries,
+    periodBounds(period, anchor, timeZone),
+    serverSummary,
+    { period, anchor },
+    categoryCache,
+    timeZone,
+  );
 }
 
 export { resolvedDeviceName };

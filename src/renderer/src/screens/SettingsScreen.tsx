@@ -1,3 +1,4 @@
+import { effectiveTimeZone, localTimeZoneLabel } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
 import {
   CalendarDays,
@@ -21,6 +22,9 @@ import {
 
 export function SettingsScreen({ state }: { state: AppSnapshot }) {
   const settings = state.settings;
+  const signedIn = Boolean(state.auth?.user);
+  const timeZones = Intl.supportedValuesOf("timeZone");
+  const selectedZone = state.auth?.user?.time_zone ?? "";
   return (
     <div className="settings-page">
       <header className="settings-header">
@@ -47,6 +51,25 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
                 onChange={(startScreenTimeOnLaunch) => window.stopscrolling.updateSettings({ startScreenTimeOnLaunch })}
                 testId="settings-start-screen-time-on-launch"
               />
+              <label className="field">
+                <span className="field-label">Time zone</span>
+                <select
+                  data-testid="settings-time-zone"
+                  value={selectedZone}
+                  disabled={!signedIn}
+                  onChange={(event) => window.stopscrolling.setTimeZone(event.target.value)}
+                >
+                  <option value="">Same as this computer ({localTimeZoneLabel(effectiveTimeZone())})</option>
+                  {timeZones.map((zone) => (
+                    <option key={zone} value={zone}>{zone}</option>
+                  ))}
+                </select>
+                <span className="field-hint">
+                  {signedIn
+                    ? "Days, calendars, and insights use this zone. Recorded sessions keep the computer’s zone."
+                    : "Sign in to save a time zone on your account."}
+                </span>
+              </label>
               {state.capabilities.platform === "macos" ? (
                 <div className="connection-row" data-testid="settings-accessibility">
                   <Hand size={17} aria-hidden="true" />

@@ -1,4 +1,4 @@
-import { useState, type MouseEvent as ReactMouseEvent } from "react";
+import { memo, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { displayNameForDevice } from "@shared/device";
 import {
   blockMatchesApp,
@@ -136,7 +136,7 @@ function NativeMacTimeline({
           const x = Math.max(0, Math.min(1, (start - dayStart) / span));
           const width = Math.max(0.004, Math.min(1 - x, (end - start) / span));
           const isHovered = hover?.block?.id === block.id;
-          const isDimmed = Boolean(highlightedAppKey) && !blockMatchesApp(block, highlightedAppKey);
+          const isDimmed = highlightedAppKey != null && !blockMatchesApp(block, highlightedAppKey);
           return (
             <button
               key={block.id}
@@ -302,7 +302,7 @@ export function VerticalDay({
   );
 }
 
-export function TimelineCard({
+export const TimelineCard = memo(function TimelineCard({
   timelines,
   devices,
   highlightedAppKey = null,
@@ -324,4 +324,4 @@ export function TimelineCard({
       <TimelineGroup timelines={timelines} devices={devices} highlightedAppKey={highlightedAppKey} />
     </Card>
   );
-}
+});

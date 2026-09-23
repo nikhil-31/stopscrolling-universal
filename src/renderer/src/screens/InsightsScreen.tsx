@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { displayNameForDevice } from "@shared/device";
+import { effectiveTimeZone } from "@shared/platform";
 import {
   buildBreakdowns,
   buildPeriodBuckets,
@@ -21,12 +22,30 @@ import {
     Sparkles,
 } from "lucide-react";
 import { DevicePicker, visibleDevicesForPicker } from "../components/DevicePicker";
-import { BreakdownList, EventLog, TimelineCard, TrendCard } from "../components/timeline";
-import { Banner, Button, LoadingState, MetricCard, Tabs } from "../components/ui";
+import { BreakdownList, EventLog, SESSION_LOG_PAGE_SIZE, TimelineCard, TrendCard } from "../components/timeline";
+import { Banner, Button, MetricCard, Skeleton, Tabs } from "../components/ui";
+
+function InsightsSkeleton() {
+  return (
+    <div className="insights-skeleton" role="status" aria-live="polite">
+      <span className="sr-only">Building your insights…</span>
+      <section className="stats" aria-hidden="true">
+        <Skeleton className="insights-skeleton-metric" />
+        <Skeleton className="insights-skeleton-metric" />
+      </section>
+      <Skeleton className="insights-skeleton-tabs" />
+      <div className="stack" aria-hidden="true">
+        <Skeleton className="insights-skeleton-chart" />
+        <Skeleton className="insights-skeleton-list" />
+      </div>
+    </div>
+  );
+}
 
 export function InsightsScreen({ state }: { state: AppSnapshot }) {
   const [selectedAppKey, setSelectedAppKey] = useState<string | null>(null);
-  const apps = rankedAppsBySeconds(state.snapshot.apps);
+  const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
+  const apps = useMemo(() => rankedAppsBySeconds(state.snapshot.apps), [state.snapshot.apps]);
   const selectedApp = selectedAppKey
     ? apps.find((app) => app.key === selectedAppKey) ?? null
     : null;
@@ -45,15 +64,14 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
   );
   const filteredBuckets = useMemo(
     () => selectedAppKey
-      ? buildPeriodBuckets(filteredSegments, state.insightsPeriod, new Date(state.insightsAnchor))
+      ? buildPeriodBuckets(filteredSegments, state.insightsPeriod, new Date(state.insightsAnchor), undefined, timeZone)
       : state.snapshot.buckets,
-    [selectedAppKey, filteredSegments, state.insightsPeriod, state.insightsAnchor, state.snapshot.buckets],
+    [selectedAppKey, filteredSegments, state.insightsPeriod, state.insightsAnchor, state.snapshot.buckets, timeZone],
   );
   const filteredCategories = useMemo(
     () => selectedAppKey ? buildBreakdowns(filteredSegments).categories : state.snapshot.categories,
     [selectedAppKey, filteredSegments, state.snapshot.categories],
   );
-  if (state.loadingEntries) return <LoadingState label="Building your insights…" />;
   const tab = normalizeInsightsTab(state.insightsTab);
   const visibleDevices = visibleDevicesForPicker(state.devices, state.hiddenDeviceKeys);
   const deviceKey = normalizeInsightsDeviceKey(
@@ -76,8 +94,8 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
           <span className="today-chrome-slash">/</span>
           <span>
             {state.insightsPeriod === "day"
-              ? formatTodayPeriod("day", new Date(state.insightsAnchor))
-              : formatPeriod(state.insightsPeriod, new Date(state.insightsAnchor))}
+              ? formatTodayPeriod("day", new Date(state.insightsAnchor), timeZone)
+              : formatPeriod(state.insightsPeriod, new Date(state.insightsAnchor), timeZone)}
           </span>
         </h2>
         <div className="today-chrome-controls">
@@ -90,60 +108,64 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
           />
         </div>
       </header>
-      <section className="stats">
-        <MetricCard
-          label="Tracked time"
-          value={formatDuration(trackedSeconds)}
-          detail={trackedDetail}
-          icon={Clock3}
-        />
-        <MetricCard
-          label="Leading app/website"
-          value={topApp ? formatDuration(topApp.seconds) : "None"}
-          detail={topApp ? `${topApp.label} · ${percentLabel(topApp.percentage)}` : "No app data yet"}
-          icon={Sparkles}
-          tone="orange"
-        />
-      </section>
-      {selectedApp ? (
-        <div className="insights-filter-banner">
-          <Banner
-            action={<Button size="sm" variant="ghost" onClick={clearFilter}>Show all</Button>}
-          >
-            Showing only {selectedApp.label}
-          </Banner>
-        </div>
-      ) : null}
-
-      <Tabs
-        ariaLabel="Insights views"
-        value={tab}
-        onChange={(next) => window.stopscrolling.setInsightsTab(next)}
-        items={[
-          { value: "overview", label: "Overview", icon: BarChart3 },
-          { value: "sessions", label: "Sessions", icon: List },
-        ]}
-      />
-
-      {tab === "overview" ? (
-        <div className="stack">
-          <TrendCard buckets={filteredBuckets} period={state.insightsPeriod} />
-          {state.insightsPeriod === "day" ? (
-            <TimelineCard
-              timelines={filteredTimelines}
-              devices={state.devices}
-              subtitle={selectedApp ? `${selectedApp.label} across your visible devices` : undefined}
+      {state.loadingEntries ? <InsightsSkeleton /> : (
+        <>
+          <section className="stats">
+            <MetricCard
+              label="Tracked time"
+              value={formatDuration(trackedSeconds)}
+              detail={trackedDetail}
+              icon={Clock3}
             />
+            <MetricCard
+              label="Leading app/website"
+              value={topApp ? formatDuration(topApp.seconds) : "None"}
+              detail={topApp ? `${topApp.label} · ${percentLabel(topApp.percentage)}` : "No app data yet"}
+              icon={Sparkles}
+              tone="orange"
+            />
+          </section>
+          {selectedApp ? (
+            <div className="insights-filter-banner">
+              <Banner
+                action={<Button size="sm" variant="ghost" onClick={clearFilter}>Show all</Button>}
+              >
+                Showing only {selectedApp.label}
+              </Banner>
+            </div>
           ) : null}
-          <BreakdownList
-            categories={filteredCategories}
-            apps={apps}
-            selectedAppKey={selectedAppKey}
-            onSelectApp={setSelectedAppKey}
+
+          <Tabs
+            ariaLabel="Insights views"
+            value={tab}
+            onChange={(next) => window.stopscrolling.setInsightsTab(next)}
+            items={[
+              { value: "overview", label: "Overview", icon: BarChart3 },
+              { value: "sessions", label: "Sessions", icon: List },
+            ]}
           />
-        </div>
-      ) : null}
-      {tab === "sessions" ? <EventLog segments={filteredSegments} /> : null}
+
+          {tab === "overview" ? (
+            <div className="stack">
+              <TrendCard buckets={filteredBuckets} period={state.insightsPeriod} />
+              {state.insightsPeriod === "day" ? (
+                <TimelineCard
+                  timelines={filteredTimelines}
+                  devices={state.devices}
+                  subtitle={selectedApp ? `${selectedApp.label} across your visible devices` : undefined}
+                />
+              ) : null}
+              <BreakdownList
+                categories={filteredCategories}
+                apps={apps}
+                selectedAppKey={selectedAppKey}
+                onSelectApp={setSelectedAppKey}
+              />
+            </div>
+          ) : null}
+          {tab === "sessions" ? <EventLog segments={filteredSegments} pageSize={SESSION_LOG_PAGE_SIZE} /> : null}
+        </>
+      )}
     </div>
   );
 }

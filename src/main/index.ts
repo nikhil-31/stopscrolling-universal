@@ -1,9 +1,16 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, crashReporter } from "electron";
 import { AppController } from "./app-controller";
+import { installMainCrashHandlers, localCrashReporterOptions, logElectronChildProcessGone } from "./crash-reporting";
 import { installApplicationMenu, installIpc } from "./ipc";
 import { isQuitting, markQuitting } from "./lifecycle";
 import { installTray, refreshTray } from "./tray";
 import { createMainWindow, showMainWindow } from "./windows";
+
+crashReporter.start(localCrashReporterOptions());
+installMainCrashHandlers();
+app.on("child-process-gone", (_event, details) => {
+  logElectronChildProcessGone(details);
+});
 
 app.setName("Stop Scrolling");
 

@@ -193,6 +193,13 @@ export class StopScrollingAPI {
     return this.request<AuthenticatedUser>("api/auth/me/");
   }
 
+  async setTimeZone(timeZone: string) {
+    return this.request<AuthenticatedUser>("api/auth/time-zone/", {
+      method: "POST",
+      body: JSON.stringify({ time_zone: timeZone }),
+    });
+  }
+
   async devices() {
     return asList(await this.request<{ results?: DeviceRow[] } | DeviceRow[]>("api/devices/"));
   }

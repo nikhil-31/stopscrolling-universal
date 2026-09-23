@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockSegments, durationAxisTicks, entriesToTimelines, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, weekNumber } from "./timeline";
+import { blockSegments, colorForCategory, durationAxisTicks, entriesToTimelines, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, weekNumber } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 
@@ -609,6 +609,25 @@ describe("today period windows", () => {
     expect(durationAxisTicks(3600).max).toBe(3600);
     expect(durationAxisTicks(3600).ticks.map((tick) => tick.label)).toEqual(["0", "15m", "30m", "45m", "1h"]);
     expect(durationAxisTicks(0).ticks[0]).toEqual({ seconds: 0, fraction: 0, label: "0" });
+  });
+});
+
+describe("colorForCategory", () => {
+  it("uses theme tokens for known categories and a spectrum for others", () => {
+    expect(colorForCategory("Social")).toBe("var(--category-social)");
+    expect(colorForCategory("Development")).toBe("var(--category-development)");
+    expect(colorForCategory("Uncategorized")).toMatch(/^var\(--category-spectrum-\d\)$/);
+  });
+});
+
+describe("trackedSecondsByDay", () => {
+  it("splits sessions at zoned midnight across a daylight saving change", () => {
+    const totals = trackedSecondsByDay(
+      [entry({ startTimeUTC: "2026-03-08T04:00:00.000Z", endTimeUTC: "2026-03-08T09:00:00.000Z", appName: "Cursor" })],
+      { start: new Date("2026-03-01T05:00:00.000Z"), end: new Date("2026-03-15T04:00:00.000Z") },
+      "America/New_York",
+    );
+    expect(totals).toEqual({ "2026-03-07": 3600, "2026-03-08": 4 * 3600 });
   });
 });
 

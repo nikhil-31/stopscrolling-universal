@@ -1,4 +1,4 @@
-import { BrowserWindow, Menu, app, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
+import { BrowserWindow, Menu, app, ipcMain, shell } from "electron";
 import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { IPC } from "@shared/ipc";
@@ -7,9 +7,10 @@ import type { CalendarView } from "@shared/calendar-workspace";
 import type { AppController } from "./app-controller";
 import { refreshTray } from "./tray";
 import { createSettingsWindow } from "./windows";
+import { recordRendererCrash } from "./crash-reporting";
 import { quitApp } from "./lifecycle";
 
-function assertTrustedRenderer(event: IpcMainInvokeEvent) {
+function assertTrustedRenderer(event: { senderFrame: Electron.WebFrameMain | null }) {
   if (!event.senderFrame) throw new Error("Untrusted renderer IPC caller");
   const url = new URL(event.senderFrame.url);
   if (url.protocol === "file:") {
@@ -32,7 +33,15 @@ export function installIpc(controller: AppController) {
     refreshTray(controller);
   };
 
-  ipcMain.handle(IPC.getState, () => controller.snapshot());
+  ipcMain.handle(IPC.getState, (event) => controller.stateFor(event.sender.id));
+  ipcMain.on(IPC.reportCrash, (event, payload: unknown) => {
+    try {
+      assertTrustedRenderer(event);
+    } catch {
+      return;
+    }
+    recordRendererCrash(payload);
+  });
   ipcMain.on(IPC.navigate, (_event, item: NavigationItem) => controller.selectNavigation(item));
   ipcMain.on(IPC.setTodayDay, (_event, iso: string) => {
     controller.todayDay = new Date(iso);
@@ -110,6 +119,9 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.commandPalette, (_event, open: boolean) => {
     controller.commandPaletteOpen = open;
     broadcast();
+  });
+  ipcMain.on(IPC.setTimeZone, (_event, timeZone: string) => {
+    void controller.setTimeZone(typeof timeZone === "string" ? timeZone : "");
   });
   ipcMain.on(IPC.updateSettings, (_event, patch: Partial<AppSettings>) => {
     const start = patch.startScreenTimeOnLaunch;

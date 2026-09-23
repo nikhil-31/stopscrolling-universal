@@ -1,3 +1,4 @@
+import { effectiveTimeZone } from "./platform";
 import type { BlockingSchedule } from "./types";
 
 export const WEEKDAYS = [
@@ -10,12 +11,8 @@ export const WEEKDAYS = [
   { value: 6, label: "Sun" },
 ] as const;
 
-export function defaultTimeZone() {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
+export function defaultTimeZone(preferred?: string | null) {
+  return effectiveTimeZone(preferred);
 }
 
 export function parseCommaSeparated(value: string) {
@@ -261,12 +258,12 @@ export function scheduleDeviceLabel(device: BlockingSchedule["devices"][number])
   return device.label || device.device_name || device.device_id;
 }
 
-export function emptySessionDraft() {
+export function emptySessionDraft(timeZone?: string | null) {
   return {
     name: "",
     startTime: "09:00",
     endTime: "17:00",
-    timeZone: defaultTimeZone(),
+    timeZone: defaultTimeZone(timeZone),
     selectedDays: [0, 1, 2, 3, 4],
     selectedBlocklistIds: [] as string[],
     selectedDeviceIds: [] as string[],

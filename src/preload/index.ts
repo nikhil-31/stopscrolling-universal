@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { RendererCrashReport } from "@shared/crash";
 import { IPC } from "@shared/ipc";
-import type { AppSnapshot, InspectorSelection } from "@shared/snapshot";
+import type { AppSnapshot, AppStateMessage, InspectorSelection } from "@shared/snapshot";
 import type {
   CalendarAssignment,
   CalendarLabel,
@@ -20,8 +21,8 @@ import type {
 
 const api = {
   getState: () => ipcRenderer.invoke(IPC.getState) as Promise<AppSnapshot>,
-  onState: (handler: (state: AppSnapshot) => void) => {
-    const listener = (_event: unknown, state: AppSnapshot) => handler(state);
+  onState: (handler: (state: AppStateMessage) => void) => {
+    const listener = (_event: unknown, state: AppStateMessage) => handler(state);
     ipcRenderer.on(IPC.state, listener);
     return () => ipcRenderer.removeListener(IPC.state, listener);
   },
@@ -50,6 +51,7 @@ const api = {
   selectInspector: (payload: InspectorSelection) => ipcRenderer.send(IPC.selectInspector, payload),
   setCommandPalette: (open: boolean) => ipcRenderer.send(IPC.commandPalette, open),
   updateSettings: (patch: Partial<AppSettings>) => ipcRenderer.send(IPC.updateSettings, patch),
+  setTimeZone: (timeZone: string) => ipcRenderer.send(IPC.setTimeZone, timeZone),
   setTypesafeApiKey: (key: string) => ipcRenderer.send(IPC.setTypesafeApiKey, key),
   setDeviceVisible: (key: string, visible: boolean) => ipcRenderer.send(IPC.setDeviceVisible, { key, visible }),
   setDeviceNickname: (deviceID: string, nickname: string) => ipcRenderer.send(IPC.setDeviceNickname, { deviceID, nickname }),
@@ -89,6 +91,7 @@ const api = {
   skipCalendarBlock: (blockId: string) => ipcRenderer.send(IPC.skipCalendarBlock, blockId),
   dismissCalendarReview: (unlabeledIds: string[]) => ipcRenderer.send(IPC.dismissCalendarReview, unlabeledIds),
   assignCalendarLabelToApp: (payload: { appKey: string; labelId: string }) => ipcRenderer.send(IPC.assignCalendarLabelToApp, payload),
+  reportCrash: (report: RendererCrashReport) => ipcRenderer.send(IPC.reportCrash, report),
 };
 
 export type StopScrollingDesktop = typeof api;

@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSnapshot } from "@shared/snapshot";
 import { ALL_INSIGHTS_DEVICES } from "@shared/timeline";
-import type { DeviceListEntry } from "@shared/types";
+import type { DeviceListEntry, ScreenTimeTimelineSegment } from "@shared/types";
+import { SESSION_LOG_PAGE_SIZE } from "../components/timeline";
 import { InsightsScreen } from "./InsightsScreen";
 
 const desktop = {
@@ -196,6 +197,15 @@ beforeEach(() => {
 });
 
 describe("InsightsScreen", () => {
+  it("keeps the activity header visible while the first insights fetch is in flight", () => {
+    render(<InsightsScreen state={snapshot({ loadingEntries: true })} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Building your insights…");
+    expect(document.querySelectorAll(".insights-skeleton .skeleton").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Activity");
+    expect(screen.queryByText("Activity trend")).toBeNull();
+    expect(screen.queryByText("Time by category")).toBeNull();
+  });
+
   it("shows breakdown content on Overview and hides the Breakdown tab", () => {
     render(<InsightsScreen state={snapshot()} />);
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
@@ -395,3 +405,170 @@ describe("InsightsScreen", () => {
     expect(screen.getByText("On Studio Mac this week")).toBeVisible();
   });
 });
+
+function logSession(index: number, patch: Partial<ScreenTimeTimelineSegment> = {}): ScreenTimeTimelineSegment {
+  return {
+    id: `session-${index}`,
+    start: new Date(2026, 8, 10, 8, index).toISOString(),
+    end: new Date(2026, 8, 10, 8, index, 30).toISOString(),
+    label: `Log ${String(index).padStart(2, "0")}`,
+    subtitle: "Development",
+    url: "",
+    bundleID: "Cursor",
+    category: "Development",
+    appName: "Cursor",
+    devicePlatform: "macos",
+    deviceName: "Mac",
+    timeZoneIdentifier: "UTC",
+    isLive: false,
+    ...patch,
+  };
+}
+
+function sessionsState(segments: ScreenTimeTimelineSegment[], extra: Partial<AppSnapshot> = {}): Partial<AppSnapshot> {
+  return {
+    insightsTab: "sessions",
+    snapshot: {
+      totalSeconds: segments.length * 30,
+      sessionCount: segments.length,
+      timelineSegments: [],
+      listSegments: segments,
+      categories: [{ category: "Development", seconds: segments.length * 30, percentage: 1 }],
+      apps: [{
+        key: "app|Cursor",
+        label: "Cursor",
+        subtitle: "Development",
+        category: "Development",
+        seconds: segments.length * 30,
+        percentage: 1,
+      }],
+      buckets: [],
+      trackedSecondsByDay: {},
+    },
+    ...extra,
+  };
+}
+
+describe("Insights session log pagination", () => {
+  let intersect: (() => void) | null;
+
+  beforeEach(() => {
+    intersect = null;
+    vi.stubGlobal("IntersectionObserver", class {
+      callback: IntersectionObserverCallback;
+      constructor(callback: IntersectionObserverCallback) {
+        this.callback = callback;
+      }
+      observe() {
+        intersect = () => {
+          this.callback(
+            [{ isIntersecting: true } as IntersectionObserverEntry],
+            this as unknown as IntersectionObserver,
+          );
+        };
+      }
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the 30 most recent sessions until you scroll", () => {
+    const segments = Array.from({ length: SESSION_LOG_PAGE_SIZE + 1 }, (_, index) => logSession(index));
+    render(<InsightsScreen state={snapshot(sessionsState(segments))} />);
+    expect(screen.getByText(`${SESSION_LOG_PAGE_SIZE + 1} recorded sessions`)).toBeVisible();
+    expect(screen.getByRole("button", { name: /Log 30/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Log 01/ })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Log 00/ })).toBeNull();
+  });
+
+  it("loads the next page when the list bottom is visible", () => {
+    const segments = Array.from({ length: SESSION_LOG_PAGE_SIZE + 1 }, (_, index) => logSession(index));
+    render(<InsightsScreen state={snapshot(sessionsState(segments))} />);
+    expect(screen.queryByRole("button", { name: /Log 00/ })).toBeNull();
+    act(() => intersect?.());
+    expect(screen.getByRole("button", { name: /Log 00/ })).toBeVisible();
+  });
+
+  it("resets to the first page when the session list changes", () => {
+    const first = Array.from({ length: SESSION_LOG_PAGE_SIZE + 1 }, (_, index) => logSession(index));
+    const { rerender } = render(<InsightsScreen state={snapshot(sessionsState(first))} />);
+    act(() => intersect?.());
+    expect(screen.getByRole("button", { name: /Log 00/ })).toBeVisible();
+
+    const next = Array.from({ length: SESSION_LOG_PAGE_SIZE + 1 }, (_, index) => logSession(index + 100));
+    rerender(<InsightsScreen state={snapshot(sessionsState(next))} />);
+    expect(screen.getByRole("button", { name: /Log 130/ })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Log 100/ })).toBeNull();
+  });
+
+  it("keeps loaded pages when a new session is prepended", () => {
+    const first = Array.from({ length: SESSION_LOG_PAGE_SIZE + 1 }, (_, index) => logSession(index));
+    const { rerender } = render(<InsightsScreen state={snapshot(sessionsState(first))} />);
+    act(() => intersect?.());
+    expect(screen.getByRole("button", { name: /Log 00/ })).toBeVisible();
+
+    rerender(<InsightsScreen state={snapshot(sessionsState([...first, logSession(99)]))} />);
+    expect(screen.getByRole("button", { name: /Log 99/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Log 01/ })).toBeVisible();
+  });
+
+  it("paginates the filtered session log", async () => {
+    const user = userEvent.setup();
+    const cursor = Array.from({ length: SESSION_LOG_PAGE_SIZE + 1 }, (_, index) => logSession(index));
+    const safari = logSession(SESSION_LOG_PAGE_SIZE + 1, {
+      id: "safari",
+      label: "Safari",
+      appName: "Safari",
+      bundleID: "Safari",
+      url: "https://github.com",
+      subtitle: "github.com",
+    });
+    const state = sessionsState([...cursor, safari], {
+      insightsTab: "overview",
+      insightsPeriod: "day",
+      snapshot: {
+        totalSeconds: 5000,
+        sessionCount: cursor.length + 1,
+        timelineSegments: [],
+        listSegments: [...cursor, safari],
+        categories: [{ category: "Development", seconds: 5000, percentage: 1 }],
+        apps: [
+          {
+            key: "app|Cursor",
+            label: "Cursor",
+            subtitle: "Development",
+            category: "Development",
+            seconds: 4000,
+            percentage: 0.8,
+          },
+          {
+            key: "web|github.com",
+            label: "github.com",
+            subtitle: "Safari",
+            category: "Development",
+            seconds: 1000,
+            percentage: 0.2,
+          },
+        ],
+        buckets: [],
+        trackedSecondsByDay: {},
+      },
+    });
+    const { rerender } = render(<InsightsScreen state={snapshot(state)} />);
+    await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
+    rerender(<InsightsScreen state={snapshot({ ...state, insightsTab: "sessions" })} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Showing only Cursor");
+    expect(screen.getByText(`${SESSION_LOG_PAGE_SIZE + 1} recorded sessions`)).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Safari/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Log 00/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Log 30/ })).toBeVisible();
+  });
+});
+

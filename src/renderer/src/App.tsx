@@ -1,18 +1,20 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { navItemForDigit } from "@shared/navigation";
 import type { BlockingSchedule } from "@shared/types";
 import { CommandPalette } from "./components/CommandPalette";
 import { Inspector } from "./components/Inspector";
 import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
+import { LoadingState } from "./components/ui";
 import { useAppState } from "./hooks/useAppState";
 import { AccountScreen } from "./screens/AccountScreen";
 import { BlockingScreen } from "./screens/BlockingScreen";
 import { CalendarScreen } from "./screens/CalendarScreen";
-import { InsightsScreen } from "./screens/InsightsScreen";
 import { LeaderboardScreen } from "./screens/LeaderboardScreen";
 import { TimerScreen } from "./screens/TimerScreen";
 import { TodayScreen } from "./screens/TodayScreen";
+
+const InsightsScreen = lazy(() => import("./screens/InsightsScreen").then((module) => ({ default: module.InsightsScreen })));
 
 export function App() {
   const state = useAppState();
@@ -58,7 +60,11 @@ export function App() {
               {state.navigation === "today" && <TodayScreen state={state} />}
               {state.navigation === "timer" && <TimerScreen state={state} />}
               {state.navigation === "calendar" && <CalendarScreen state={state} />}
-              {state.navigation === "insights" && <InsightsScreen state={state} />}
+              {state.navigation === "insights" && (
+                <Suspense fallback={<LoadingState label="Building your insights…" />}>
+                  <InsightsScreen state={state} />
+                </Suspense>
+              )}
               {state.navigation === "blocking" && (
                 <BlockingScreen
                   state={state}

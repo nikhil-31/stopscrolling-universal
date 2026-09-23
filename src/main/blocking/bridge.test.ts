@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import { logCrash } from "../logger";
 import type { HelperRequest } from "./protocol";
 import type { HelperTransport } from "./transport";
 import { BlockingHelperBridge, createHelperTransport } from "./bridge";
 
-vi.mock("../logger", () => ({ logObservability: vi.fn() }));
+vi.mock("../logger", () => ({ logObservability: vi.fn(), logCrash: vi.fn() }));
 
 class FakeTransport implements HelperTransport {
   readonly kind = "windows-pipe" as const;
@@ -80,5 +81,21 @@ describe("blocking helper lifecycle", () => {
     await bridge.refreshStatus();
     expect(bridge.status.strictMode).toBe(true);
     expect(bridge.status.connected).toBe(false);
+  });
+
+  it("records a helper exit without the helper message", async () => {
+    const transport: HelperTransport = {
+      kind: "macos-xpc",
+      request: async () => {
+        throw new Error("failed for /Users/secret/Library/policy.json");
+      },
+    };
+    const bridge = new BlockingHelperBridge(transport);
+    await bridge.refreshStatus();
+    expect(logCrash).toHaveBeenCalledWith({
+      kind: "helper-exit",
+      process: "macos-xpc",
+      reason: "blocking_helper_unavailable",
+    });
   });
 });

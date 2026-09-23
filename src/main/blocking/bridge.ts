@@ -5,7 +5,7 @@ import type {
   BlockingPolicyResponse,
   InstalledApplication,
 } from "@shared/types";
-import { logObservability } from "../logger";
+import { logCrash, logObservability } from "../logger";
 import { loadMacHostClient } from "./host-client";
 import { MacXpcTransport, type MacXpcClient } from "./macos-xpc";
 import {
@@ -171,5 +171,10 @@ export class BlockingHelperBridge {
     // Do not persist helper messages: OS errors can contain usernames, paths,
     // policy identifiers, or pipe/XPC details.
     logObservability(`blocking_helper_unavailable transport=${this.transport.kind}`);
+    logCrash({
+      kind: "helper-exit",
+      process: this.transport.kind,
+      reason: "blocking_helper_unavailable",
+    });
   }
 }

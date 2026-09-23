@@ -32,13 +32,19 @@ function loadOrCreateKey(): Buffer {
 
 export class PendingUploadStore {
   private key = loadOrCreateKey();
+  private cached: ScreenTimeEntry[] | null = null;
 
   load(): ScreenTimeEntry[] {
+    if (this.cached) return this.cached;
     try {
-      if (!existsSync(outboxPath())) return [];
+      if (!existsSync(outboxPath())) {
+        this.cached = [];
+        return this.cached;
+      }
       const decrypted = decryptAesGcm(readFileSync(outboxPath()), this.key);
       const parsed = JSON.parse(decrypted.toString("utf8")) as ScreenTimeEntry[];
-      return Array.isArray(parsed) ? parsed : [];
+      this.cached = Array.isArray(parsed) ? parsed : [];
+      return this.cached;
     } catch {
       return [];
     }
@@ -49,10 +55,11 @@ export class PendingUploadStore {
     const unique = dedupe(entries);
     const blob = encryptAesGcm(Buffer.from(JSON.stringify(unique), "utf8"), this.key);
     writeFileSync(outboxPath(), blob);
+    this.cached = unique;
   }
 
   append(entry: ScreenTimeEntry) {
-    const items = this.load();
+    const items = this.load().slice();
     items.push(entry);
     this.save(items);
   }

@@ -1,3 +1,4 @@
+import { effectiveTimeZone } from "@shared/platform";
 import { formatPeriod, localTimeZoneLabel } from "@shared/timeline";
 import type { AppSnapshot } from "@shared/snapshot";
 import {
@@ -22,6 +23,7 @@ const subtitles: Record<AppSnapshot["navigation"], string> = {
 
 export function Toolbar({ state }: { state: AppSnapshot }) {
   const title = state.navigation[0].toUpperCase() + state.navigation.slice(1);
+  const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
   return (
     <header className="toolbar" data-testid="toolbar">
       <div className="toolbar-title">
@@ -45,14 +47,14 @@ export function Toolbar({ state }: { state: AppSnapshot }) {
         ) : null}
         {state.navigation === "insights" ? (
           <DateNav
-            label={formatPeriod(state.insightsPeriod, new Date(state.insightsAnchor))}
+            label={formatPeriod(state.insightsPeriod, new Date(state.insightsAnchor), timeZone)}
             onPrev={() => shiftPeriod(state, -1)}
             onNext={() => shiftPeriod(state, 1)}
             onCurrent={() => window.stopscrolling.setInsightsAnchor(new Date().toISOString())}
           />
         ) : null}
         {!["today", "timer", "calendar", "insights"].includes(state.navigation) ? (
-          <span className="timezone">{localTimeZoneLabel()}</span>
+          <span className="timezone">{localTimeZoneLabel(timeZone)}</span>
         ) : null}
       </div>
       <div className="toolbar-actions">

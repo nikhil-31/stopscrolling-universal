@@ -1,3 +1,4 @@
+import { effectiveTimeZone } from "@shared/platform";
 import { ALL_DEVICES, formatTodayPeriod, shiftTodayAnchor } from "@shared/timeline";
 import type { AppSnapshot } from "@shared/snapshot";
 import { CalendarClock, ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
@@ -14,20 +15,21 @@ export function TodayChrome({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const anchor = new Date(state.todayDay);
+  const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
 
   return (
     <header className="today-chrome">
       <h2 className="today-chrome-title">
         <span>Activity</span>
         <span className="today-chrome-slash">/</span>
-        <span>{formatTodayPeriod("day", anchor)}</span>
+        <span>{formatTodayPeriod("day", anchor, timeZone)}</span>
       </h2>
       <div className="today-chrome-controls">
         <div className="calendar-chrome-nav">
           <IconButton
             label="Previous day"
             icon={ChevronLeft}
-            onClick={() => window.stopscrolling.setTodayDay(shiftTodayAnchor("day", anchor, -1).toISOString())}
+            onClick={() => window.stopscrolling.setTodayDay(shiftTodayAnchor("day", anchor, -1, timeZone).toISOString())}
           />
           <Tooltip label="Jump to today">
             <IconButton
@@ -39,7 +41,7 @@ export function TodayChrome({
           <IconButton
             label="Next day"
             icon={ChevronRight}
-            onClick={() => window.stopscrolling.setTodayDay(shiftTodayAnchor("day", anchor, 1).toISOString())}
+            onClick={() => window.stopscrolling.setTodayDay(shiftTodayAnchor("day", anchor, 1, timeZone).toISOString())}
           />
         </div>
         <DevicePicker

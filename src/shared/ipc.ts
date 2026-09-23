@@ -26,6 +26,7 @@ export const IPC = {
   selectInspector: "app:select-inspector",
   commandPalette: "app:command-palette",
   updateSettings: "app:update-settings",
+  setTimeZone: "app:set-time-zone",
   setTypesafeApiKey: "app:set-typesafe-api-key",
   setDeviceVisible: "app:set-device-visible",
   setDeviceNickname: "app:set-device-nickname",
@@ -63,6 +64,7 @@ export const IPC = {
   skipCalendarBlock: "app:skip-calendar-block",
   dismissCalendarReview: "app:dismiss-calendar-review",
   assignCalendarLabelToApp: "app:assign-calendar-label-to-app",
+  reportCrash: "app:report-crash",
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

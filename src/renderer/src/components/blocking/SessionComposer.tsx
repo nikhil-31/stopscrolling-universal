@@ -91,7 +91,7 @@ export function SessionComposer({
       start_time: startTime,
       end_time: endTime,
       days_of_week: [...selectedDays].sort((a, b) => a - b),
-      time_zone: timeZone.trim() || defaultTimeZone(),
+      time_zone: timeZone.trim() || defaultTimeZone(initialDraft.timeZone),
       blocklist_ids: selectedBlocklistIds,
       device_ids: selectedDeviceIds,
       strict_mode: strictMode,

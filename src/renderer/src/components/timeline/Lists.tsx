@@ -1,3 +1,4 @@
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { displayNameForDevice } from "@shared/device";
 import {
   colorForCategory,
@@ -17,7 +18,56 @@ import { Card, EmptyState, Grouped } from "../ui";
 import { AppsWebsitesShareRow } from "../today/AppsWebsitesList";
 import { PieChart } from "./Charts";
 
-export function EventLog({ segments }: { segments: ScreenTimeTimelineSegment[] }) {
+export const SESSION_LOG_PAGE_SIZE = 30;
+
+export const EventLog = memo(function EventLog({
+  segments,
+  pageSize,
+}: {
+  segments: ScreenTimeTimelineSegment[];
+  pageSize?: number;
+}) {
+  const paginated = pageSize != null && pageSize > 0;
+  const [limit, setLimit] = useState(paginated ? pageSize : segments.length);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const ordered = useMemo(() => {
+    if (!paginated) return segments;
+    return segments
+      .map((segment) => ({ segment, start: Date.parse(segment.start) }))
+      .sort((a, b) => b.start - a.start)
+      .map((item) => item.segment);
+  }, [paginated, segments]);
+
+  const previousList = useRef<{ oldestId: string | undefined; length: number } | null>(null);
+  useEffect(() => {
+    const oldestId = ordered[ordered.length - 1]?.id;
+    const previous = previousList.current;
+    previousList.current = { oldestId, length: ordered.length };
+    // Newly recorded sessions only prepend to the log, so keep the loaded pages for those.
+    const onlyPrepended = previous !== null && previous.oldestId === oldestId && ordered.length >= previous.length;
+    if (!onlyPrepended) setLimit(paginated ? pageSize : ordered.length);
+  }, [paginated, pageSize, ordered]);
+
+  const visible = paginated ? ordered.slice(0, limit) : ordered;
+  const hasMore = paginated && limit < ordered.length;
+
+  useEffect(() => {
+    if (!hasMore || !paginated || !sentinelRef.current || typeof IntersectionObserver === "undefined") return;
+    const node = sentinelRef.current;
+    const root = node.closest(".content-area");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setLimit((current) => Math.min(current + pageSize, ordered.length));
+        }
+      },
+      { root: root instanceof Element ? root : null, rootMargin: "80px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, ordered.length, pageSize, paginated, limit]);
+
   if (!segments.length) {
     return <EmptyState title="No events yet" body="Individual sessions will collect here." icon={List} />;
   }
@@ -30,7 +80,7 @@ export function EventLog({ segments }: { segments: ScreenTimeTimelineSegment[] }
         </div>
       </div>
       <div className="list">
-        {segments.map((segment) => (
+        {visible.map((segment) => (
           <button
             key={segment.id}
             className="data-row"
@@ -49,10 +99,11 @@ export function EventLog({ segments }: { segments: ScreenTimeTimelineSegment[] }
             <span className="row-value">{formatClock(segment.start)}</span>
           </button>
         ))}
+        {hasMore ? <div ref={sentinelRef} data-testid="session-log-sentinel" aria-hidden="true" /> : null}
       </div>
     </Card>
   );
-}
+});
 
 export function BlockList({ timelines, devices = [] }: { timelines: ScreenTimeDeviceTimeline[]; devices?: DeviceListEntry[] }) {
   const blocks = timelines.flatMap((timeline) => timeline.blocks);
@@ -92,7 +143,7 @@ export function BlockList({ timelines, devices = [] }: { timelines: ScreenTimeDe
   );
 }
 
-export function BreakdownList({
+export const BreakdownList = memo(function BreakdownList({
   categories,
   apps,
   selectedAppKey = null,
@@ -162,4 +213,4 @@ export function BreakdownList({
       </Grouped>
     </div>
   );
-}
+});

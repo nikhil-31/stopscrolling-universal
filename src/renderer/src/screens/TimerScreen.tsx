@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { toDateInput } from "@shared/platform";
+import { effectiveTimeZone, toDateInput } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
 import {
   effectiveTimerBonus,
@@ -13,7 +13,7 @@ import { EmptyState, IconButton, Tooltip, Tabs } from "../components/ui";
 
 export function TimerScreen({ state }: { state: AppSnapshot }) {
   const [rail, setRail] = useState<"session" | "timeline">("session");
-  const today = toDateInput(new Date(state.todayDay));
+  const today = toDateInput(new Date(state.todayDay), effectiveTimeZone(state.auth?.user?.time_zone));
   const bonus = effectiveTimerBonus(
     state.settings.timerBonusSeconds,
     state.settings.timerBonusDay,

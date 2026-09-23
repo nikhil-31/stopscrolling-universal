@@ -2,7 +2,7 @@
 
 interface StopScrollingDesktop {
   getState: () => Promise<import("@shared/snapshot").AppSnapshot>;
-  onState: (handler: (state: import("@shared/snapshot").AppSnapshot) => void) => () => void;
+  onState: (handler: (state: import("@shared/snapshot").AppStateMessage) => void) => () => void;
   navigate: (item: import("@shared/types").NavigationItem) => void;
   setTodayDay: (iso: string) => void;
   setCalendarAnchor: (iso: string) => void;
@@ -28,6 +28,7 @@ interface StopScrollingDesktop {
   selectInspector: (payload: import("@shared/snapshot").InspectorSelection) => void;
   setCommandPalette: (open: boolean) => void;
   updateSettings: (patch: Partial<import("@shared/types").AppSettings>) => void;
+  setTimeZone: (timeZone: string) => void;
   setTypesafeApiKey: (key: string) => void;
   setDeviceVisible: (key: string, visible: boolean) => void;
   setDeviceNickname: (deviceID: string, nickname: string) => void;
@@ -67,6 +68,7 @@ interface StopScrollingDesktop {
   skipCalendarBlock: (blockId: string) => void;
   dismissCalendarReview: (unlabeledIds: string[]) => void;
   assignCalendarLabelToApp: (payload: { appKey: string; labelId: string }) => void;
+  reportCrash: (report: import("@shared/crash").RendererCrashReport) => void;
 }
 
 declare global {

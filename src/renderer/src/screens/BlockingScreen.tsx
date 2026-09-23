@@ -184,7 +184,7 @@ export function BlockingScreen({
             />
             {showCreateSession ? (
               <SessionComposer
-                initialDraft={emptySessionDraft()}
+                initialDraft={emptySessionDraft(state.auth?.user?.time_zone)}
                 blocklists={blocking.blocklists}
                 devices={registeredDevices}
                 loading={blocking.loading}

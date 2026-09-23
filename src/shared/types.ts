@@ -25,6 +25,7 @@ export interface AuthenticatedUser {
   mfa_delivery: string;
   social_providers: string[];
   theme?: "light" | "dark";
+  time_zone?: string;
 }
 
 export interface MFAPendingResponse {

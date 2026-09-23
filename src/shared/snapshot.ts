@@ -138,4 +138,37 @@ export interface AppSnapshot {
   leaderboard: LeaderboardUiState;
   blocking: BlockingUiState;
   commandPaletteOpen: boolean;
+  /** Bumps whenever any of `HEAVY_SNAPSHOT_KEYS` is rebuilt in the main process. */
+  dataVersion?: number;
+}
+
+export const HEAVY_SNAPSHOT_KEYS = ["snapshot", "timelines", "calendarDayStats", "devices"] as const;
+type HeavySnapshotKey = (typeof HEAVY_SNAPSHOT_KEYS)[number];
+
+/** A state update whose heavy fields are unchanged from `dataVersion`. */
+export type AppStatePatch = Omit<AppSnapshot, HeavySnapshotKey> & { reuseData: true; dataVersion: number };
+export type AppStateMessage = AppSnapshot | AppStatePatch;
+
+export function isStatePatch(message: AppStateMessage): message is AppStatePatch {
+  return "reuseData" in message && message.reuseData === true;
+}
+
+export function toStatePatch(state: AppSnapshot): AppStatePatch {
+  const patch: Record<string, unknown> = { ...state, reuseData: true, dataVersion: state.dataVersion ?? 0 };
+  for (const key of HEAVY_SNAPSHOT_KEYS) delete patch[key];
+  return patch as AppStatePatch;
+}
+
+/** Returns null when a patch cannot be applied and the full state must be refetched. */
+export function applyStateMessage(previous: AppSnapshot | null, message: AppStateMessage): AppSnapshot | null {
+  if (!isStatePatch(message)) return message;
+  if (!previous || previous.dataVersion !== message.dataVersion) return null;
+  const { reuseData: _reuseData, ...rest } = message;
+  return {
+    ...rest,
+    snapshot: previous.snapshot,
+    timelines: previous.timelines,
+    calendarDayStats: previous.calendarDayStats,
+    devices: previous.devices,
+  };
 }

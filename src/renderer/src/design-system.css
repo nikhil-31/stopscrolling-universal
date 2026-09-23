@@ -28,6 +28,26 @@
   --danger-soft: rgba(216, 74, 98, 0.11);
   --now-line: #FF0F0F;
   --orange: #e57c45;
+  --category-development: #4338ca;
+  --category-productivity: #047857;
+  --category-communication: #0369a1;
+  --category-entertainment: #6b21a8;
+  --category-video: #be123c;
+  --category-social: #c2410c;
+  --category-web: #155e75;
+  --category-application: #3f6212;
+  --category-utilities: #44403c;
+  --category-email: #1e3a8a;
+  --category-spectrum-0: var(--category-development);
+  --category-spectrum-1: var(--category-productivity);
+  --category-spectrum-2: var(--category-social);
+  --category-spectrum-3: var(--category-entertainment);
+  --category-spectrum-4: var(--category-video);
+  --category-spectrum-5: var(--category-web);
+  --category-spectrum-6: var(--category-email);
+  --category-spectrum-7: var(--category-application);
+  --category-spectrum-8: var(--category-communication);
+  --category-spectrum-9: var(--category-utilities);
   --sidebar-width: 248px;
   --inspector-width: 328px;
   --radius-xs: 7px;
@@ -75,6 +95,16 @@
     --danger: #f2b8b5;
     --danger-soft: rgba(242, 184, 181, 0.16);
     --orange: #f5bd6c;
+    --category-development: #a5b4fc;
+    --category-productivity: #4ade80;
+    --category-communication: #7dd3fc;
+    --category-entertainment: #e879f9;
+    --category-video: #fb7185;
+    --category-social: #fb923c;
+    --category-web: #5eead4;
+    --category-application: #a3e635;
+    --category-utilities: #d6d3d1;
+    --category-email: #60a5fa;
     --focus: 0 0 0 3px rgba(11, 217, 169, 0.35);
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.45);
@@ -111,6 +141,16 @@
   --danger: #f2b8b5;
   --danger-soft: rgba(242, 184, 181, 0.16);
   --orange: #f5bd6c;
+  --category-development: #a5b4fc;
+  --category-productivity: #4ade80;
+  --category-communication: #7dd3fc;
+  --category-entertainment: #e879f9;
+  --category-video: #fb7185;
+  --category-social: #fb923c;
+  --category-web: #5eead4;
+  --category-application: #a3e635;
+  --category-utilities: #d6d3d1;
+  --category-email: #60a5fa;
   --focus: 0 0 0 3px rgba(11, 217, 169, 0.35);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.45);
@@ -544,6 +584,7 @@ a { color: var(--brand); }
 .field-label { font-size: 11px; font-weight: 680; }
 .field-hint { color: var(--text-tertiary); font-size: 10px; }
 .field input:not([type="checkbox"]):not([type="radio"]),
+.field select,
 .form input:not([type="checkbox"]):not([type="radio"]),
 .settings-page input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
@@ -557,7 +598,9 @@ a { color: var(--brand); }
 }
 .field input::placeholder, .form input::placeholder { color: var(--text-tertiary); }
 .field input:not([type="checkbox"]):not([type="radio"]):focus,
+.field select:focus,
 .form input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--brand); box-shadow: var(--focus); }
+.field select:disabled { opacity: 0.6; }
 .form input[type="checkbox"],
 .form input[type="radio"],
 .field input[type="checkbox"],
@@ -639,6 +682,10 @@ a { color: var(--brand); }
   border-radius: 6px;
   animation: shimmer 1.4s ease infinite;
 }
+.insights-skeleton-metric { height: 92px; border-radius: 12px; }
+.insights-skeleton-tabs { width: 220px; height: 32px; margin-bottom: 16px; border-radius: 8px; }
+.insights-skeleton-chart { height: 240px; border-radius: 12px; }
+.insights-skeleton-list { height: 320px; border-radius: 12px; }
 .tooltip { position: relative; display: inline-flex; }
 .tooltip:hover::after {
   content: attr(data-tooltip);
@@ -804,8 +851,8 @@ a { color: var(--brand); }
 .native-timeline-block {
   position: absolute;
   z-index: 1;
-  top: 8px;
-  bottom: 8px;
+  top: 0;
+  bottom: 0;
   min-width: 4px;
   padding: 0;
   overflow: hidden;
@@ -823,8 +870,8 @@ a { color: var(--brand); }
 .native-timeline-highlight {
   position: absolute;
   z-index: 3;
-  top: 8px;
-  bottom: 8px;
+  top: 0;
+  bottom: 0;
   min-width: 4px;
   pointer-events: none;
   background: #ffffff;
@@ -832,8 +879,6 @@ a { color: var(--brand); }
   box-shadow: none;
 }
 .native-timeline-highlight.is-compact {
-  top: 12px;
-  bottom: 12px;
   border-radius: 0;
   box-shadow: none;
 }
@@ -928,8 +973,6 @@ a { color: var(--brand); }
   background: var(--surface-subtle);
 }
 .native-timeline-block.is-compact {
-  top: 12px;
-  bottom: 12px;
   background: var(--brand);
   border-radius: 0;
   box-shadow: none;
@@ -2124,6 +2167,41 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
 .friend-request { padding: 11px; margin-bottom: 8px; background: var(--brand-soft); border-radius: var(--radius-sm); }
 
 .settings-page { width: min(100%, 900px); margin: 0 auto; padding: 24px; }
+.settings-window-drag { display: none; }
+
+html[data-platform="macos"] .sidebar,
+html[data-platform="macos"] .toolbar {
+  -webkit-app-region: drag;
+}
+html[data-platform="macos"] .sidebar button,
+html[data-platform="macos"] .sidebar a,
+html[data-platform="macos"] .toolbar button,
+html[data-platform="macos"] .toolbar a,
+html[data-platform="macos"] .toolbar input,
+html[data-platform="macos"] .toolbar select,
+html[data-platform="macos"] .toolbar .seg,
+html[data-platform="macos"] .toolbar .date-nav {
+  -webkit-app-region: no-drag;
+}
+html[data-platform="macos"]:not([data-fullscreen="true"]) .brand {
+  margin-top: 28px;
+}
+html[data-platform="macos"] .settings-window-drag {
+  position: fixed;
+  z-index: 20;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: block;
+  height: 28px;
+  -webkit-app-region: drag;
+}
+html[data-platform="macos"]:not([data-fullscreen="true"]) .settings-page {
+  padding-top: 48px;
+}
+html[data-platform="macos"] .settings-nav {
+  top: 40px;
+}
 .settings-header { margin-bottom: 20px; }
 .settings-header h1 { margin: 0; font-size: 23px; letter-spacing: -0.04em; }
 .settings-header p { margin: 4px 0 0; color: var(--text-secondary); font-size: 11px; }

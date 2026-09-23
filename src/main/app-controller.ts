@@ -14,6 +14,7 @@ import {
   skipBlock,
   shouldShowReviewBar,
   type CalendarAssignment,
+  type CalendarDayStats,
   type CalendarLabel,
   type CalendarTask,
   type CalendarView,
@@ -22,10 +23,10 @@ import {
 } from "@shared/calendar-workspace";
 import { deviceKey, resolvedDeviceName, withComputedOnline } from "@shared/device";
 import { IPC } from "@shared/ipc";
-import { currentDevicePlatform, localTimeZone, toDateInput } from "@shared/platform";
+import { currentDevicePlatform, effectiveTimeZone as resolveTimeZone, toDateInput } from "@shared/platform";
 import { TIMER_BONUS_STEP_SECONDS, usesTodayWindow } from "@shared/timer";
-import type { AppSnapshot, AuthUiState, BlockingUiState, InspectorSelection, LeaderboardUiState } from "@shared/snapshot";
-import { emptyInspector, inspectorFromSelection } from "@shared/snapshot";
+import type { AppSnapshot, AppStatePatch, AuthUiState, BlockingUiState, InspectorSelection, LeaderboardUiState } from "@shared/snapshot";
+import { emptyInspector, inspectorFromSelection, toStatePatch } from "@shared/snapshot";
 import {
   ALL_DEVICES,
   ALL_INSIGHTS_DEVICES,
@@ -113,6 +114,39 @@ const defaultLeaderboard = (): LeaderboardUiState => ({
   loading: false,
 });
 
+const BROADCAST_COALESCE_MS = 16;
+const LIVE_SESSION_RESOLUTION_MS = 15_000;
+const SLOW_SNAPSHOT_MS = 50;
+const PREFETCH_DELAY_MS = 3_000;
+const SUMMARY_CACHE_LIMIT = 8;
+
+function rangeCacheKey(bounds: { start: Date; end: Date }, zone: string) {
+  return `${bounds.start.getTime()}|${bounds.end.getTime()}|${zone}`;
+}
+
+interface SnapshotDataView {
+  version: number;
+  devices: DeviceListEntry[];
+  todayDeviceKey: string;
+  insightsDeviceKey: string;
+  snapshot: AppSnapshot["snapshot"];
+  timelines: AppSnapshot["timelines"];
+  calendarDayStats: CalendarDayStats;
+}
+
+const EMPTY_CALENDAR_STATS: CalendarDayStats = {
+  workSeconds: 0,
+  pendingSeconds: 0,
+  trackedSeconds: 0,
+  targetSeconds: 1,
+  percentOfTarget: 0,
+  labelTotals: [],
+  productivity: { focus: 0, meetings: 0, breaks: 0, other: 0 },
+  unlabeledBlocks: [],
+  reviewCount: 0,
+  dayTasks: [],
+};
+
 const defaultBlocking = (helper: BlockingHelperBridge): BlockingUiState => ({
   schedules: [],
   blocklists: [],
@@ -163,6 +197,14 @@ export class AppController {
   );
 
   private windows = new Set<BrowserWindow>();
+  private refreshGeneration = 0;
+  private dataCache: { deps: unknown[]; view: SnapshotDataView } | null = null;
+  private dataVersion = 0;
+  private sentDataVersion = new Map<number, number>();
+  private broadcastTimer: NodeJS.Timeout | null = null;
+  private insightsOpenedAt: number | null = null;
+  private summaryCache = new Map<string, PeriodSummaryResponse>();
+  private prefetchTimer: NodeJS.Timeout | null = null;
   private timelineTimer: NodeJS.Timeout | null = null;
   private helperTimer: NodeJS.Timeout | null = null;
   private helperBoundaryTimer: NodeJS.Timeout | null = null;
@@ -194,30 +236,145 @@ export class AppController {
     }
     this.startTimelineRefresh();
     await this.refreshVisibleRange();
+    this.schedulePrefetch();
     logObservability("Bootstrap complete");
   }
 
   addWindow(win: BrowserWindow) {
     this.windows.add(win);
-    win.on("closed", () => this.windows.delete(win));
+    const contentsId = win.webContents.id;
+    win.on("closed", () => {
+      this.windows.delete(win);
+      this.sentDataVersion.delete(contentsId);
+    });
     win.webContents.once("did-finish-load", () => {
-      win.webContents.send(IPC.state, this.snapshot());
+      win.webContents.send(IPC.state, this.stateFor(contentsId));
     });
   }
 
+  /** Full state for one renderer; later broadcasts may send it patches against this version. */
+  stateFor(contentsId: number): AppSnapshot {
+    const snap = this.snapshot();
+    this.sentDataVersion.set(contentsId, snap.dataVersion ?? 0);
+    return snap;
+  }
+
+  effectiveTimeZone() {
+    return resolveTimeZone(this.auth.user?.time_zone);
+  }
+
   visibleRange() {
+    const zone = this.effectiveTimeZone();
     if (this.navigation === "calendar") {
-      return { start: startOfMonth(this.calendarMonth), end: endOfMonth(this.calendarMonth) };
+      return { start: startOfMonth(this.calendarMonth, zone), end: endOfMonth(this.calendarMonth, zone) };
     }
     if (usesTodayWindow(this.navigation)) {
-      return todayPeriodBounds("day", this.todayDay);
+      return todayPeriodBounds("day", this.todayDay, zone);
     }
-    if (this.navigation === "insights") return periodBounds(this.insightsPeriod, this.insightsAnchor);
-    return periodBounds("day", this.todayDay);
+    if (this.navigation === "insights") return periodBounds(this.insightsPeriod, this.insightsAnchor, zone);
+    return periodBounds("day", this.todayDay, zone);
   }
 
   snapshot(): AppSnapshot {
     if (this.navigation === "leaderboard" || this.navigation === "timer") this.navigation = "today";
+    const view = this.dataView();
+    return {
+      navigation: this.navigation,
+      statusMessage: this.statusMessage,
+      appearance: this.settings.appearance,
+      isTracking: this.tracker.isTracking,
+      currentContext: this.tracker.currentContext,
+      pendingUploadCount: this.tracker.pendingUploadCount,
+      isAuthenticated: Boolean(this.auth.user),
+      auth: this.auth,
+      settings: this.settings,
+      typesafeApiKeyConfigured: hasTypesafeApiKey(),
+      todayDay: this.todayDay.toISOString(),
+      todayTab: this.todayTab,
+      todayPeriod: "day",
+      todayDeviceKey: view.todayDeviceKey,
+      calendarAnchor: this.calendarAnchor.toISOString(),
+      calendarMonth: this.calendarMonth.toISOString(),
+      calendarView: this.calendarView,
+      calendarWorkspace: this.calendarWorkspace,
+      calendarDayStats: view.calendarDayStats,
+      calendarReviewVisible: shouldShowReviewBar(
+        view.calendarDayStats.unlabeledBlocks.map((block) => block.id),
+        this.reviewBarDismissedIds,
+      ),
+      insightsPeriod: this.insightsPeriod,
+      insightsAnchor: this.insightsAnchor.toISOString(),
+      insightsTab: normalizeInsightsTab(this.insightsTab),
+      insightsDeviceKey: view.insightsDeviceKey,
+      snapshot: view.snapshot,
+      timelines: view.timelines,
+      loadingEntries: this.tracker.loadingEntries,
+      entriesUnavailableReason: this.tracker.entriesUnavailableReason,
+      devices: view.devices,
+      hiddenDeviceKeys: [...this.hiddenDeviceKeys],
+      inspector: this.inspector,
+      capabilities: this.tracker.capabilities(),
+      calendarEvents: this.settings.showGoogleCalendarEvents ? this.calendarEvents : [],
+      googleCalendarConnected: this.google.connected(),
+      googleCalendarStatus: this.google.connected()
+        ? "Showing Google Calendar events"
+        : "Google Calendar not connected",
+      logs: {
+        network: networkLogPath(),
+        observability: observabilityLogPath(),
+      },
+      leaderboard: this.leaderboard,
+      blocking: this.blocking,
+      commandPaletteOpen: this.commandPaletteOpen,
+      dataVersion: view.version,
+    };
+  }
+
+  /**
+   * Rebuilds entries, aggregates, and timelines only when one of their inputs
+   * changes. The live session's end is bucketed so periodic status broadcasts
+   * reuse the previous result.
+   */
+  private dataView(): SnapshotDataView {
+    const zone = this.effectiveTimeZone();
+    const deps: unknown[] = [
+      this.navigation,
+      zone,
+      Boolean(this.auth.user),
+      ...this.tracker.entriesSignature(LIVE_SESSION_RESOLUTION_MS),
+      this.tracker.registeredDevices,
+      this.tracker.deviceStatus,
+      this.tracker.localDeviceId,
+      [...this.hiddenDeviceKeys].sort().join("\n"),
+      this.insightsDeviceKey,
+      this.todayDeviceKey,
+      this.insightsPeriod,
+      this.insightsAnchor.getTime(),
+      this.todayDay.getTime(),
+      this.calendarAnchor.getTime(),
+      this.calendarMonth.getTime(),
+      this.serverSummary,
+      this.serverSummaryRange,
+      this.tracker.categoryCache(),
+      this.calendarWorkspace,
+      this.settings.dailyWorkTargetSeconds,
+    ];
+    const cached = this.dataCache;
+    if (cached && cached.deps.length === deps.length && cached.deps.every((value, index) => Object.is(value, deps[index]))) {
+      return cached.view;
+    }
+    const started = performance.now();
+    const view = { ...this.buildDataView(zone), version: ++this.dataVersion };
+    const elapsed = performance.now() - started;
+    if (elapsed >= SLOW_SNAPSHOT_MS) {
+      const scope = this.navigation === "insights" ? `insights/${this.insightsPeriod}` : this.navigation;
+      logObservability(`Snapshot data for ${scope} rebuilt in ${elapsed.toFixed(0)}ms (${view.snapshot.timelineSegments.length} segments)`);
+    }
+    this.dataCache = { deps, view };
+    return view;
+  }
+
+  private buildDataView(zone: string): Omit<SnapshotDataView, "version"> {
     const devices = this.deviceEntries();
     const registeredKeys = new Set(devices.map((device) => device.visibilityKey));
     const localKey = deviceKey(currentDevicePlatform(), localDeviceName());
@@ -251,98 +408,87 @@ export class AppController {
         : this.navigation === "calendar"
           ? this.calendarAnchor
           : this.todayDay;
-    const todayBounds = todayPeriodBounds("day", this.todayDay);
+    const todayBounds = todayPeriodBounds("day", this.todayDay, zone);
     const todayWindow = usesTodayWindow(this.navigation);
     const snapshotBounds = todayWindow
       ? todayBounds
-      : periodBounds(period, anchor);
+      : periodBounds(period, anchor, zone);
     const serverSummary = deviceScoped ? undefined : this.mappedServerSummary(snapshotBounds);
     const categoryCache = this.tracker.categoryCache();
     const snapshot = todayWindow
-      ? snapshotFromRange(entries, todayBounds, serverSummary, undefined, categoryCache)
-      : snapshotFromEntries(entries, period, anchor, serverSummary, categoryCache);
+      ? snapshotFromRange(entries, todayBounds, serverSummary, undefined, categoryCache, zone)
+      : snapshotFromEntries(entries, period, anchor, serverSummary, categoryCache, zone);
     const extraDevices = this.tracker.registeredDevices.map((device) => ({
       platform: device.device_platform,
       name: device.device_name,
       timeZone: device.time_zone,
     }));
-    const timelines = filterTimelinesForInsights(
-      filterVisibleTimelines(
-        entriesToTimelines(entries, anchor, extraDevices, snapshotBounds),
-        this.hiddenDeviceKeys,
-      ),
-      deviceKeyForNav,
-    );
-    const calendarTimelines = this.navigation === "calendar"
-      ? timelines
-      : filterVisibleTimelines(
-          entriesToTimelines(allEntries, this.calendarAnchor, extraDevices),
-          this.hiddenDeviceKeys,
+    const timelines = this.navigation === "insights" && period !== "day"
+      ? []
+      : filterTimelinesForInsights(
+          filterVisibleTimelines(
+            entriesToTimelines(entries, anchor, extraDevices, snapshotBounds),
+            this.hiddenDeviceKeys,
+          ),
+          deviceKeyForNav,
         );
-    const calendarDayStats = buildCalendarDayStats(
-      this.calendarWorkspace,
-      collectDayBlocks(calendarTimelines),
-      this.calendarAnchor,
-      this.settings.dailyWorkTargetSeconds || 8 * 60 * 60,
-    );
+    const calendarDayStats = this.navigation === "calendar"
+      ? buildCalendarDayStats(
+          this.calendarWorkspace,
+          collectDayBlocks(timelines),
+          this.calendarAnchor,
+          this.settings.dailyWorkTargetSeconds || 8 * 60 * 60,
+          zone,
+        )
+      : EMPTY_CALENDAR_STATS;
     return {
-      navigation: this.navigation,
-      statusMessage: this.statusMessage,
-      appearance: this.settings.appearance,
-      isTracking: this.tracker.isTracking,
-      currentContext: this.tracker.currentContext,
-      pendingUploadCount: this.tracker.pendingUploadCount,
-      isAuthenticated: Boolean(this.auth.user),
-      auth: this.auth,
-      settings: this.settings,
-      typesafeApiKeyConfigured: hasTypesafeApiKey(),
-      todayDay: this.todayDay.toISOString(),
-      todayTab: this.todayTab,
-      todayPeriod: "day",
+      devices,
       todayDeviceKey,
-      calendarAnchor: this.calendarAnchor.toISOString(),
-      calendarMonth: this.calendarMonth.toISOString(),
-      calendarView: this.calendarView,
-      calendarWorkspace: this.calendarWorkspace,
-      calendarDayStats,
-      calendarReviewVisible: shouldShowReviewBar(
-        calendarDayStats.unlabeledBlocks.map((block) => block.id),
-        this.reviewBarDismissedIds,
-      ),
-      insightsPeriod: this.insightsPeriod,
-      insightsAnchor: this.insightsAnchor.toISOString(),
-      insightsTab: normalizeInsightsTab(this.insightsTab),
       insightsDeviceKey,
       snapshot: this.navigation === "calendar"
         ? { ...snapshot, trackedSecondsByDay: trackedSecondsByDay(entries, this.calendarMonth) }
         : snapshot,
       timelines,
-      loadingEntries: this.tracker.loadingEntries,
-      entriesUnavailableReason: this.tracker.entriesUnavailableReason,
-      devices,
-      hiddenDeviceKeys: [...this.hiddenDeviceKeys],
-      inspector: this.inspector,
-      capabilities: this.tracker.capabilities(),
-      calendarEvents: this.settings.showGoogleCalendarEvents ? this.calendarEvents : [],
-      googleCalendarConnected: this.google.connected(),
-      googleCalendarStatus: this.google.connected()
-        ? "Showing Google Calendar events"
-        : "Google Calendar not connected",
-      logs: {
-        network: networkLogPath(),
-        observability: observabilityLogPath(),
-      },
-      leaderboard: this.leaderboard,
-      blocking: this.blocking,
-      commandPaletteOpen: this.commandPaletteOpen,
+      calendarDayStats,
     };
   }
 
+  /** Coalesces bursts of state changes into one update per window. */
   broadcast() {
+    if (this.broadcastTimer) return;
+    this.broadcastTimer = setTimeout(() => {
+      this.broadcastTimer = null;
+      this.flushBroadcast();
+    }, BROADCAST_COALESCE_MS);
+  }
+
+  private flushBroadcast() {
     const snap = this.snapshot();
+    this.reportInsightsReady(snap);
+    const version = snap.dataVersion ?? 0;
+    let patch: AppStatePatch | null = null;
     for (const win of this.windows) {
-      if (!win.isDestroyed()) win.webContents.send(IPC.state, snap);
+      if (win.isDestroyed()) continue;
+      const contents = win.webContents;
+      if (this.sentDataVersion.get(contents.id) === version) {
+        patch ??= toStatePatch(snap);
+        contents.send(IPC.state, patch);
+      } else {
+        this.sentDataVersion.set(contents.id, version);
+        contents.send(IPC.state, snap);
+      }
     }
+  }
+
+  private reportInsightsReady(snap: AppSnapshot) {
+    if (this.insightsOpenedAt === null) return;
+    if (snap.navigation !== "insights") {
+      this.insightsOpenedAt = null;
+      return;
+    }
+    if (snap.loadingEntries) return;
+    logObservability(`Insights (${snap.insightsPeriod}) ready ${(performance.now() - this.insightsOpenedAt).toFixed(0)}ms after opening`);
+    this.insightsOpenedAt = null;
   }
 
   selectNavigation(item: NavigationItem) {
@@ -351,39 +497,42 @@ export class AppController {
     this.inspector = emptyInspector();
     this.statusMessage = `Showing ${item[0].toUpperCase()}${item.slice(1)}`;
     this.commandPaletteOpen = false;
+    this.insightsOpenedAt = item === "insights" ? performance.now() : null;
     if (item === "blocking") void this.refreshBlocking();
     void this.refreshVisibleRange();
     this.broadcast();
   }
 
   async refreshVisibleRange() {
+    const generation = ++this.refreshGeneration;
     const bounds = this.visibleRange();
-    const zone = localTimeZone();
+    const zone = this.effectiveTimeZone();
+    const syncing = Boolean(this.api.getTokens() && this.settings.syncEnabled);
+    const summaryKey = rangeCacheKey(bounds, zone);
+    const cachedSummary = syncing ? this.summaryCache.get(summaryKey) : undefined;
+    if (cachedSummary) this.applySummary(cachedSummary, bounds);
+    const summaryPromise = this.fetchPeriodSummary(bounds, zone);
+    const devicesPromise = syncing ? this.tracker.refreshDevices(false) : Promise.resolve();
     await this.tracker.loadRange(bounds.start, bounds.end, zone);
-    if (this.api.getTokens() && this.settings.syncEnabled) {
-      try {
-        this.serverSummary = await this.api.periodSummary({
-          start: bounds.start.toISOString(),
-          end: bounds.end.toISOString(),
-          time_zone: zone,
-          include_daily_totals: true,
-        });
-        this.serverSummaryRange = { start: bounds.start.getTime(), end: bounds.end.getTime() };
-      } catch {
-        this.serverSummary = null;
-        this.serverSummaryRange = null;
-      }
-      await this.tracker.refreshDevices();
+    if (generation !== this.refreshGeneration) return;
+    const summary = await summaryPromise;
+    if (generation !== this.refreshGeneration) return;
+    if (syncing && this.api.getTokens() && this.settings.syncEnabled) {
+      if (summary) this.rememberSummary(summaryKey, summary);
+      this.applySummary(summary ?? null, bounds);
     } else {
       this.serverSummary = null;
       this.serverSummaryRange = null;
     }
+    await devicesPromise;
+    if (generation !== this.refreshGeneration) return;
     if (this.navigation === "calendar" && this.settings.showGoogleCalendarEvents) {
       try {
         this.calendarEvents = await this.google.eventsForDay(this.calendarAnchor, this.settings.googleClientId);
       } catch {
         this.calendarEvents = [];
       }
+      if (generation !== this.refreshGeneration) return;
     }
     this.broadcast();
   }
@@ -526,6 +675,8 @@ export class AppController {
     this.auth = { ...defaultAuth(), email: this.auth.email };
     this.blocking = defaultBlocking(this.helper);
     this.statusMessage = "Signed out";
+    this.summaryCache.clear();
+    this.tracker.clearRangeCache();
     this.broadcast();
   }
 
@@ -543,8 +694,28 @@ export class AppController {
     this.broadcast();
   }
 
+  async setTimeZone(timeZone: string) {
+    if (!this.auth.user) {
+      this.statusMessage = "Sign in to save a time zone.";
+      this.broadcast();
+      return;
+    }
+    try {
+      this.auth.user = await this.api.setTimeZone(timeZone);
+      saveSessionUser(this.auth.user);
+      this.leaderboard.day = toDateInput(new Date(), this.effectiveTimeZone());
+      this.statusMessage = timeZone
+        ? `Time zone set to ${timeZone}.`
+        : "Time zone follows this computer.";
+      await this.refreshVisibleRange();
+    } catch (error) {
+      this.statusMessage = error instanceof Error ? error.message : "Could not save time zone.";
+      this.broadcast();
+    }
+  }
+
   addTimerBonus(seconds = TIMER_BONUS_STEP_SECONDS) {
-    const day = toDateInput(new Date());
+    const day = toDateInput(new Date(), this.effectiveTimeZone());
     const current = this.settings.timerBonusDay === day ? this.settings.timerBonusSeconds : 0;
     this.updateSettings({
       timerBonusSeconds: current + Math.max(0, seconds),
@@ -763,6 +934,8 @@ export class AppController {
   async shutdown() {
     if (this.helperTimer) clearInterval(this.helperTimer);
     if (this.helperBoundaryTimer) clearTimeout(this.helperBoundaryTimer);
+    if (this.broadcastTimer) clearTimeout(this.broadcastTimer);
+    if (this.prefetchTimer) clearTimeout(this.prefetchTimer);
     await Promise.all([this.tracker.shutdown(), this.helper.close()]);
   }
 
@@ -986,6 +1159,57 @@ export class AppController {
       );
     }
     return Array.from(byKey.values()).sort((a, b) => Number(b.isOnline) - Number(a.isOnline) || a.deviceName.localeCompare(b.deviceName));
+  }
+
+  private applySummary(summary: PeriodSummaryResponse | null, bounds: { start: Date; end: Date }) {
+    this.serverSummary = summary;
+    this.serverSummaryRange = summary ? { start: bounds.start.getTime(), end: bounds.end.getTime() } : null;
+  }
+
+  private rememberSummary(key: string, summary: PeriodSummaryResponse) {
+    this.summaryCache.delete(key);
+    this.summaryCache.set(key, summary);
+    while (this.summaryCache.size > SUMMARY_CACHE_LIMIT) {
+      const oldest = this.summaryCache.keys().next().value;
+      if (oldest === undefined) break;
+      this.summaryCache.delete(oldest);
+    }
+  }
+
+  /** Warms the week and month Insights ranges so switching periods skips the loading state. */
+  private schedulePrefetch() {
+    if (this.prefetchTimer) clearTimeout(this.prefetchTimer);
+    this.prefetchTimer = setTimeout(() => {
+      this.prefetchTimer = null;
+      void this.prefetchInsightsRanges();
+    }, PREFETCH_DELAY_MS);
+  }
+
+  private async prefetchInsightsRanges() {
+    if (!this.api.getTokens() || !this.settings.syncEnabled) return;
+    const zone = this.effectiveTimeZone();
+    for (const period of ["week", "month"] as const) {
+      const bounds = periodBounds(period, this.insightsAnchor, zone);
+      const key = rangeCacheKey(bounds, zone);
+      await this.tracker.prefetchRange(bounds.start, bounds.end, zone);
+      if (this.summaryCache.has(key)) continue;
+      const summary = await this.fetchPeriodSummary(bounds, zone);
+      if (summary) this.rememberSummary(key, summary);
+    }
+  }
+
+  private async fetchPeriodSummary(bounds: { start: Date; end: Date }, zone: string) {
+    if (!this.api.getTokens() || !this.settings.syncEnabled) return null;
+    try {
+      return await this.api.periodSummary({
+        start: bounds.start.toISOString(),
+        end: bounds.end.toISOString(),
+        time_zone: zone,
+        include_daily_totals: true,
+      });
+    } catch {
+      return null;
+    }
   }
 
   private mappedServerSummary(bounds: { start: Date; end: Date }) {

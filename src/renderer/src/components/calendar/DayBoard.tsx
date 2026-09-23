@@ -1,7 +1,7 @@
 import { formatClock24, hourLabel24, isOngoingBlock } from "@shared/calendar-workspace";
 import { displayNameForDevice } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
-import { endOfDay, startOfDay } from "@shared/platform";
+import { effectiveTimeZone, endOfDay, startOfDay } from "@shared/platform";
 import { formatClock } from "@shared/timeline";
 import type { ForegroundContext, ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
@@ -15,8 +15,9 @@ const ENTRY_MIN = 110;
 const CALENDAR_MIN = 160;
 
 export function DayBoard({ state }: { state: AppSnapshot }) {
-  const dayStart = startOfDay(new Date(state.calendarAnchor));
-  const dayEnd = endOfDay(new Date(state.calendarAnchor));
+  const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
+  const dayStart = startOfDay(new Date(state.calendarAnchor), timeZone);
+  const dayEnd = endOfDay(new Date(state.calendarAnchor), timeZone);
   const timelines = state.timelines.length ? state.timelines : [emptyTimeline(dayStart, dayEnd)];
   const manyDevices = timelines.length > 1;
   const blocks = timelines.flatMap((timeline) => timeline.blocks);
@@ -40,8 +41,8 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
     const header = scroller.querySelector(".day-board-head");
     const headerHeight = header instanceof HTMLElement ? header.offsetHeight : 0;
     const current = Date.now();
-    const start = startOfDay(new Date(state.calendarAnchor)).getTime();
-    const end = endOfDay(new Date(state.calendarAnchor)).getTime();
+    const start = startOfDay(new Date(state.calendarAnchor), timeZone).getTime();
+    const end = endOfDay(new Date(state.calendarAnchor), timeZone).getTime();
     const viewingToday = current >= start && current < end;
     if (viewingToday) {
       const y = ((current - start) / (end - start)) * HEIGHT;
@@ -62,7 +63,7 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
       viewportHeight: scroller.clientHeight,
       headerHeight,
     });
-  }, [state.calendarAnchor, isToday ? "now" : firstEntryTop]);
+  }, [state.calendarAnchor, timeZone, isToday ? "now" : firstEntryTop]);
 
   return (
     <div className="day-board" data-testid="calendar-day-board" ref={scrollerRef}>

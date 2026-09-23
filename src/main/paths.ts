@@ -54,6 +54,10 @@ export function observabilityLogPath() {
   return join(userDataDir(), "observability.log");
 }
 
+export function crashLogPath() {
+  return join(userDataDir(), "crash.log");
+}
+
 export function jevCategoriesPath() {
   return join(userDataDir(), "jev-categories.json");
 }

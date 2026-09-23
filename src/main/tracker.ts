@@ -31,6 +31,11 @@ const FLUSH_MS = 60_000;
 const HEARTBEAT_MS = 60_000;
 const FLUSH_THRESHOLD = 20;
 const CHECKPOINT_MS = 15_000;
+const RANGE_CACHE_LIMIT = 8;
+
+function rangeKey(start: Date, end: Date, timeZone: string) {
+  return `${start.getTime()}|${end.getTime()}|${timeZone}`;
+}
 
 export class ScreenTimeTracker {
   readonly outbox = new PendingUploadStore();
@@ -43,6 +48,14 @@ export class ScreenTimeTracker {
   serverEntries: ScreenTimeEntry[] = [];
   loadingEntries = false;
   entriesUnavailableReason: string | null = null;
+  private readonly rangeCache = new Map<string, ScreenTimeEntry[]>();
+  private loadGeneration = 0;
+  private mergedBase: {
+    server: ScreenTimeEntry[];
+    outbox: ScreenTimeEntry[];
+    entries: ScreenTimeEntry[];
+    keys: Set<string>;
+  } | null = null;
   localDeviceId: string | null = existsSync(localDeviceIdPath())
     ? readFileSync(localDeviceIdPath(), "utf8").trim()
     : null;
@@ -92,17 +105,47 @@ export class ScreenTimeTracker {
   }
 
   mergedEntries(): ScreenTimeEntry[] {
-    const live: ScreenTimeEntry[] = [];
-    if (this.isTracking && this.openStart && this.openContext) {
-      live.push(this.liveEntry(this.openStart, this.openContext, this.liveEnd()));
+    const base = this.mergedBaseEntries();
+    if (!this.isTracking || !this.openStart || !this.openContext) return base.entries;
+    const live = this.liveEntry(this.openStart, this.openContext, this.liveEnd());
+    const liveKey = persistenceKey(live);
+    const merged = base.keys.has(liveKey)
+      ? base.entries.filter((entry) => persistenceKey(entry) !== liveKey)
+      : base.entries.slice();
+    const liveStart = Date.parse(live.startTimeUTC);
+    let index = merged.length;
+    while (index > 0 && Date.parse(merged[index - 1].startTimeUTC) > liveStart) index -= 1;
+    merged.splice(index, 0, live);
+    return merged;
+  }
+
+  /** Changes whenever `mergedEntries()` would; the live end is bucketed to `liveResolutionMs`. */
+  entriesSignature(liveResolutionMs: number): unknown[] {
+    const live = this.isTracking && this.openStart && this.openContext;
+    return [
+      this.serverEntries,
+      this.outbox.load(),
+      live ? this.openStart : null,
+      live ? this.openContext : null,
+      live ? Math.floor(this.liveEnd().getTime() / liveResolutionMs) : null,
+    ];
+  }
+
+  private mergedBaseEntries() {
+    const server = this.serverEntries;
+    const outbox = this.outbox.load();
+    if (this.mergedBase && this.mergedBase.server === server && this.mergedBase.outbox === outbox) {
+      return this.mergedBase;
     }
     const byKey = new Map<string, ScreenTimeEntry>();
-    for (const entry of this.serverEntries) byKey.set(persistenceKey(entry), entry);
-    for (const entry of this.outbox.load()) byKey.set(persistenceKey(entry), entry);
-    for (const entry of live) byKey.set(persistenceKey(entry), entry);
-    return Array.from(byKey.values()).sort(
-      (a, b) => new Date(a.startTimeUTC).getTime() - new Date(b.startTimeUTC).getTime(),
-    );
+    for (const entry of server) byKey.set(persistenceKey(entry), entry);
+    for (const entry of outbox) byKey.set(persistenceKey(entry), entry);
+    const entries = Array.from(byKey.values())
+      .map((entry) => ({ entry, start: Date.parse(entry.startTimeUTC) }))
+      .sort((a, b) => a.start - b.start)
+      .map((item) => item.entry);
+    this.mergedBase = { server, outbox, entries, keys: new Set(byKey.keys()) };
+    return this.mergedBase;
   }
 
   async startTracking() {
@@ -217,36 +260,78 @@ export class ScreenTimeTracker {
     this.onChange();
   }
 
+  /**
+   * Shows a cached copy of the range immediately (no loading state) and
+   * revalidates it from the server; only uncached ranges show `loadingEntries`.
+   */
   async loadRange(start: Date, end: Date, timeZone: string) {
-    this.loadingEntries = true;
-    this.onChange();
-    try {
-      if (!this.syncReady()) {
-        this.serverEntries = [];
-        this.entriesUnavailableReason = this.api.getTokens()
-          ? null
-          : "Sign in to load multi-device timelines. Local sessions still record to the outbox.";
-        return;
-      }
-      const sessions = await this.api.sessions({
-        start: start.toISOString(),
-        end: end.toISOString(),
-        time_zone: timeZone,
-      });
-      this.serverEntries = sessions.map((session) =>
-        entryFromSession(session, currentDevicePlatform(), deviceName(), timeZone),
-      );
-      this.entriesUnavailableReason = null;
-    } catch (error) {
-      this.entriesUnavailableReason = error instanceof Error ? error.message : "Timeline unavailable";
-    } finally {
+    const generation = ++this.loadGeneration;
+    if (!this.syncReady()) {
+      this.serverEntries = [];
+      this.rangeCache.clear();
       this.loadingEntries = false;
+      this.entriesUnavailableReason = this.api.getTokens()
+        ? null
+        : "Sign in to load multi-device timelines. Local sessions still record to the outbox.";
       this.pendingUploadCount = this.outbox.count();
       this.onChange();
+      return;
+    }
+    const key = rangeKey(start, end, timeZone);
+    const cached = this.rangeCache.get(key);
+    if (cached) this.serverEntries = cached;
+    this.loadingEntries = !cached;
+    this.onChange();
+    try {
+      const entries = await this.fetchRange(key, start, end, timeZone);
+      if (generation !== this.loadGeneration) return;
+      this.serverEntries = entries;
+      this.entriesUnavailableReason = null;
+    } catch (error) {
+      if (generation !== this.loadGeneration) return;
+      this.entriesUnavailableReason = error instanceof Error ? error.message : "Timeline unavailable";
+    }
+    this.loadingEntries = false;
+    this.pendingUploadCount = this.outbox.count();
+    this.onChange();
+  }
+
+  clearRangeCache() {
+    this.rangeCache.clear();
+  }
+
+  /** Warms the range cache without changing what is on screen. */
+  async prefetchRange(start: Date, end: Date, timeZone: string) {
+    if (!this.syncReady()) return;
+    const key = rangeKey(start, end, timeZone);
+    if (this.rangeCache.has(key)) return;
+    try {
+      await this.fetchRange(key, start, end, timeZone);
+    } catch (error) {
+      logObservability(`Range prefetch failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  async refreshDevices() {
+  private async fetchRange(key: string, start: Date, end: Date, timeZone: string) {
+    const sessions = await this.api.sessions({
+      start: start.toISOString(),
+      end: end.toISOString(),
+      time_zone: timeZone,
+    });
+    const entries = sessions.map((session) =>
+      entryFromSession(session, currentDevicePlatform(), deviceName(), timeZone),
+    );
+    this.rangeCache.delete(key);
+    this.rangeCache.set(key, entries);
+    while (this.rangeCache.size > RANGE_CACHE_LIMIT) {
+      const oldest = this.rangeCache.keys().next().value;
+      if (oldest === undefined) break;
+      this.rangeCache.delete(oldest);
+    }
+    return entries;
+  }
+
+  async refreshDevices(notify = true) {
     if (!this.syncReady()) return;
     try {
       this.registeredDevices = await this.api.devices();
@@ -254,7 +339,7 @@ export class ScreenTimeTracker {
     } catch (error) {
       logObservability(`Device refresh failed: ${error instanceof Error ? error.message : String(error)}`);
     }
-    this.onChange();
+    if (notify) this.onChange();
   }
 
   async pullFromServer() {
@@ -283,6 +368,7 @@ export class ScreenTimeTracker {
       }
     }
     this.serverEntries = collected;
+    this.rangeCache.clear();
     this.onChange();
   }
 

@@ -1,11 +1,32 @@
 import { useEffect, useState } from "react";
-import type { AppSnapshot } from "@shared/snapshot";
+import { applyStateMessage, type AppSnapshot } from "@shared/snapshot";
 
 export function useAppState() {
   const [state, setState] = useState<AppSnapshot | null>(null);
   useEffect(() => {
-    void window.stopscrolling.getState().then(setState);
-    return window.stopscrolling.onState(setState);
+    let current: AppSnapshot | null = null;
+    let disposed = false;
+    const apply = (next: AppSnapshot) => {
+      current = next;
+      setState(next);
+    };
+    const fetchFull = () => {
+      void window.stopscrolling.getState().then((full) => {
+        if (disposed) return;
+        if (current && (full.dataVersion ?? 0) < (current.dataVersion ?? 0)) return;
+        apply(full);
+      });
+    };
+    fetchFull();
+    const unsubscribe = window.stopscrolling.onState((message) => {
+      const next = applyStateMessage(current, message);
+      if (next) apply(next);
+      else fetchFull();
+    });
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
   }, []);
   useEffect(() => {
     if (!state) return;

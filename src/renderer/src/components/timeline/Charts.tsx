@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   colorForCategory,
   durationAxisTicks,
@@ -119,7 +120,7 @@ export function BucketBars({
   );
 }
 
-export function TrendCard({
+export const TrendCard = memo(function TrendCard({
   buckets,
   period,
 }: {
@@ -137,4 +138,4 @@ export function TrendCard({
       <BucketBars buckets={buckets} period={period} />
     </Card>
   );
-}
+});

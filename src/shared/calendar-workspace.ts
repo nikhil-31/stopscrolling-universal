@@ -1,4 +1,4 @@
-import { startOfDay, endOfDay } from "./platform";
+import { addCalendarDays, endOfDay, localTimeZone, startOfDay, weekdayIndex } from "./platform";
 import type { ScreenTimeSessionBlock, ScreenTimeTimelineSegment } from "./types";
 
 export type ProductivityBucket = "focus" | "meetings" | "breaks" | "other";
@@ -246,8 +246,15 @@ export function buildCalendarDayStats(
   blocks: ScreenTimeSessionBlock[],
   anchor: Date,
   targetSeconds: number,
+  timeZone = localTimeZone(),
 ): CalendarDayStats {
-  return buildCalendarRangeStats(workspace, blocks, startOfDay(anchor), endOfDay(anchor), targetSeconds);
+  return buildCalendarRangeStats(
+    workspace,
+    blocks,
+    startOfDay(anchor, timeZone),
+    endOfDay(anchor, timeZone),
+    targetSeconds,
+  );
 }
 
 export function buildCalendarRangeStats(
@@ -433,10 +440,10 @@ export function assignLabelToApp(
   );
 }
 
-export function weekDays(anchor: Date) {
-  const start = startOfDay(anchor);
-  start.setDate(start.getDate() - start.getDay());
-  return Array.from({ length: 7 }, (_, index) => new Date(start.getTime() + index * dayMs));
+export function weekDays(anchor: Date, timeZone = localTimeZone()) {
+  const startDay = startOfDay(anchor, timeZone);
+  const start = addCalendarDays(startDay, -weekdayIndex(startDay, timeZone), timeZone);
+  return Array.from({ length: 7 }, (_, index) => addCalendarDays(start, index, timeZone));
 }
 
 export function snapToQuarterHour(date: Date) {
