@@ -32,6 +32,7 @@
   --category-productivity: #047857;
   --category-communication: #0369a1;
   --category-entertainment: #6b21a8;
+  --category-gaming: #a16207;
   --category-video: #be123c;
   --category-social: #c2410c;
   --category-web: #155e75;
@@ -48,6 +49,7 @@
   --category-spectrum-7: var(--category-application);
   --category-spectrum-8: var(--category-communication);
   --category-spectrum-9: var(--category-utilities);
+  --category-spectrum-10: var(--category-gaming);
   --sidebar-width: 248px;
   --inspector-width: 328px;
   --radius-xs: 7px;
@@ -99,6 +101,7 @@
     --category-productivity: #4ade80;
     --category-communication: #7dd3fc;
     --category-entertainment: #e879f9;
+    --category-gaming: #facc15;
     --category-video: #fb7185;
     --category-social: #fb923c;
     --category-web: #5eead4;
@@ -145,6 +148,7 @@
   --category-productivity: #4ade80;
   --category-communication: #7dd3fc;
   --category-entertainment: #e879f9;
+  --category-gaming: #facc15;
   --category-video: #fb7185;
   --category-social: #fb923c;
   --category-web: #5eead4;

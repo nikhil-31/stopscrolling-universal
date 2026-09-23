@@ -37,6 +37,7 @@ const CATEGORY_ORDER = [
   "Productivity",
   "Communication",
   "Entertainment",
+  "Gaming",
   "Video",
   "Social",
   "Web",

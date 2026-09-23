@@ -616,6 +616,7 @@ describe("colorForCategory", () => {
   it("uses theme tokens for known categories and a spectrum for others", () => {
     expect(colorForCategory("Social")).toBe("var(--category-social)");
     expect(colorForCategory("Development")).toBe("var(--category-development)");
+    expect(colorForCategory("Gaming")).toBe("var(--category-gaming)");
     expect(colorForCategory("Uncategorized")).toMatch(/^var\(--category-spectrum-\d\)$/);
   });
 });

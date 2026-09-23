@@ -7,6 +7,8 @@ describe("category resolver", () => {
     expect(resolveCategory("com.google.Chrome", "https://github.com/stopscrolling", "GitHub")).toBe("Development");
     expect(resolveCategory("com.google.Chrome", "https://example.com", "Example")).toBe("Web");
     expect(resolveCategory("com.apple.finder", "", "")).toBe("Utilities");
-    expect(resolveCategory("com.riotgames.valorant", "", "VALORANT", "VALORANT")).toBe("Application");
+    expect(resolveCategory("com.riotgames.valorant", "", "VALORANT", "VALORANT")).toBe("Gaming");
+    expect(resolveCategory("com.valvesoftware.steam", "", "", "Steam")).toBe("Gaming");
+    expect(resolveCategory("com.google.Chrome", "https://store.steampowered.com/app/1", "Steam")).toBe("Gaming");
   });
 });
