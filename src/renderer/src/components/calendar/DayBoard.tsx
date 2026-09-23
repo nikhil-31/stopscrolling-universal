@@ -1,5 +1,5 @@
 import { formatClock24, hourLabel24, isOngoingBlock } from "@shared/calendar-workspace";
-import { displayNameForDevice } from "@shared/device";
+import { deviceColor, deviceKey, displayNameForDevice } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
 import { effectiveTimeZone, endOfDay, startOfDay } from "@shared/platform";
 import { formatClock } from "@shared/timeline";
@@ -80,7 +80,9 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
             <div key={hour} style={{ height: HOUR_HEIGHT }}>{hourLabel24(hour)}</div>
           ))}
         </div>
-        {timelines.map((timeline) => (
+        {timelines.map((timeline) => {
+          const blockColor = deviceColor(deviceKey(timeline.devicePlatform, timeline.deviceName), state.devices);
+          return (
           <div
             key={timeline.id}
             className="day-board-col day-board-entries"
@@ -97,7 +99,7 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
                 <button
                   key={block.id}
                   className={`day-block day-block-entry is-solid ${live ? "is-live" : ""}`}
-                  style={style}
+                  style={{ ...style, ["--block-color" as string]: blockColor }}
                   onMouseEnter={showHover}
                   onMouseMove={showHover}
                   onMouseLeave={() => setHover(null)}
@@ -115,7 +117,8 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
               );
             })}
           </div>
-        ))}
+          );
+        })}
         <div className="day-board-col day-board-calendar">
           {events.map((event, index) => {
             const style = place(event.start, event.end, dayStart, dayEnd);

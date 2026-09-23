@@ -132,6 +132,7 @@ describe("CalendarScreen", () => {
               reportedOnline: null,
               isOnline: true,
               isRegistered: true,
+              colorIndex: 0,
             },
             {
               visibilityKey: "ios|iPhone",
@@ -146,6 +147,7 @@ describe("CalendarScreen", () => {
               reportedOnline: null,
               isOnline: true,
               isRegistered: true,
+              colorIndex: 1,
             },
           ],
           timelines: [
@@ -177,6 +179,8 @@ describe("CalendarScreen", () => {
     expect(within(mac).queryByText("Safari")).toBeNull();
     expect(within(phone).getByText("Safari")).toBeVisible();
     expect(within(phone).queryByText("Writing")).toBeNull();
+    expect(within(mac).getByRole("button", { name: /Writing/ })).toHaveStyle({ "--block-color": "var(--device-0)" });
+    expect(within(phone).getByRole("button", { name: /Safari/ })).toHaveStyle({ "--block-color": "var(--device-1)" });
   });
 
   it("shows session time when hovering a time-entry block", () => {
