@@ -6,17 +6,17 @@
   --surface-solid: #ffffff;
   --surface-raised: rgba(255, 255, 255, 0.96);
   --surface-subtle: rgba(62, 57, 122, 0.045);
-  --surface-hover: rgba(11, 217, 169, 0.075);
-  --surface-active: rgba(11, 217, 169, 0.12);
+  --surface-hover: rgba(25, 24, 42, 0.06);
+  --surface-active: rgba(25, 24, 42, 0.1);
   --text: #19182a;
   --text-secondary: #64647a;
   --text-tertiary: #8f8fa3;
   --line: rgba(45, 42, 91, 0.1);
   --line-strong: rgba(45, 42, 91, 0.17);
-  --brand: #0bd9a9;
-  --brand-strong: #09b890;
-  --brand-soft: rgba(11, 217, 169, 0.12);
-  --on-brand: #003326;
+  --brand: #2c2c2c;
+  --brand-strong: #171717;
+  --brand-soft: rgba(44, 44, 44, 0.1);
+  --on-brand: #ffffff;
   --on-danger: #ffffff;
   --violet: #8b5cf6;
   --violet-soft: rgba(139, 92, 246, 0.12);
@@ -68,7 +68,7 @@
   --shadow-xs: 0 1px 2px rgba(32, 29, 73, 0.04);
   --shadow-sm: 0 8px 24px rgba(32, 29, 73, 0.07);
   --shadow-md: 0 18px 45px rgba(32, 29, 73, 0.12);
-  --focus: 0 0 0 3px rgba(11, 217, 169, 0.2);
+  --focus: 0 0 0 3px rgba(44, 44, 44, 0.18);
   --ease: cubic-bezier(0.2, 0.75, 0.3, 1);
   --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
   font-family: var(--font-sans);
@@ -91,9 +91,9 @@
     --text-tertiary: #b3b3b3;
     --line: #404040;
     --line-strong: #404040;
-    --brand: #0bd9a9;
-    --brand-strong: #67f0c8;
-    --brand-soft: rgba(11, 217, 169, 0.16);
+    --brand: #f2f2f2;
+    --brand-strong: #ffffff;
+    --brand-soft: rgba(255, 255, 255, 0.14);
     --on-brand: #121212;
     --on-danger: #121212;
     --violet: #ccc2dc;
@@ -124,7 +124,7 @@
     --device-5: #5dccf2;
     --device-6: #ff6ba8;
     --device-7: #f08ae0;
-    --focus: 0 0 0 3px rgba(11, 217, 169, 0.35);
+    --focus: 0 0 0 3px rgba(255, 255, 255, 0.28);
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.45);
     --shadow-md: 0 22px 55px rgba(0, 0, 0, 0.55);
@@ -146,9 +146,9 @@
   --text-tertiary: #b3b3b3;
   --line: #404040;
   --line-strong: #404040;
-  --brand: #0bd9a9;
-  --brand-strong: #67f0c8;
-  --brand-soft: rgba(11, 217, 169, 0.16);
+  --brand: #f2f2f2;
+  --brand-strong: #ffffff;
+  --brand-soft: rgba(255, 255, 255, 0.14);
   --on-brand: #121212;
   --on-danger: #121212;
   --violet: #ccc2dc;
@@ -179,7 +179,7 @@
   --device-5: #5dccf2;
   --device-6: #ff6ba8;
   --device-7: #f08ae0;
-  --focus: 0 0 0 3px rgba(11, 217, 169, 0.35);
+  --focus: 0 0 0 3px rgba(255, 255, 255, 0.28);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.45);
   --shadow-md: 0 22px 55px rgba(0, 0, 0, 0.55);
@@ -1508,7 +1508,7 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
 .calendar-target-track span {
   display: block;
   height: 100%;
-  background: #1fb894;
+  background: var(--brand);
   border-radius: inherit;
 }
 .calendar-summary-chip {
