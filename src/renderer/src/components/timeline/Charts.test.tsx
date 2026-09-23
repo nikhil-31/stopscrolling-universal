@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { snapshotFromEntries } from "@shared/timeline";
 import type { DeviceListEntry, ScreenTimePeriodBucket } from "@shared/types";
@@ -48,8 +48,8 @@ describe("TrendCard month view", () => {
             label: "9",
             seconds: 5400,
             devices: [
-              { key: "ios|iPhone", seconds: 1800 },
-              { key: "macos|Studio Mac", seconds: 3600 },
+              { key: "ios|iPhone", seconds: 1800, apps: [] },
+              { key: "macos|Studio Mac", seconds: 3600, apps: [] },
             ],
           }),
           bucket({ id: "plain", label: "10", seconds: 1200 }),
@@ -61,10 +61,82 @@ describe("TrendCard month view", () => {
     expect(stacked).toHaveLength(2);
     expect(stacked[0]).toHaveStyle({ background: "var(--device-0)" });
     expect(stacked[1]).toHaveStyle({ background: "var(--device-1)" });
-    expect(items[0]).toHaveAttribute("title", "Studio Mac 1h, Phone 30m, 1h 30m");
+    expect(items[0]).not.toHaveAttribute("title");
     expect(items[1].querySelector(".bar-device")).toBeNull();
     expect(items[1].querySelector(".bar-column")).not.toHaveClass("is-stacked");
     expect(screen.getByTestId("activity-trend-legend")).toHaveTextContent("Studio Mac");
     expect(screen.getByTestId("activity-trend-legend")).toHaveTextContent("Phone");
+  });
+
+  it("shows each device's time while hovering a bar", () => {
+    render(
+      <TrendCard
+        period="day"
+        devices={devices}
+        buckets={[
+          bucket({
+            id: "shared",
+            label: "9",
+            seconds: 5400,
+            devices: [
+              {
+                key: "ios|iPhone",
+                seconds: 1800,
+                apps: [
+                  { label: "Safari", seconds: 1200 },
+                  { label: "Messages", seconds: 600 },
+                ],
+              },
+              {
+                key: "macos|Studio Mac",
+                seconds: 3600,
+                apps: [
+                  { label: "Code", seconds: 2400 },
+                  { label: "Slack", seconds: 900 },
+                  { label: "Figma", seconds: 300 },
+                ],
+              },
+            ],
+          }),
+          bucket({ id: "plain", label: "10", seconds: 1200 }),
+        ]}
+      />,
+    );
+    const items = screen.getByRole("img", { name: /Tracked time chart/ }).querySelectorAll(".bar-item");
+
+    fireEvent.pointerMove(items[0], { clientX: 40, clientY: 40 });
+    const card = screen.getByTestId("activity-bar-hover");
+    const rows = card.querySelectorAll(".activity-bar-hover-device");
+    expect(card).toHaveTextContent("9");
+    expect(card).toHaveTextContent("1h 30m");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent("Studio Mac");
+    expect(rows[0]).toHaveTextContent("1h");
+    expect(rows[0].querySelector(".legend-dot")).toHaveStyle({ "--swatch": "var(--device-0)" });
+    const macApps = rows[0].querySelectorAll(".activity-bar-hover-apps > div");
+    expect(macApps).toHaveLength(3);
+    expect(macApps[0]).toHaveTextContent("Code");
+    expect(macApps[0]).toHaveTextContent("40m");
+    expect(macApps[1]).toHaveTextContent("Slack");
+    expect(macApps[1]).toHaveTextContent("15m");
+    expect(macApps[2]).toHaveTextContent("Figma");
+    expect(macApps[2]).toHaveTextContent("5m");
+    expect(rows[1]).toHaveTextContent("Phone");
+    expect(rows[1]).toHaveTextContent("30m");
+    const phoneApps = rows[1].querySelectorAll(".activity-bar-hover-apps > div");
+    expect(phoneApps).toHaveLength(2);
+    expect(phoneApps[0]).toHaveTextContent("Safari");
+    expect(phoneApps[0]).toHaveTextContent("20m");
+    expect(phoneApps[1]).toHaveTextContent("Messages");
+    expect(phoneApps[1]).toHaveTextContent("10m");
+
+    fireEvent.pointerLeave(items[0]);
+    expect(screen.queryByTestId("activity-bar-hover")).toBeNull();
+
+    fireEvent.pointerEnter(items[1], { clientX: 80, clientY: 40 });
+    const plain = screen.getByTestId("activity-bar-hover");
+    expect(plain).toHaveTextContent("10");
+    expect(plain).toHaveTextContent("20m");
+    expect(plain.querySelector(".native-hover-items")).toBeNull();
   });
 });

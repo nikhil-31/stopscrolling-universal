@@ -18,6 +18,7 @@ import type {
   InsightsPeriod,
   InsightsTab,
   ScreenTimeAppBreakdown,
+  ScreenTimeBucketDevice,
   ScreenTimeCategoryBreakdown,
   ScreenTimeDeviceTimeline,
   ScreenTimeEntry,
@@ -733,6 +734,8 @@ export function buildPeriodBuckets(
     start: Date.parse(segment.start),
     end: Date.parse(segment.end),
     key: deviceKey(segment.devicePlatform, segment.deviceName),
+    appKey: appBreakdownKey(segment),
+    appLabel: websiteHostname(segment.url) || segment.appName || segment.label,
   }));
   return Array.from({ length: count }, (_, index) => {
     const start = period === "month"
@@ -744,14 +747,22 @@ export function buildPeriodBuckets(
     const startMs = start.getTime();
     const endMs = end.getTime();
     let segmentSecondsTotal = 0;
-    const byDevice = new Map<string, number>();
+    const byDevice = new Map<string, DeviceBucketAccum>();
     for (const interval of intervals) {
       const overlapStart = interval.start > startMs ? interval.start : startMs;
       const overlapEnd = interval.end < endMs ? interval.end : endMs;
       if (overlapEnd <= overlapStart) continue;
       const overlapSeconds = (overlapEnd - overlapStart) / 1000;
       segmentSecondsTotal += overlapSeconds;
-      byDevice.set(interval.key, (byDevice.get(interval.key) ?? 0) + overlapSeconds);
+      let share = byDevice.get(interval.key);
+      if (!share) {
+        share = { seconds: 0, apps: new Map() };
+        byDevice.set(interval.key, share);
+      }
+      share.seconds += overlapSeconds;
+      const app = share.apps.get(interval.appKey);
+      if (app) app.seconds += overlapSeconds;
+      else share.apps.set(interval.appKey, { label: interval.appLabel, seconds: overlapSeconds });
     }
     const dayKey = toDateInput(start, timeZone);
     const dailyTotal = period === "month" ? trackedSecondsByDay?.[dayKey] : undefined;
@@ -774,21 +785,45 @@ export function buildPeriodBuckets(
   });
 }
 
+interface DeviceBucketAccum {
+  seconds: number;
+  apps: Map<string, { label: string; seconds: number }>;
+}
+
+const TOP_BUCKET_APPS = 3;
+
+function topBucketApps(apps: Map<string, { label: string; seconds: number }>) {
+  return [...apps.values()]
+    .filter((app) => app.seconds > 0)
+    .sort((a, b) => b.seconds - a.seconds || a.label.localeCompare(b.label))
+    .slice(0, TOP_BUCKET_APPS)
+    .map(({ label, seconds }) => ({ label, seconds }));
+}
+
 function scaleDeviceShares(
-  byDevice: Map<string, number>,
+  byDevice: Map<string, DeviceBucketAccum>,
   seconds: number,
   fromDailyTotal: boolean,
-) {
+): ScreenTimeBucketDevice[] {
   const shares = [...byDevice.entries()]
-    .filter(([, value]) => value > 0)
+    .filter(([, value]) => value.seconds > 0)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => ({ key, seconds: value }));
+    .map(([key, value]) => ({
+      key,
+      seconds: value.seconds,
+      apps: topBucketApps(value.apps),
+    }));
   if (!fromDailyTotal) return shares;
   const shareSum = shares.reduce((sum, share) => sum + share.seconds, 0);
   if (shareSum <= 0) return [];
   if (shareSum === seconds) return shares;
+  const ratio = seconds / shareSum;
   return shares
-    .map((share) => ({ key: share.key, seconds: (share.seconds / shareSum) * seconds }))
+    .map((share) => ({
+      key: share.key,
+      seconds: share.seconds * ratio,
+      apps: share.apps.map((app) => ({ label: app.label, seconds: app.seconds * ratio })),
+    }))
     .filter((share) => share.seconds > 0);
 }
 

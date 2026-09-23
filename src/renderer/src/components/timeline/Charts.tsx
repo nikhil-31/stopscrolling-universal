@@ -1,4 +1,5 @@
-import { memo } from "react";
+import { memo, useState, type PointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { displayNameForDevice } from "@shared/device";
 import {
   colorForCategory,
@@ -13,6 +14,7 @@ import type {
   ScreenTimePeriodBucket,
 } from "@shared/types";
 import { BarChart3, PieChart as PieChartIcon } from "lucide-react";
+import { hoverCardPosition } from "./SessionHoverCard";
 import { Card, EmptyState } from "../ui";
 
 export function PieChart({ categories }: { categories: ScreenTimeCategoryBreakdown[] }) {
@@ -89,11 +91,53 @@ function orderedShares(shares: ScreenTimeBucketDevice[], devices: DeviceListEntr
   return [...shares].sort((a, b) => (order.get(a.key) ?? devices.length) - (order.get(b.key) ?? devices.length));
 }
 
-function bucketTitle(bucket: ScreenTimePeriodBucket, shares: ScreenTimeBucketDevice[], devices: DeviceListEntry[]) {
-  const total = formatDuration(bucket.seconds);
-  if (!shares.length) return `${bucket.label}: ${total}`;
-  const parts = shares.map((share) => `${deviceName(share.key, devices)} ${formatDuration(share.seconds)}`);
-  return `${parts.join(", ")}, ${total}`;
+function ActivityBarHover({
+  bucket,
+  devices,
+  x,
+  y,
+}: {
+  bucket: ScreenTimePeriodBucket;
+  devices: DeviceListEntry[];
+  x: number;
+  y: number;
+}) {
+  const shares = orderedShares(bucket.devices ?? [], devices);
+  const appRows = shares.reduce((sum, share) => sum + (share.apps?.length ?? 0), 0);
+  const cardHeight = 48 + shares.length * 28 + appRows * 16;
+  const { left, top } = hoverCardPosition(x, y, cardHeight);
+  return createPortal(
+    <div className="native-hover-card activity-bar-hover" data-testid="activity-bar-hover" style={{ left, top }}>
+      <div className="native-hover-heading">
+        <strong>{bucket.label}</strong>
+        <span>{formatDuration(bucket.seconds)}</span>
+      </div>
+      {shares.length ? (
+        <div className="native-hover-items">
+          {shares.map((share) => (
+            <div key={share.key} className="activity-bar-hover-device">
+              <div className="activity-bar-hover-device-row">
+                <span className="legend-dot" style={{ ["--swatch" as string]: deviceColor(share.key, devices) }} />
+                <span>{deviceName(share.key, devices)}</span>
+                <span>{formatDuration(share.seconds)}</span>
+              </div>
+              {share.apps?.length ? (
+                <div className="activity-bar-hover-apps">
+                  {share.apps.map((app) => (
+                    <div key={app.label}>
+                      <span>{app.label}</span>
+                      <span>{formatDuration(app.seconds)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>,
+    document.body,
+  );
 }
 
 export function BucketBars({
@@ -105,6 +149,7 @@ export function BucketBars({
   period?: InsightsPeriod;
   devices?: DeviceListEntry[];
 }) {
+  const [hover, setHover] = useState<{ bucket: ScreenTimePeriodBucket; x: number; y: number } | null>(null);
   const max = Math.max(0, ...buckets.map((bucket) => bucket.seconds));
   if (!buckets.length) {
     return <EmptyState title="No trend data" body="Track some activity to reveal your rhythm." icon={BarChart3} />;
@@ -118,6 +163,9 @@ export function BucketBars({
     : [];
   const dense = period === "month";
   const axis = durationAxisTicks(max);
+  const trackHover = (bucket: ScreenTimePeriodBucket, event: PointerEvent<HTMLDivElement>) => {
+    setHover({ bucket, x: event.clientX, y: event.clientY });
+  };
   return (
     <>
       <div className="bar-chart-frame">
@@ -154,8 +202,10 @@ export function BucketBars({
               <div
                 className="bar-item"
                 key={bucket.id}
-                title={bucketTitle(bucket, shares, devices)}
                 style={{ ["--height" as string]: `${height}%` }}
+                onPointerEnter={(event) => trackHover(bucket, event)}
+                onPointerMove={(event) => trackHover(bucket, event)}
+                onPointerLeave={() => setHover(null)}
               >
                 <span className="bar-value">{formatDuration(bucket.seconds)}</span>
                 <span
@@ -189,6 +239,7 @@ export function BucketBars({
           ))}
         </div>
       ) : null}
+      {hover ? <ActivityBarHover bucket={hover.bucket} devices={devices} x={hover.x} y={hover.y} /> : null}
     </>
   );
 }

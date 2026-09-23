@@ -253,9 +253,16 @@ export interface ScreenTimeAppBreakdown {
   colorIndex?: number;
 }
 
+export interface ScreenTimeBucketApp {
+  label: string;
+  seconds: number;
+}
+
 export interface ScreenTimeBucketDevice {
   key: string;
   seconds: number;
+  /** Largest apps or websites on this device in the bucket, at most three. */
+  apps: ScreenTimeBucketApp[];
 }
 
 export interface ScreenTimePeriodBucket {

@@ -692,8 +692,8 @@ describe("periodBounds", () => {
     const day = snapshotFromEntries([mac, phone], "day", anchor);
     expect(day.buckets[9].seconds).toBe(5400);
     expect(day.buckets[9].devices).toEqual([
-      { key: "ios|iPhone", seconds: 1800 },
-      { key: "macos|Studio Mac", seconds: 3600 },
+      { key: "ios|iPhone", seconds: 1800, apps: [{ label: "Safari", seconds: 1800 }] },
+      { key: "macos|Studio Mac", seconds: 3600, apps: [{ label: "Code", seconds: 3600 }] },
     ]);
 
     const monthAnchor = new Date(2026, 8, 9, 15);
@@ -710,8 +710,43 @@ describe("periodBounds", () => {
     );
     expect(month.buckets[0].seconds).toBe(4000);
     expect(month.buckets[0].devices).toEqual([
-      { key: "ios|iPhone", seconds: 2000 },
-      { key: "macos|Studio Mac", seconds: 2000 },
+      { key: "ios|iPhone", seconds: 2000, apps: [{ label: "Safari", seconds: 2000 }] },
+      { key: "macos|Studio Mac", seconds: 2000, apps: [{ label: "Code", seconds: 2000 }] },
+    ]);
+  });
+
+  it("keeps the three longest apps on each device in a bucket", () => {
+    const anchor = new Date(2026, 5, 22, 15);
+    const dayStart = periodBounds("day", anchor).start;
+    const at = (minutes: number) => new Date(dayStart.getTime() + 9 * 3600 * 1000 + minutes * 60 * 1000).toISOString();
+    const slice = (appName: string, startMin: number, endMin: number) => entry({
+      startTimeUTC: at(startMin),
+      endTimeUTC: at(endMin),
+      appName,
+      platform: "macos",
+      deviceName: "Studio Mac",
+    });
+    const day = snapshotFromEntries(
+      [
+        slice("Code", 0, 20),
+        slice("Slack", 20, 35),
+        slice("Figma", 35, 45),
+        slice("Notes", 45, 50),
+      ],
+      "day",
+      anchor,
+    );
+    expect(day.buckets[9].seconds).toBe(3000);
+    expect(day.buckets[9].devices).toEqual([
+      {
+        key: "macos|Studio Mac",
+        seconds: 3000,
+        apps: [
+          { label: "Code", seconds: 1200 },
+          { label: "Slack", seconds: 900 },
+          { label: "Figma", seconds: 600 },
+        ],
+      },
     ]);
   });
 });

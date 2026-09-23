@@ -8,14 +8,14 @@ const CARD_WIDTH = 240;
 const CARD_HEIGHT = 168;
 const OFFSET = 12;
 
-export function hoverCardPosition(clientX: number, clientY: number) {
+export function hoverCardPosition(clientX: number, clientY: number, cardHeight = CARD_HEIGHT) {
   const vw = typeof window === "undefined" ? 1280 : window.innerWidth;
   const vh = typeof window === "undefined" ? 720 : window.innerHeight;
   let left = clientX + OFFSET;
   let top = clientY + OFFSET;
   if (left + CARD_WIDTH > vw - 8) left = clientX - CARD_WIDTH - OFFSET;
   if (left < 8) left = 8;
-  if (top + CARD_HEIGHT > vh - 8) top = clientY - CARD_HEIGHT - OFFSET;
+  if (top + cardHeight > vh - 8) top = clientY - cardHeight - OFFSET;
   if (top < 8) top = 8;
   return { left, top };
 }
