@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deviceDisplayName, displayNameForDevice, deviceKey, isDeviceOnline } from "./device";
+import { deviceColor, deviceDisplayName, displayNameForDevice, deviceKey, isDeviceOnline } from "./device";
 import { browserKind, browserUrlScripts, extractUrlFromText, isBrowserProcess, looksLikeBrowser, normalizeCapturedUrl, parseBrowserTabResult, scriptingAppName, websiteHostname } from "./browser";
 
 describe("device display names", () => {
@@ -19,6 +19,21 @@ describe("device display names", () => {
     expect(displayNameForDevice("macos", "Studio Mac", devices)).toBe("Work Mac");
     expect(deviceKey("macos", "Studio Mac")).toBe("macos|Studio Mac");
     expect(displayNameForDevice("ios", "iPhone", devices)).toBe("iPhone");
+  });
+
+  it("keeps a stored color when the device moves to the front of the list", () => {
+    const mac = { visibilityKey: "macos|Studio Mac", colorIndex: 0 };
+    const phone = { visibilityKey: "ios|iPhone", colorIndex: 1 };
+    expect(deviceColor("ios|iPhone", [mac, phone])).toBe("var(--device-1)");
+    expect(deviceColor("ios|iPhone", [phone, mac])).toBe("var(--device-1)");
+    expect(deviceColor("macos|Studio Mac", [phone, mac])).toBe("var(--device-0)");
+  });
+
+  it("uses a stable hash until the server assigns a color", () => {
+    const hashed = deviceColor("macos|Studio Mac");
+    expect(hashed).toMatch(/^var\(--device-[0-7]\)$/);
+    expect(deviceColor("macos|Studio Mac", [{ visibilityKey: "macos|Studio Mac" }])).toBe(hashed);
+    expect(deviceColor("macos|Studio Mac", [{ visibilityKey: "ios|iPhone", colorIndex: 0 }])).toBe(hashed);
   });
 });
 

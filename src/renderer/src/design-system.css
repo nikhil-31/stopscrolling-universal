@@ -1048,7 +1048,7 @@ a { color: var(--brand); }
   background: var(--surface-subtle);
 }
 .native-timeline-block.is-compact {
-  background: var(--brand);
+  background: var(--block-color);
   border-radius: 0;
   box-shadow: none;
 }

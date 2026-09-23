@@ -45,6 +45,33 @@ export function deviceKey(platform: string, deviceName: string): string {
   return `${platform || "unknown"}|${resolvedDeviceName(platform, deviceName)}`;
 }
 
+const DEVICE_COLOR_COUNT = 8;
+
+function colorSlot(value: number) {
+  return ((value % DEVICE_COLOR_COUNT) + DEVICE_COLOR_COUNT) % DEVICE_COLOR_COUNT;
+}
+
+function hashKey(key: string) {
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) {
+    hash = (hash * 31 + key.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+export function deviceColorIndex(key: string, colorIndex?: number | null) {
+  if (typeof colorIndex === "number" && Number.isFinite(colorIndex)) return colorSlot(Math.trunc(colorIndex));
+  return colorSlot(hashKey(key));
+}
+
+export function deviceColor(
+  key: string,
+  devices: Array<Pick<DeviceListEntry, "visibilityKey" | "colorIndex">> = [],
+) {
+  const match = devices.find((device) => device.visibilityKey === key);
+  return `var(--device-${deviceColorIndex(key, match?.colorIndex)})`;
+}
+
 export function isDeviceOnline(entry: {
   lastSeenAt?: string | Date | null;
   reportedOnline?: boolean | null;

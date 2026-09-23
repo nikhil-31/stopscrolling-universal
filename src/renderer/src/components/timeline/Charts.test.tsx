@@ -7,8 +7,8 @@ import type { DeviceListEntry, ScreenTimePeriodBucket } from "@shared/types";
 import { TrendCard } from "./Charts";
 
 const devices = [
-  { visibilityKey: "macos|Studio Mac", devicePlatform: "macos", deviceName: "Studio Mac", nickname: "" },
-  { visibilityKey: "ios|iPhone", devicePlatform: "ios", deviceName: "iPhone", nickname: "Phone" },
+  { visibilityKey: "macos|Studio Mac", devicePlatform: "macos", deviceName: "Studio Mac", nickname: "", colorIndex: 0 },
+  { visibilityKey: "ios|iPhone", devicePlatform: "ios", deviceName: "iPhone", nickname: "Phone", colorIndex: 1 },
 ] as DeviceListEntry[];
 
 function bucket(patch: Partial<ScreenTimePeriodBucket> & Pick<ScreenTimePeriodBucket, "id" | "label" | "seconds">): ScreenTimePeriodBucket {

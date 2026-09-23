@@ -4,6 +4,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSnapshot } from "@shared/snapshot";
+import type { DeviceListEntry } from "@shared/types";
 import { CommandPalette } from "./CommandPalette";
 import { Inspector } from "./Inspector";
 import { Sidebar } from "./Sidebar";
@@ -528,6 +529,40 @@ describe("native timeline", () => {
 
     fireEvent.mouseLeave(track);
     expect(screen.queryByTestId("session-hover-card")).toBeNull();
+  });
+
+  it("colors blocks with the device's stored color, including compact tracks", () => {
+    const timeline = {
+      id: "timeline-phone",
+      deviceName: "iPhone",
+      devicePlatform: "ios",
+      timeZoneIdentifier: "UTC",
+      dayStart: "2026-09-09T00:00:00Z",
+      dayEnd: "2026-09-10T00:00:00Z",
+      segments: [],
+      blocks: [{
+        id: "block-1",
+        start: "2026-09-09T09:00:00Z",
+        end: "2026-09-09T10:00:00Z",
+        title: "Reading",
+        subtitle: "",
+        category: "Productivity",
+        devicePlatform: "ios",
+        deviceName: "iPhone",
+        durationSeconds: 3600,
+        items: [],
+      }],
+    };
+    const devices = [
+      { visibilityKey: "macos|Studio Mac", colorIndex: 0 },
+      { visibilityKey: "ios|iPhone", colorIndex: 1 },
+    ] as DeviceListEntry[];
+    const { rerender } = render(<TimelineGroup timelines={[timeline]} devices={devices} />);
+    expect(screen.getByRole("button", { name: /^Reading,/ })).toHaveStyle({ "--block-color": "var(--device-1)" });
+    rerender(<TimelineGroup timelines={[timeline]} devices={devices} compact />);
+    const compact = screen.getByRole("button", { name: /^Reading,/ });
+    expect(compact).toHaveClass("is-compact");
+    expect(compact).toHaveStyle({ "--block-color": "var(--device-1)" });
   });
 
   it("highlights matching app intervals and dims the rest", () => {

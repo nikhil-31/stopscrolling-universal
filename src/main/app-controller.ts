@@ -1155,6 +1155,7 @@ export class AppController {
           reportedOnline: status?.is_online ?? null,
           isRegistered: true,
           isLocal: device.device_id === this.tracker.localDeviceId,
+          ...(typeof device.color_index === "number" ? { colorIndex: device.color_index } : {}),
         }),
       );
     }

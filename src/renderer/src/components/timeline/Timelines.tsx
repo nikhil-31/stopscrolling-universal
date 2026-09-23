@@ -1,5 +1,5 @@
 import { memo, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { displayNameForDevice } from "@shared/device";
+import { deviceColor, deviceKey, displayNameForDevice } from "@shared/device";
 import {
   blockMatchesApp,
   colorForCategory,
@@ -91,6 +91,7 @@ function NativeMacTimeline({
   const highlights = highlightedAppKey
     ? highlightRangesForApp(timeline.blocks, highlightedAppKey, new Date(timeline.dayStart), new Date(timeline.dayEnd))
     : [];
+  const blockColor = deviceColor(deviceKey(timeline.devicePlatform, timeline.deviceName), devices);
 
   const onMove = (event: ReactMouseEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -144,7 +145,7 @@ function NativeMacTimeline({
               style={{
                 left: `${x * 100}%`,
                 width: `${width * 100}%`,
-                ["--block-color" as string]: "var(--brand)",
+                ["--block-color" as string]: blockColor,
               }}
               aria-label={`${block.title}, ${formatClock(block.start)} to ${formatClock(block.end)}, ${formatDuration(block.durationSeconds)}`}
               onClick={() => window.stopscrolling.selectInspector({ kind: "block", block })}

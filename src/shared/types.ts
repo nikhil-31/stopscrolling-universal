@@ -48,6 +48,8 @@ export interface DeviceRow {
   updated_at: string;
   last_seen_at: string | null;
   session_count: number;
+  /** Stable palette slot, 0–7, assigned once by the device API. */
+  color_index?: number;
 }
 
 export interface DeviceStatusRow {
@@ -74,6 +76,8 @@ export interface DeviceListEntry {
   isOnline: boolean;
   isRegistered: boolean;
   isLocal?: boolean;
+  /** Stable palette slot from the device API. Missing until the server assigns one. */
+  colorIndex?: number;
 }
 
 export interface LeaderboardEntry {

@@ -1,6 +1,6 @@
 import { memo, useState, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { displayNameForDevice } from "@shared/device";
+import { deviceColor, displayNameForDevice } from "@shared/device";
 import {
   colorForCategory,
   durationAxisTicks,
@@ -63,19 +63,11 @@ export function PieChart({ categories }: { categories: ScreenTimeCategoryBreakdo
   );
 }
 
-const DEVICE_COLOR_COUNT = 8;
-
 function deviceName(key: string, devices: DeviceListEntry[]) {
   const split = key.indexOf("|");
   const platform = split < 0 ? "" : key.slice(0, split);
   const name = split < 0 ? key : key.slice(split + 1);
   return displayNameForDevice(platform, name, devices);
-}
-
-function deviceColor(key: string, devices: DeviceListEntry[]) {
-  const index = devices.findIndex((device) => device.visibilityKey === key);
-  const slot = index >= 0 ? index : devices.length;
-  return `var(--device-${slot % DEVICE_COLOR_COUNT})`;
 }
 
 function periodDeviceKeys(buckets: ScreenTimePeriodBucket[]) {
