@@ -157,6 +157,7 @@ export function BucketBars({
 
   const keysInPeriod = periodDeviceKeys(buckets);
   const stacked = keysInPeriod.length >= 2;
+  const singleDeviceKey = keysInPeriod.length === 1 ? keysInPeriod[0] : null;
   const known = devices.map((device) => device.visibilityKey).filter((key) => keysInPeriod.includes(key));
   const legendKeys = stacked
     ? [...known, ...keysInPeriod.filter((key) => !known.includes(key))]
@@ -198,6 +199,9 @@ export function BucketBars({
           {buckets.map((bucket) => {
             const height = axis.max && bucket.seconds ? Math.max(2, (bucket.seconds / axis.max) * 100) : 0;
             const shares = stacked ? orderedShares(bucket.devices ?? [], devices) : [];
+            const singleDeviceColor = singleDeviceKey && (bucket.devices ?? []).some((share) => share.key === singleDeviceKey)
+              ? deviceColor(singleDeviceKey, devices)
+              : undefined;
             return (
               <div
                 className="bar-item"
@@ -210,7 +214,10 @@ export function BucketBars({
                 <span className="bar-value">{formatDuration(bucket.seconds)}</span>
                 <span
                   className={`bar-column ${shares.length ? "is-stacked" : ""}`}
-                  style={{ height: `${height}%` }}
+                  style={{
+                    height: `${height}%`,
+                    ...(singleDeviceColor ? { background: singleDeviceColor } : {}),
+                  }}
                 >
                   {shares.map((share) => (
                     <span

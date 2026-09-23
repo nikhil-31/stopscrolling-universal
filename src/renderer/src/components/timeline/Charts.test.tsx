@@ -68,6 +68,36 @@ describe("TrendCard month view", () => {
     expect(screen.getByTestId("activity-trend-legend")).toHaveTextContent("Phone");
   });
 
+  it("keeps a selected device's color when the period has only that device", () => {
+    render(
+      <TrendCard
+        period="day"
+        devices={devices}
+        buckets={[
+          bucket({
+            id: "phone-9",
+            label: "9",
+            seconds: 1800,
+            devices: [{ key: "ios|iPhone", seconds: 1800, apps: [] }],
+          }),
+          bucket({
+            id: "phone-10",
+            label: "10",
+            seconds: 600,
+            devices: [{ key: "ios|iPhone", seconds: 600, apps: [] }],
+          }),
+        ]}
+      />,
+    );
+    const columns = screen.getByRole("img", { name: /Tracked time chart/ }).querySelectorAll(".bar-column");
+    expect(columns).toHaveLength(2);
+    for (const column of columns) {
+      expect(column).toHaveStyle({ background: "var(--device-1)" });
+      expect(column).not.toHaveClass("is-stacked");
+    }
+    expect(screen.queryByTestId("activity-trend-legend")).toBeNull();
+  });
+
   it("shows each device's time while hovering a bar", () => {
     render(
       <TrendCard
