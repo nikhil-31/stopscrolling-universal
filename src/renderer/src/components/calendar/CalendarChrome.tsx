@@ -1,7 +1,8 @@
 import type { CalendarView } from "@shared/calendar-workspace";
 import { formatFullDate, formatWeekRange, mondayWeekDays } from "@shared/calendar-workspace";
-import { effectiveTimeZone } from "@shared/platform";
+import { effectiveTimeZone, zonedDateTime, zonedParts } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
+import { formatMonthLabel } from "@shared/timeline";
 import { CalendarClock, ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
 import { useState } from "react";
 import { IconButton, Tooltip } from "../ui";
@@ -16,9 +17,15 @@ export function CalendarChrome({
   const [menuOpen, setMenuOpen] = useState(false);
   const anchor = new Date(state.calendarAnchor);
   const week = state.calendarView === "week";
+  const month = state.calendarView === "month";
   const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
   const weekDays = week ? mondayWeekDays(anchor, timeZone) : null;
-  const title = weekDays ? formatWeekRange(weekDays[0], weekDays[6], timeZone) : formatFullDate(anchor);
+  const title = weekDays
+    ? formatWeekRange(weekDays[0], weekDays[6], timeZone)
+    : month
+      ? formatMonthLabel(new Date(state.calendarMonth), timeZone)
+      : formatFullDate(anchor);
+  const stepLabel = week ? "week" : month ? "month" : "day";
   const allDay = state.calendarEvents.filter((event) => event.isAllDay);
 
   return (
@@ -26,15 +33,27 @@ export function CalendarChrome({
       <h2 className="calendar-chrome-date">{title}</h2>
       <div className="calendar-chrome-controls">
         <div className="calendar-chrome-nav">
-          <IconButton label={week ? "Previous week" : "Previous day"} icon={ChevronLeft} onClick={() => shiftAnchor(anchor, week ? -7 : -1)} />
+          <IconButton
+            label={`Previous ${stepLabel}`}
+            icon={ChevronLeft}
+            onClick={() => month ? shiftMonth(new Date(state.calendarMonth), -1, timeZone) : shiftAnchor(anchor, week ? -7 : -1)}
+          />
           <Tooltip label="Jump to today">
             <IconButton
               label="Jump to today"
               icon={CalendarClock}
-              onClick={() => window.stopscrolling.setCalendarAnchor(new Date().toISOString())}
+              onClick={() => {
+                const now = new Date().toISOString();
+                window.stopscrolling.setCalendarAnchor(now);
+                window.stopscrolling.setCalendarMonth(now);
+              }}
             />
           </Tooltip>
-          <IconButton label={week ? "Next week" : "Next day"} icon={ChevronRight} onClick={() => shiftAnchor(anchor, week ? 7 : 1)} />
+          <IconButton
+            label={`Next ${stepLabel}`}
+            icon={ChevronRight}
+            onClick={() => month ? shiftMonth(new Date(state.calendarMonth), 1, timeZone) : shiftAnchor(anchor, week ? 7 : 1)}
+          />
         </div>
         <div className="seg calendar-view-switch" aria-label="Calendar view">
           {views.map((view) => (
@@ -89,6 +108,14 @@ export function CalendarChrome({
 function shiftAnchor(anchor: Date, days: number) {
   const next = new Date(anchor);
   next.setDate(next.getDate() + days);
+  window.stopscrolling.setCalendarAnchor(next.toISOString());
+  window.stopscrolling.setCalendarMonth(next.toISOString());
+}
+
+function shiftMonth(month: Date, delta: number, timeZone: string) {
+  const parts = zonedParts(month, timeZone);
+  const shifted = new Date(Date.UTC(parts.year, parts.month - 1 + delta, 1));
+  const next = zonedDateTime(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, 1, timeZone);
   window.stopscrolling.setCalendarAnchor(next.toISOString());
   window.stopscrolling.setCalendarMonth(next.toISOString());
 }

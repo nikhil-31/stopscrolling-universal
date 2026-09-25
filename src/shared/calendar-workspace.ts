@@ -1,4 +1,4 @@
-import { addCalendarDays, endOfDay, localTimeZone, startOfDay, weekdayIndex, zonedParts } from "./platform";
+import { addCalendarDays, endOfDay, endOfMonth, localTimeZone, startOfDay, startOfMonth, weekdayIndex, zonedParts } from "./platform";
 import type { ScreenTimeSessionBlock, ScreenTimeTimelineSegment } from "./types";
 
 export type ProductivityBucket = "focus" | "meetings" | "breaks" | "other";
@@ -469,7 +469,7 @@ export function weekDays(anchor: Date, timeZone = localTimeZone()) {
   return Array.from({ length: 7 }, (_, index) => addCalendarDays(start, index, timeZone));
 }
 
-/** Monday through Sunday. Insights and the month grid stay Sunday-start. */
+/** Monday through Sunday. Insights weeks stay Sunday-start. */
 export function mondayWeekStart(anchor: Date, timeZone = localTimeZone()) {
   const startDay = startOfDay(anchor, timeZone);
   const weekday = weekdayIndex(startDay, timeZone);
@@ -485,6 +485,26 @@ export function mondayWeekDays(anchor: Date, timeZone = localTimeZone()) {
 export function mondayWeekBounds(anchor: Date, timeZone = localTimeZone()) {
   const start = mondayWeekStart(anchor, timeZone);
   return { start, end: addCalendarDays(start, 7, timeZone) };
+}
+
+export function mondayMonthGridDays(month: Date, timeZone = localTimeZone()) {
+  const start = mondayWeekStart(startOfMonth(month, timeZone), timeZone);
+  const end = endOfMonth(month, timeZone);
+  const days: Date[] = [];
+  let cursor = start;
+  while (cursor < end || days.length % 7 !== 0) {
+    days.push(cursor);
+    cursor = addCalendarDays(cursor, 1, timeZone);
+    if (days.length >= 42) break;
+  }
+  return days;
+}
+
+export function mondayMonthGridBounds(month: Date, timeZone = localTimeZone()) {
+  const days = mondayMonthGridDays(month, timeZone);
+  const first = days[0] ?? startOfMonth(month, timeZone);
+  const last = days[days.length - 1] ?? first;
+  return { start: first, end: addCalendarDays(last, 1, timeZone) };
 }
 
 export function formatWeekRange(start: Date, end: Date, timeZone = localTimeZone()) {

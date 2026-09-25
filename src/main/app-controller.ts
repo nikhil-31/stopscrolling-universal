@@ -8,6 +8,7 @@ import {
   buildCalendarDayStats,
   collectDayBlocks,
   clearAssignment,
+  mondayMonthGridBounds,
   mondayWeekBounds,
   deleteLabel,
   deleteTask,
@@ -271,6 +272,7 @@ export class AppController {
   visibleRange() {
     const zone = this.effectiveTimeZone();
     if (this.navigation === "calendar") {
+      if (this.calendarView === "month") return mondayMonthGridBounds(this.calendarMonth, zone);
       return { start: startOfMonth(this.calendarMonth, zone), end: endOfMonth(this.calendarMonth, zone) };
     }
     if (usesTodayWindow(this.navigation)) {
@@ -431,7 +433,9 @@ export class AppController {
     }));
     const timelineBounds = this.navigation === "calendar" && this.calendarView === "week"
       ? mondayWeekBounds(anchor, zone)
-      : snapshotBounds;
+      : this.navigation === "calendar" && this.calendarView === "month"
+        ? mondayMonthGridBounds(this.calendarMonth, zone)
+        : snapshotBounds;
     const timelines = this.navigation === "insights" && period !== "day"
       ? []
       : filterTimelinesForInsights(

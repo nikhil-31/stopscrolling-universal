@@ -336,6 +336,69 @@ describe("CalendarScreen", () => {
     expect(toDateInput(new Date(desktop.setCalendarAnchor.mock.calls[0][0]))).toBe("2026-09-05");
   });
 
+  it("lists four month chips and the rest as more", () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date(2026, 8, 26, 12).getTime());
+    const titles = ["Writing", "Reading", "Mail", "Notes", "Safari"];
+    render(
+      <CalendarScreen
+        state={snapshot({
+          calendarView: "month",
+          timelines: [
+            timeline({
+              id: "macos|Studio Mac",
+              deviceName: "Studio Mac",
+              devicePlatform: "macos",
+              blocks: titles.map((title, index) => {
+                const minutes = (index + 1) * 10;
+                const start = new Date(2026, 8, 12, 9 + index);
+                const end = new Date(start.getTime() + minutes * 60 * 1000);
+                return block({
+                  id: `month-${title}`,
+                  title,
+                  deviceName: "Studio Mac",
+                  devicePlatform: "macos",
+                  start: start.toISOString(),
+                  end: end.toISOString(),
+                  durationSeconds: minutes * 60,
+                });
+              }),
+            }),
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "September 2026" })).toBeVisible();
+    expect(screen.getByText("Monday")).toBeVisible();
+    expect(screen.getByText("Sunday")).toBeVisible();
+    expect(screen.queryByRole("complementary", { name: "Day summary" })).toBeNull();
+    expect(document.querySelector(".month-day")).toBeNull();
+    expect(screen.getByTestId("calendar-month-day-2026-08-31")).toHaveClass("is-outside");
+    expect(screen.getByTestId("calendar-month-day-2026-09-26")).toHaveClass("is-today");
+
+    const saturday = screen.getByTestId("calendar-month-day-2026-09-12");
+    expect(within(saturday).getByText("Safari")).toBeVisible();
+    expect(within(saturday).getByText("50 min")).toBeVisible();
+    expect(within(saturday).getByText("Notes")).toBeVisible();
+    expect(within(saturday).getByText("Mail")).toBeVisible();
+    expect(within(saturday).getByText("Reading")).toBeVisible();
+    expect(within(saturday).queryByText("Writing")).toBeNull();
+    expect(within(saturday).getByRole("button", { name: "1 more" })).toBeVisible();
+
+    fireEvent.click(within(saturday).getByRole("button", { name: /Safari/ }));
+    expect(desktop.selectInspector).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "block",
+      block: expect.objectContaining({ title: "Safari" }),
+    }));
+
+    fireEvent.click(within(saturday).getByRole("button", { name: "1 more" }));
+    expect(desktop.setCalendarView).toHaveBeenCalledWith("day");
+    expect(toDateInput(new Date(desktop.setCalendarAnchor.mock.calls[0][0]))).toBe("2026-09-12");
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(toDateInput(new Date(desktop.setCalendarMonth.mock.calls.at(-1)?.[0]))).toBe("2026-08-01");
+  });
+
   it("opens a label suggestion from the live week block", () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date(2026, 8, 12, 9, 30).getTime());
     render(

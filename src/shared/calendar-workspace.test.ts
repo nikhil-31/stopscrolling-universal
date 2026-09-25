@@ -9,6 +9,8 @@ import {
   formatWeekRange,
   hourLabel24,
   mergeIntervals,
+  mondayMonthGridBounds,
+  mondayMonthGridDays,
   mondayWeekBounds,
   mondayWeekDays,
   normalizeWorkspace,
@@ -71,6 +73,15 @@ describe("calendar workspace math", () => {
     expect(formatWeekRange(crossing[0], crossing[6])).toBe("September 28–October 4, 2026");
     const yearEnd = mondayWeekDays(new Date(2026, 11, 31, 12));
     expect(formatWeekRange(yearEnd[0], yearEnd[6])).toBe("December 28, 2026–January 3, 2027");
+  });
+
+  it("pads the calendar month to Monday and Sunday", () => {
+    const september = new Date(2026, 8, 15, 12);
+    const days = mondayMonthGridDays(september);
+    expect(toDateInput(days[0])).toBe("2026-08-31");
+    expect(toDateInput(days[days.length - 1])).toBe("2026-10-04");
+    expect(days.length % 7).toBe(0);
+    expect(toDateInput(mondayMonthGridBounds(september).end)).toBe("2026-10-05");
   });
 
   it("formats hour-minute copy like the calendar summary", () => {
