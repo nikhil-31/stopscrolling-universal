@@ -8,6 +8,7 @@ import {
   buildCalendarDayStats,
   collectDayBlocks,
   clearAssignment,
+  mondayWeekBounds,
   deleteLabel,
   deleteTask,
   reviewBlock,
@@ -357,6 +358,7 @@ export class AppController {
       this.todayDay.getTime(),
       this.calendarAnchor.getTime(),
       this.calendarMonth.getTime(),
+      this.calendarView,
       this.serverSummary,
       this.serverSummaryRange,
       this.tracker.categoryCache(),
@@ -427,11 +429,14 @@ export class AppController {
       name: device.device_name,
       timeZone: device.time_zone,
     }));
+    const timelineBounds = this.navigation === "calendar" && this.calendarView === "week"
+      ? mondayWeekBounds(anchor, zone)
+      : snapshotBounds;
     const timelines = this.navigation === "insights" && period !== "day"
       ? []
       : filterTimelinesForInsights(
           filterVisibleTimelines(
-            entriesToTimelines(entries, anchor, extraDevices, snapshotBounds),
+            entriesToTimelines(entries, anchor, extraDevices, timelineBounds),
             this.hiddenDeviceKeys,
           ),
           deviceKeyForNav,

@@ -2,6 +2,8 @@
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defaultWorkspace } from "@shared/calendar-workspace";
+import { toDateInput } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
 import { dayBoardScrollTop } from "../components/calendar/DayBoard";
@@ -262,6 +264,125 @@ describe("CalendarScreen", () => {
     expect(within(mac).queryByText("Notes")).toBeNull();
     expect(within(phone).getByText("Safari")).toBeVisible();
     expect(within(phone).queryByText("Tracking...")).toBeNull();
+  });
+
+  it("places timed blocks on the Monday week grid", () => {
+    render(
+      <CalendarScreen
+        state={snapshot({
+          calendarView: "week",
+          timelines: [
+            timeline({
+              id: "macos|Studio Mac",
+              deviceName: "Studio Mac",
+              devicePlatform: "macos",
+              blocks: [
+                block({
+                  id: "monday-mail",
+                  title: "Mail",
+                  deviceName: "Studio Mac",
+                  devicePlatform: "macos",
+                  start: new Date(2026, 8, 7, 1).toISOString(),
+                  end: new Date(2026, 8, 7, 1, 7).toISOString(),
+                  durationSeconds: 7 * 60,
+                }),
+                block({
+                  id: "sat-writing",
+                  title: "Writing",
+                  deviceName: "Studio Mac",
+                  devicePlatform: "macos",
+                  start: new Date(2026, 8, 12, 9).toISOString(),
+                  end: new Date(2026, 8, 12, 10).toISOString(),
+                }),
+              ],
+            }),
+            timeline({
+              id: "ios|iPhone",
+              deviceName: "iPhone",
+              devicePlatform: "ios",
+              blocks: [block({
+                id: "sat-safari",
+                title: "Safari",
+                deviceName: "iPhone",
+                devicePlatform: "ios",
+                start: new Date(2026, 8, 12, 9).toISOString(),
+                end: new Date(2026, 8, 12, 10).toISOString(),
+              })],
+            }),
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("calendar-week-board")).toBeVisible();
+    expect(screen.getAllByTestId(/calendar-week-day-/)).toHaveLength(14);
+    expect(screen.getAllByText("Studio Mac")).toHaveLength(7);
+    expect(screen.getAllByText("iPhone")).toHaveLength(7);
+    expect(screen.getByRole("heading", { name: "September 7–13, 2026" })).toBeVisible();
+    expect(screen.queryByTestId("calendar-week-strip")).toBeNull();
+    expect(screen.queryByRole("complementary", { name: "Day summary" })).toBeNull();
+
+    const mondayMac = screen.getByTestId("calendar-week-day-2026-09-07-macos|Studio Mac");
+    const saturdayMac = screen.getByTestId("calendar-week-day-2026-09-12-macos|Studio Mac");
+    const saturdayPhone = screen.getByTestId("calendar-week-day-2026-09-12-ios|iPhone");
+    expect(within(mondayMac).getByText("Mail")).toBeVisible();
+    expect(within(mondayMac).getByText("0:07")).toBeVisible();
+    expect(within(saturdayMac).getByText("Writing")).toBeVisible();
+    expect(within(saturdayMac).queryByText("Safari")).toBeNull();
+    expect(within(saturdayPhone).getByText("Safari")).toBeVisible();
+    expect(within(saturdayPhone).queryByText("Writing")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous week" }));
+    expect(toDateInput(new Date(desktop.setCalendarAnchor.mock.calls[0][0]))).toBe("2026-09-05");
+  });
+
+  it("opens a label suggestion from the live week block", () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date(2026, 8, 12, 9, 30).getTime());
+    render(
+      <CalendarScreen
+        state={snapshot({
+          calendarView: "week",
+          isTracking: true,
+          calendarWorkspace: defaultWorkspace(),
+          currentContext: {
+            title: "Weekly notes",
+            url: "",
+            appName: "Notes",
+            bundleID: "com.apple.Notes",
+            category: "Productivity",
+          },
+          timelines: [
+            timeline({
+              id: "macos|Studio Mac",
+              deviceName: "Studio Mac",
+              devicePlatform: "macos",
+              blocks: [block({
+                id: "mac-live",
+                title: "Notes",
+                deviceName: "Studio Mac",
+                devicePlatform: "macos",
+                items: [{
+                  id: "notes",
+                  title: "Notes",
+                  subtitle: "Weekly notes",
+                  url: "",
+                  category: "Productivity",
+                  appName: "Notes",
+                  start: new Date(2026, 8, 12, 9).toISOString(),
+                  end: new Date(2026, 8, 12, 10).toISOString(),
+                  durationSeconds: 3600,
+                }],
+              })],
+            }),
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Click to create suggestion")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: /Tracking/ }));
+    expect(screen.getByRole("heading", { name: "Apply label" })).toBeVisible();
+    expect(desktop.selectInspector).not.toHaveBeenCalled();
   });
 
   it("centers the current time in the day board viewport", async () => {

@@ -1,4 +1,4 @@
-import { addCalendarDays, endOfDay, localTimeZone, startOfDay, weekdayIndex } from "./platform";
+import { addCalendarDays, endOfDay, localTimeZone, startOfDay, weekdayIndex, zonedParts } from "./platform";
 import type { ScreenTimeSessionBlock, ScreenTimeTimelineSegment } from "./types";
 
 export type ProductivityBucket = "focus" | "meetings" | "breaks" | "other";
@@ -467,6 +467,39 @@ export function weekDays(anchor: Date, timeZone = localTimeZone()) {
   const startDay = startOfDay(anchor, timeZone);
   const start = addCalendarDays(startDay, -weekdayIndex(startDay, timeZone), timeZone);
   return Array.from({ length: 7 }, (_, index) => addCalendarDays(start, index, timeZone));
+}
+
+/** Monday through Sunday. Insights and the month grid stay Sunday-start. */
+export function mondayWeekStart(anchor: Date, timeZone = localTimeZone()) {
+  const startDay = startOfDay(anchor, timeZone);
+  const weekday = weekdayIndex(startDay, timeZone);
+  const daysSinceMonday = weekday === 0 ? 6 : weekday - 1;
+  return addCalendarDays(startDay, -daysSinceMonday, timeZone);
+}
+
+export function mondayWeekDays(anchor: Date, timeZone = localTimeZone()) {
+  const start = mondayWeekStart(anchor, timeZone);
+  return Array.from({ length: 7 }, (_, index) => addCalendarDays(start, index, timeZone));
+}
+
+export function mondayWeekBounds(anchor: Date, timeZone = localTimeZone()) {
+  const start = mondayWeekStart(anchor, timeZone);
+  return { start, end: addCalendarDays(start, 7, timeZone) };
+}
+
+export function formatWeekRange(start: Date, end: Date, timeZone = localTimeZone()) {
+  const startParts = zonedParts(start, timeZone);
+  const endParts = zonedParts(end, timeZone);
+  const monthName = (date: Date) => new Intl.DateTimeFormat(undefined, { month: "long", timeZone }).format(date);
+  const dayNumber = (date: Date) => new Intl.DateTimeFormat(undefined, { day: "numeric", timeZone }).format(date);
+  const dash = "–";
+  if (startParts.year !== endParts.year) {
+    return `${monthName(start)} ${dayNumber(start)}, ${startParts.year}${dash}${monthName(end)} ${dayNumber(end)}, ${endParts.year}`;
+  }
+  if (startParts.month !== endParts.month) {
+    return `${monthName(start)} ${dayNumber(start)}${dash}${monthName(end)} ${dayNumber(end)}, ${startParts.year}`;
+  }
+  return `${monthName(start)} ${dayNumber(start)}${dash}${dayNumber(end)}, ${startParts.year}`;
 }
 
 export function snapToQuarterHour(date: Date) {

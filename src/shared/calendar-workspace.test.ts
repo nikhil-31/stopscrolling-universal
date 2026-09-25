@@ -6,8 +6,11 @@ import {
   buildCalendarDayStats,
   defaultWorkspace,
   formatHourMinute,
+  formatWeekRange,
   hourLabel24,
   mergeIntervals,
+  mondayWeekBounds,
+  mondayWeekDays,
   normalizeWorkspace,
   overlapMs,
   reviewBlock,
@@ -18,6 +21,7 @@ import {
   upsertLabel,
   upsertTask,
 } from "./calendar-workspace";
+import { toDateInput } from "./platform";
 import type { ScreenTimeSessionBlock, ScreenTimeTimelineSegment } from "./types";
 
 function block(partial: Partial<ScreenTimeSessionBlock> & Pick<ScreenTimeSessionBlock, "id" | "start" | "end">): ScreenTimeSessionBlock {
@@ -48,6 +52,27 @@ function block(partial: Partial<ScreenTimeSessionBlock> & Pick<ScreenTimeSession
 const day = new Date(2026, 8, 9, 12);
 
 describe("calendar workspace math", () => {
+  it("starts the calendar week on Monday", () => {
+    const saturday = new Date(2026, 8, 12, 15);
+    const days = mondayWeekDays(saturday);
+    expect(days.map((day) => toDateInput(day))).toEqual([
+      "2026-09-07",
+      "2026-09-08",
+      "2026-09-09",
+      "2026-09-10",
+      "2026-09-11",
+      "2026-09-12",
+      "2026-09-13",
+    ]);
+    expect(toDateInput(mondayWeekBounds(saturday).end)).toBe("2026-09-14");
+    expect(toDateInput(mondayWeekDays(new Date(2026, 8, 13, 23))[0])).toBe("2026-09-07");
+    expect(formatWeekRange(days[0], days[6])).toBe("September 7–13, 2026");
+    const crossing = mondayWeekDays(new Date(2026, 8, 30, 12));
+    expect(formatWeekRange(crossing[0], crossing[6])).toBe("September 28–October 4, 2026");
+    const yearEnd = mondayWeekDays(new Date(2026, 11, 31, 12));
+    expect(formatWeekRange(yearEnd[0], yearEnd[6])).toBe("December 28, 2026–January 3, 2027");
+  });
+
   it("formats hour-minute copy like the calendar summary", () => {
     expect(formatHourMinute(8 * 3600 + 8 * 60)).toBe("8 hr 8 min");
     expect(formatHourMinute(26 * 60)).toBe("26 min");

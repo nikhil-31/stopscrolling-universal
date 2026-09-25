@@ -1,5 +1,6 @@
 import type { CalendarView } from "@shared/calendar-workspace";
-import { formatFullDate } from "@shared/calendar-workspace";
+import { formatFullDate, formatWeekRange, mondayWeekDays } from "@shared/calendar-workspace";
+import { effectiveTimeZone } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
 import { CalendarClock, ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
 import { useState } from "react";
@@ -14,14 +15,18 @@ export function CalendarChrome({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const anchor = new Date(state.calendarAnchor);
+  const week = state.calendarView === "week";
+  const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
+  const weekDays = week ? mondayWeekDays(anchor, timeZone) : null;
+  const title = weekDays ? formatWeekRange(weekDays[0], weekDays[6], timeZone) : formatFullDate(anchor);
   const allDay = state.calendarEvents.filter((event) => event.isAllDay);
 
   return (
     <header className="calendar-chrome">
-      <h2 className="calendar-chrome-date">{formatFullDate(anchor)}</h2>
+      <h2 className="calendar-chrome-date">{title}</h2>
       <div className="calendar-chrome-controls">
         <div className="calendar-chrome-nav">
-          <IconButton label="Previous day" icon={ChevronLeft} onClick={() => shiftAnchor(anchor, -1)} />
+          <IconButton label={week ? "Previous week" : "Previous day"} icon={ChevronLeft} onClick={() => shiftAnchor(anchor, week ? -7 : -1)} />
           <Tooltip label="Jump to today">
             <IconButton
               label="Jump to today"
@@ -29,7 +34,7 @@ export function CalendarChrome({
               onClick={() => window.stopscrolling.setCalendarAnchor(new Date().toISOString())}
             />
           </Tooltip>
-          <IconButton label="Next day" icon={ChevronRight} onClick={() => shiftAnchor(anchor, 1)} />
+          <IconButton label={week ? "Next week" : "Next day"} icon={ChevronRight} onClick={() => shiftAnchor(anchor, week ? 7 : 1)} />
         </div>
         <div className="seg calendar-view-switch" aria-label="Calendar view">
           {views.map((view) => (

@@ -8,8 +8,8 @@ import type { ForegroundContext, ScreenTimeDeviceTimeline, ScreenTimeSessionBloc
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { SessionHoverCard } from "../timeline/SessionHoverCard";
 
-const HOUR_HEIGHT = 48;
-const HEIGHT = HOUR_HEIGHT * 24;
+export const DAY_HOUR_HEIGHT = 48;
+export const DAY_BOARD_HEIGHT = DAY_HOUR_HEIGHT * 24;
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const HOUR_COL = 52;
 const ENTRY_MIN = 110;
@@ -26,7 +26,7 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
   const events = state.calendarEvents.filter((event) => !event.isAllDay);
   const now = Date.now();
   const isToday = now >= dayStart.getTime() && now < dayEnd.getTime();
-  const nowY = ((now - dayStart.getTime()) / (dayEnd.getTime() - dayStart.getTime())) * HEIGHT;
+  const nowY = ((now - dayStart.getTime()) / (dayEnd.getTime() - dayStart.getTime())) * DAY_BOARD_HEIGHT;
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{
     block: ScreenTimeSessionBlock;
@@ -47,7 +47,7 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
     const end = endOfDay(new Date(state.calendarAnchor), timeZone).getTime();
     const viewingToday = current >= start && current < end;
     if (viewingToday) {
-      const y = ((current - start) / (end - start)) * HEIGHT;
+      const y = ((current - start) / (end - start)) * DAY_BOARD_HEIGHT;
       scroller.scrollTop = dayBoardScrollTop({
         isToday: true,
         nowY: y,
@@ -76,10 +76,10 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
         ))}
         <span>Calendar</span>
       </div>
-      <div className="day-board-body" style={{ height: HEIGHT, gridTemplateColumns, minWidth: gridMinWidth }}>
+      <div className="day-board-body" style={{ height: DAY_BOARD_HEIGHT, gridTemplateColumns, minWidth: gridMinWidth }}>
         <div className="day-board-hours" aria-hidden="true">
           {HOURS.map((hour) => (
-            <div key={hour} style={{ height: HOUR_HEIGHT }}>{clockFormat === "24" ? hourLabel24(hour) : hourLabelWithPeriod(hour)}</div>
+            <div key={hour} style={{ height: DAY_HOUR_HEIGHT }}>{clockFormat === "24" ? hourLabel24(hour) : hourLabelWithPeriod(hour)}</div>
           ))}
         </div>
         {timelines.map((timeline) => {
@@ -93,7 +93,7 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
           >
             {timeline.blocks.map((block) => {
               const live = isLocalLiveBlock(block, timeline, state, now);
-              const style = place(block.start, block.end, dayStart, dayEnd);
+              const style = placeDayBlock(block.start, block.end, dayStart, dayEnd);
               const showHover = (event: ReactMouseEvent) => {
                 setHover({ block, x: event.clientX, y: event.clientY });
               };
@@ -123,7 +123,7 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
         })}
         <div className="day-board-col day-board-calendar">
           {events.map((event, index) => {
-            const style = place(event.start, event.end, dayStart, dayEnd);
+            const style = placeDayBlock(event.start, event.end, dayStart, dayEnd);
             const color = event.colorHex || (index % 2 === 0 ? "#1fb894" : "#2de2e2");
             return (
               <div
@@ -151,7 +151,7 @@ function deviceLabel(timeline: ScreenTimeDeviceTimeline, devices: AppSnapshot["d
   return displayNameForDevice(timeline.devicePlatform, timeline.deviceName, devices);
 }
 
-function isLocalLiveBlock(
+export function isLocalLiveBlock(
   block: ScreenTimeSessionBlock,
   timeline: ScreenTimeDeviceTimeline,
   state: AppSnapshot,
@@ -214,14 +214,14 @@ function earliestEntryTop(
   const first = blocks.reduce((earliest, block) => (
     new Date(block.start).getTime() < new Date(earliest.start).getTime() ? block : earliest
   ));
-  return place(first.start, first.end, dayStart, dayEnd).top;
+  return placeDayBlock(first.start, first.end, dayStart, dayEnd).top;
 }
 
-function place(startIso: string, endIso: string, dayStart: Date, dayEnd: Date) {
+export function placeDayBlock(startIso: string, endIso: string, dayStart: Date, dayEnd: Date) {
   const span = dayEnd.getTime() - dayStart.getTime();
   const start = Math.max(new Date(startIso).getTime(), dayStart.getTime());
   const end = Math.min(new Date(endIso).getTime(), dayEnd.getTime());
-  const top = ((start - dayStart.getTime()) / span) * HEIGHT;
-  const height = Math.max(16, ((end - start) / span) * HEIGHT);
+  const top = ((start - dayStart.getTime()) / span) * DAY_BOARD_HEIGHT;
+  const height = Math.max(16, ((end - start) / span) * DAY_BOARD_HEIGHT);
   return { top, height };
 }
