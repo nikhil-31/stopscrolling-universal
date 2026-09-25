@@ -15,6 +15,7 @@ import {
   zonedParts,
 } from "./platform";
 import type {
+  ClockFormat,
   InsightsPeriod,
   InsightsTab,
   ScreenTimeAppBreakdown,
@@ -171,13 +172,17 @@ export function filterTimelinesForInsights(
   );
 }
 
-export function timelineAxisTicks(start: Date, end: Date) {
+export function clockFormatOf(value: unknown): ClockFormat {
+  return value === "12" ? "12" : "24";
+}
+
+export function timelineAxisTicks(start: Date, end: Date, format: ClockFormat = "24") {
   const span = Math.max(1, end.getTime() - start.getTime());
   const hours = span / (60 * 60 * 1000);
   if (hours <= 26) {
     return [3, 6, 9, 12, 15, 18, 21].map((hour) => ({
       fraction: hour / 24,
-      label: `${hour}:00`,
+      label: format === "12" ? hourLabelWithPeriod(hour) : `${hour}:00`,
     }));
   }
   if (hours <= 8 * 24) {
@@ -261,9 +266,13 @@ export function durationAxisTicks(maxSeconds: number) {
   };
 }
 
-export function formatClock(value: string | Date) {
+export function formatClock(value: string | Date, format: ClockFormat = "24") {
   const date = typeof value === "string" ? new Date(value) : value;
-  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+  return new Intl.DateTimeFormat(undefined, {
+    hour: format === "24" ? "2-digit" : "numeric",
+    minute: "2-digit",
+    hourCycle: format === "12" ? "h12" : "h23",
+  }).format(date);
 }
 
 export function formatDayLabel(date: Date, timeZone = localTimeZone()) {
@@ -296,12 +305,44 @@ export function formatPeriod(period: InsightsPeriod, anchor: Date, timeZone = lo
   return `${zonedParts(anchor, timeZone).year}`;
 }
 
-export function hourLabel(hour: number) {
+export function hourLabel(hour: number, format: ClockFormat = "24") {
   const normalized = ((hour % 24) + 24) % 24;
+  if (format === "24") return String(normalized);
   if (normalized === 0) return "12a";
   if (normalized === 12) return "12p";
   if (normalized < 12) return `${normalized}a`;
   return `${normalized - 12}p`;
+}
+
+export function hourLabelWithPeriod(hour: number) {
+  const normalized = ((hour % 24) + 24) % 24;
+  const suffix = normalized < 12 ? "AM" : "PM";
+  const display = normalized % 12 || 12;
+  return `${display} ${suffix}`;
+}
+
+export function dayAxisHour(hour: number, format: ClockFormat = "24") {
+  const normalized = ((hour % 24) + 24) % 24;
+  if (format === "24") return { text: String(normalized), period: "" };
+  const period = normalized === 0 ? "AM" : normalized === 12 ? "PM" : "";
+  return { text: String(normalized % 12 || 12), period };
+}
+
+export function dayHourTitle(hour: number, format: ClockFormat = "24") {
+  const normalized = ((hour % 24) + 24) % 24;
+  if (format === "24") return `${String(normalized).padStart(2, "0")}:00`;
+  return hourLabelWithPeriod(normalized);
+}
+
+export function dayTrackAxis(format: ClockFormat = "24") {
+  return [0, 3, 6, 9, 12, 15, 18, 21, 24].map((hour) => ({
+    fraction: hour / 24,
+    label: hour === 24
+      ? (format === "24" ? "24:00" : "12 AM")
+      : format === "24"
+        ? `${hour}:00`
+        : hourLabelWithPeriod(hour),
+  }));
 }
 
 export const VERTICAL_TIMELINE_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
@@ -773,7 +814,7 @@ export function buildPeriodBuckets(
         period === "year"
           ? new Intl.DateTimeFormat(undefined, { month: "short", timeZone }).format(start)
           : period === "day"
-            ? hourLabel(index)
+            ? hourLabelWithPeriod(index)
             : period === "month"
               ? `${zonedParts(start, timeZone).day}`
               : formatDayLabel(start, timeZone),

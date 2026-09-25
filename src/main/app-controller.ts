@@ -229,6 +229,10 @@ export class AppController {
     }
     await this.restoreSession();
     await this.helper.initialize();
+    const setup = await this.helper.activateNativeSetup();
+    logObservability(
+      `Blocking helper activation: registered=${setup.helperRegistered} error=${setup.lastError ?? "none"}`,
+    );
     await this.refreshBlockingHelper(true);
     this.startHelperRefresh();
     if (process.env.STOPSCROLLING_UI_TEST !== "1") {

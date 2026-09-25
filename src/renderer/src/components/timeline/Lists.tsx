@@ -14,6 +14,7 @@ import type {
   ScreenTimeTimelineSegment,
 } from "@shared/types";
 import { Boxes, List, Shapes } from "lucide-react";
+import { useClockFormat } from "../../clock-format";
 import { Card, EmptyState, Grouped } from "../ui";
 import { AppsWebsitesShareRow } from "../today/AppsWebsitesList";
 import { PieChart } from "./Charts";
@@ -27,6 +28,7 @@ export const EventLog = memo(function EventLog({
   segments: ScreenTimeTimelineSegment[];
   pageSize?: number;
 }) {
+  const clockFormat = useClockFormat();
   const paginated = pageSize != null && pageSize > 0;
   const [limit, setLimit] = useState(paginated ? pageSize : segments.length);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -96,7 +98,7 @@ export const EventLog = memo(function EventLog({
                 <span className="row-subtitle">{segment.subtitle || segment.category}</span>
               </span>
             </span>
-            <span className="row-value">{formatClock(segment.start)}</span>
+            <span className="row-value">{formatClock(segment.start, clockFormat)}</span>
           </button>
         ))}
         {hasMore ? <div ref={sentinelRef} data-testid="session-log-sentinel" aria-hidden="true" /> : null}

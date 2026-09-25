@@ -317,9 +317,12 @@ export interface CalendarOverlayEvent {
   provider: "google";
 }
 
+export type ClockFormat = "12" | "24";
+
 export interface AppSettings {
   startScreenTimeOnLaunch: boolean;
   appearance: ThemePreference;
+  clockFormat: ClockFormat;
   apiBaseUrl: string;
   syncEnabled: boolean;
   showGoogleCalendarEvents: boolean;

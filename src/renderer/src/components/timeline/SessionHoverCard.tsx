@@ -2,6 +2,7 @@ import { formatClock, formatDuration } from "@shared/timeline";
 import type { ScreenTimeSessionBlock } from "@shared/types";
 import { AppWindow, Clock3, Globe2, Layers3 } from "lucide-react";
 import { createPortal } from "react-dom";
+import { useClockFormat } from "../../clock-format";
 import { Badge } from "../ui";
 
 const CARD_WIDTH = 240;
@@ -29,6 +30,7 @@ export function SessionHoverCard({
   x: number;
   y: number;
 }) {
+  const clockFormat = useClockFormat();
   const { left, top } = hoverCardPosition(x, y);
   return createPortal(
     <div
@@ -38,7 +40,7 @@ export function SessionHoverCard({
     >
       {block.title ? <div className="native-hover-title">{block.title}</div> : null}
       <div className="native-hover-heading">
-        <strong>{formatClock(block.start)} – {formatClock(block.end)}</strong>
+        <strong>{formatClock(block.start, clockFormat)} – {formatClock(block.end, clockFormat)}</strong>
         {block.category ? <Badge tone="accent">{block.category}</Badge> : null}
       </div>
       <div className="native-hover-meta">

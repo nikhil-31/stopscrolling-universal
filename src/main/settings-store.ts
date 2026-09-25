@@ -6,6 +6,7 @@ import { settingsPath } from "./paths";
 export const defaultSettings = (): AppSettings => ({
   startScreenTimeOnLaunch: true,
   appearance: "system",
+  clockFormat: "24",
   apiBaseUrl: "http://localhost",
   syncEnabled: true,
   showGoogleCalendarEvents: false,
@@ -19,7 +20,9 @@ export function loadSettings(): AppSettings {
   try {
     if (!existsSync(settingsPath())) return defaultSettings();
     const parsed = JSON.parse(readFileSync(settingsPath(), "utf8")) as Partial<AppSettings>;
-    return { ...defaultSettings(), ...parsed };
+    const settings = { ...defaultSettings(), ...parsed };
+    settings.clockFormat = settings.clockFormat === "12" ? "12" : "24";
+    return settings;
   } catch {
     return defaultSettings();
   }

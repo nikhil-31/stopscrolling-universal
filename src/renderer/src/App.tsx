@@ -6,6 +6,7 @@ import { Inspector } from "./components/Inspector";
 import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { LoadingState } from "./components/ui";
+import { ClockFormatProvider } from "./clock-format";
 import { useAppState } from "./hooks/useAppState";
 import { AccountScreen } from "./screens/AccountScreen";
 import { BlockingScreen } from "./screens/BlockingScreen";
@@ -46,6 +47,7 @@ export function App() {
   if (!state) return <div className="loading-page">Loading Stop Scrolling…</div>;
 
   return (
+    <ClockFormatProvider value={state.settings.clockFormat}>
     <div className="app-shell" data-testid="app-root">
       <Sidebar state={state} />
       <div className="main-column">
@@ -82,5 +84,6 @@ export function App() {
       {state.commandPaletteOpen ? <CommandPalette state={state} /> : null}
       <div className="sr-only" aria-live="polite">{state.statusMessage}</div>
     </div>
+    </ClockFormatProvider>
   );
 }

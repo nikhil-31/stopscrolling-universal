@@ -81,8 +81,18 @@ export class BlockingHelperBridge {
     return this.refreshStatus();
   }
 
+  private async registeredHelper(): Promise<boolean> {
+    if (!this.transport.setup) return true;
+    const setup = await this.transport.setup();
+    if (setup) this.hostSetup = setup;
+    if (setup?.helperRegistered) return true;
+    this.recordFailure(new Error(setup?.lastError || "blocking-helper-not-registered"));
+    return false;
+  }
+
   async refreshStatus() {
     try {
+      if (!(await this.registeredHelper())) return this.status;
       this.status = parseEnforcementStatus(await this.transport.request({ operation: "status" }));
       this.capabilities = { ...this.capabilities, helperAvailable: true, reason: null };
       await this.refreshHostSetup();
@@ -99,8 +109,12 @@ export class BlockingHelperBridge {
       return this.hostSetup;
     }
     try {
-      this.hostSetup = await this.transport.activate();
+      const activated = await this.transport.activate();
+      this.hostSetup = activated;
       await this.refreshStatus();
+      if (!this.hostSetup.lastError && activated.lastError) {
+        this.hostSetup = { ...this.hostSetup, lastError: activated.lastError };
+      }
       return this.hostSetup;
     } catch (error) {
       this.hostSetup = unavailableHostSetup("activation-failed");
@@ -121,6 +135,7 @@ export class BlockingHelperBridge {
 
   async refreshInventory() {
     try {
+      if (!(await this.registeredHelper())) return this.inventory;
       this.inventory = parseInventory(await this.transport.request({ operation: "inventory" }));
     } catch (error) {
       this.recordFailure(error);
@@ -130,6 +145,7 @@ export class BlockingHelperBridge {
 
   async applyPolicy(policy: BlockingPolicyResponse) {
     try {
+      if (!(await this.registeredHelper())) return this.status;
       this.status = parseEnforcementStatus(await this.transport.request({
         operation: "applyPolicy",
         envelope: policyEnvelope(policy),
@@ -142,11 +158,13 @@ export class BlockingHelperBridge {
   }
 
   async cancelNormal(occurrenceID: string) {
+    if (!(await this.registeredHelper())) return this.status;
     await this.transport.request({ operation: "cancelNormal", occurrenceID });
     return this.refreshStatus();
   }
 
   async redeemBypass(token: string) {
+    if (!(await this.registeredHelper())) return this.status;
     this.status = parseEnforcementStatus(await this.transport.request({
       operation: "redeemBypass",
       envelope: bypassEnvelope(token),

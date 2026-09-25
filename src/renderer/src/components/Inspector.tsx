@@ -15,6 +15,7 @@ import { displayNameForDevice } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { BlockingSchedule } from "@shared/types";
 import { Clock3, Globe2, Laptop2, Layers3, Shield, X } from "lucide-react";
+import { useClockFormat } from "../clock-format";
 import { Badge, Button, IconButton } from "./ui";
 
 function closeInspector() {
@@ -177,6 +178,7 @@ export function Inspector({
   state: AppSnapshot;
   onEditSchedule?: (schedule: BlockingSchedule) => void;
 }) {
+  const clockFormat = useClockFormat();
   if (state.inspector.kind === "none") return null;
   if (state.inspector.kind === "schedule" && state.inspector.schedule) {
     return <ScheduleInspector schedule={state.inspector.schedule} state={state} onEdit={onEditSchedule} />;
@@ -205,7 +207,7 @@ export function Inspector({
           <strong>{formatDuration(duration)}</strong>
           <span className="small muted">
             <Clock3 size={11} aria-hidden="true" />{" "}
-            {formatClock(segment.start)} – {formatClock(segment.end)}
+            {formatClock(segment.start, clockFormat)} – {formatClock(segment.end, clockFormat)}
           </span>
         </div>
         {segment.url ? (
@@ -238,7 +240,7 @@ export function Inspector({
         <div className="inspector-duration">
           <span className="small muted">Focused block</span>
           <strong>{formatDuration(block.durationSeconds)}</strong>
-          <span className="small muted">{formatClock(block.start)} – {formatClock(block.end)}</span>
+          <span className="small muted">{formatClock(block.start, clockFormat)} – {formatClock(block.end, clockFormat)}</span>
         </div>
         <div className="inspector-kicker">Activity</div>
         {block.items.map((item) => (

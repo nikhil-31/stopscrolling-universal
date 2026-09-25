@@ -3,6 +3,7 @@ import { deviceColor, deviceKey, displayNameForDevice } from "@shared/device";
 import {
   blockMatchesApp,
   colorForCategory,
+  dayTrackAxis,
   formatClock,
   formatDuration,
   highlightRangesForApp,
@@ -19,6 +20,7 @@ import type {
   ScreenTimeSessionBlock,
 } from "@shared/types";
 import { Globe2, Laptop2 } from "lucide-react";
+import { useClockFormat } from "../../clock-format";
 import { Card } from "../ui";
 import { SessionHoverCard } from "./SessionHoverCard";
 
@@ -62,6 +64,7 @@ function NativeMacTimeline({
   compact?: boolean;
   highlightedAppKey?: string | null;
 }) {
+  const clockFormat = useClockFormat();
   const [hover, setHover] = useState<{
     x: number;
     clientX: number;
@@ -74,19 +77,9 @@ function NativeMacTimeline({
   const span = dayEnd - dayStart || 1;
   const now = Date.now();
   const nowFraction = now >= dayStart && now < dayEnd ? (now - dayStart) / span : null;
-  const ticks = timelineAxisTicks(new Date(timeline.dayStart), new Date(timeline.dayEnd));
+  const ticks = timelineAxisTicks(new Date(timeline.dayStart), new Date(timeline.dayEnd), clockFormat);
   const usePeriodAxis = compact || span > 26 * 60 * 60 * 1000;
-  const axisTicks = usePeriodAxis ? ticks : [
-    { fraction: 0, label: "12 AM" },
-    { fraction: 0.125, label: "3 AM" },
-    { fraction: 0.25, label: "6 AM" },
-    { fraction: 0.375, label: "9 AM" },
-    { fraction: 0.5, label: "12 PM" },
-    { fraction: 0.625, label: "3 PM" },
-    { fraction: 0.75, label: "6 PM" },
-    { fraction: 0.875, label: "9 PM" },
-    { fraction: 1, label: "12 AM" },
-  ];
+  const axisTicks = usePeriodAxis ? ticks : dayTrackAxis(clockFormat);
   const total = timeline.blocks.reduce((sum, block) => sum + block.durationSeconds, 0);
   const highlights = highlightedAppKey
     ? highlightRangesForApp(timeline.blocks, highlightedAppKey, new Date(timeline.dayStart), new Date(timeline.dayEnd))
@@ -147,7 +140,7 @@ function NativeMacTimeline({
                 width: `${width * 100}%`,
                 ["--block-color" as string]: blockColor,
               }}
-              aria-label={`${block.title}, ${formatClock(block.start)} to ${formatClock(block.end)}, ${formatDuration(block.durationSeconds)}`}
+              aria-label={`${block.title}, ${formatClock(block.start, clockFormat)} to ${formatClock(block.end, clockFormat)}, ${formatDuration(block.durationSeconds)}`}
               onClick={() => window.stopscrolling.selectInspector({ kind: "block", block })}
             />
           );
@@ -172,7 +165,7 @@ function NativeMacTimeline({
                 className="native-hover-time"
                 style={{ left: `clamp(26px, ${hover.x}px, calc(100% - 26px))` }}
               >
-                {formatClock(hover.time)}
+                {formatClock(hover.time, clockFormat)}
               </span>
             )}
           </>
@@ -227,6 +220,7 @@ export function VerticalDay({
     ? new Date(timelines[0].dayEnd)
     : new Date(fallbackStart.getTime() + 24 * 60 * 60 * 1000);
   const placements = sessionBlockPlacements(blocks, dayStart, dayEnd);
+  const clockFormat = useClockFormat();
   const height = VERTICAL_TIMELINE_HOUR_HEIGHT * 24;
   const now = Date.now();
   const isToday = now >= dayStart.getTime() && now < dayEnd.getTime();
@@ -240,12 +234,12 @@ export function VerticalDay({
         aria-label={`Day timeline with ${blocks.length} activity blocks and ${events.length} calendar events`}
       >
         <div className="hour-col" aria-hidden="true">
-          {VERTICAL_TIMELINE_HOURS.map((hour) => <div key={hour}>{hourLabel(hour)}</div>)}
+          {VERTICAL_TIMELINE_HOURS.map((hour) => <div key={hour}>{hourLabel(hour, clockFormat)}</div>)}
         </div>
         <div className="day-canvas" style={{ height }}>
           {isToday ? (
             <div className="calendar-now-line" style={{ top: nowY }}>
-              <span>{formatClock(new Date())}</span>
+              <span>{formatClock(new Date(), clockFormat)}</span>
             </div>
           ) : null}
           {placements.map((placement) => {
@@ -268,7 +262,7 @@ export function VerticalDay({
               >
                 <strong>{block.title}</strong>
                 {blockHeight > 34 ? (
-                  <span className="block-time">{formatClock(block.start)} – {formatClock(block.end)}</span>
+                  <span className="block-time">{formatClock(block.start, clockFormat)} – {formatClock(block.end, clockFormat)}</span>
                 ) : null}
               </button>
             );
@@ -290,10 +284,10 @@ export function VerticalDay({
                   width: 132,
                   left: "auto",
                 }}
-                title={`${event.title}\n${formatClock(event.start)} – ${formatClock(event.end)}`}
+                title={`${event.title}\n${formatClock(event.start, clockFormat)} – ${formatClock(event.end, clockFormat)}`}
               >
                 <strong>{event.title}</strong>
-                <span className="block-time">{formatClock(event.start)}</span>
+                <span className="block-time">{formatClock(event.start, clockFormat)}</span>
               </div>
             );
           })}

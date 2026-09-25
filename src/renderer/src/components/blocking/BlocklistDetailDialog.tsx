@@ -1,14 +1,19 @@
 import { useEffect, useState } from "react";
 import { decomposeBlocklistEntries } from "@shared/blocking";
-import type { Blocklist, BlocklistEntry, InstalledApplication } from "@shared/types";
+import type { Blocklist, BlocklistEntry, ClockFormat, InstalledApplication } from "@shared/types";
+import { useClockFormat } from "../../clock-format";
 import { AppWindow, Globe2, Shield, X } from "lucide-react";
 import { Button, EmptyState, IconButton } from "../ui";
 import { BlocklistComposer } from "./BlocklistComposer";
 
-function formatTimestamp(iso: string) {
+function formatTimestamp(iso: string, format: ClockFormat) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    hourCycle: format === "12" ? "h12" : "h23",
+  }).format(date);
 }
 
 function EntrySection({ title, entries }: { title: string; entries: BlocklistEntry[] }) {
@@ -54,6 +59,7 @@ export function BlocklistDetailDialog({
   editingDisabledReason?: string;
   onClose: () => void;
 }) {
+  const clockFormat = useClockFormat();
   const [editing, setEditing] = useState(false);
   const websites = blocklist.entries.filter((entry) => entry.entry_type === "website");
   const apps = blocklist.entries.filter((entry) => entry.entry_type === "app");
@@ -141,11 +147,11 @@ export function BlocklistDetailDialog({
             {editingDisabledReason ? <p className="muted" role="status">{editingDisabledReason}</p> : null}
             <div className="data-row">
               <span className="row-title">Created</span>
-              <span className="row-value muted">{formatTimestamp(blocklist.created_at)}</span>
+              <span className="row-value muted">{formatTimestamp(blocklist.created_at, clockFormat)}</span>
             </div>
             <div className="data-row">
               <span className="row-title">Updated</span>
-              <span className="row-value muted">{formatTimestamp(blocklist.updated_at)}</span>
+              <span className="row-value muted">{formatTimestamp(blocklist.updated_at, clockFormat)}</span>
             </div>
             {!blocklist.entries.length ? (
               <EmptyState

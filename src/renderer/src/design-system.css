@@ -1229,7 +1229,7 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
   grid-template-columns: 36px minmax(0, 1fr);
   column-gap: 8px;
   height: 150px;
-  margin-bottom: 22px;
+  margin-bottom: 28px;
 }
 .bar-y-axis { position: relative; }
 .bar-y-tick {
@@ -1285,6 +1285,16 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
 .bar-chart-month .bar-column { width: min(84%, 14px); border-radius: 3px 3px 1px 1px; }
 .bar-item:hover .bar-column { filter: brightness(1.1); transform: translateY(-2px); }
 .bar-label { position: absolute; top: calc(100% + 7px); overflow: hidden; width: 100%; color: var(--text-tertiary); font-size: 8px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.bar-chart-day .bar-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  font-size: 8px;
+  line-height: 1.05;
+  white-space: normal;
+}
+.bar-label-period { font-size: 7px; letter-spacing: 0.02em; }
 .bar-chart-month .bar-label {
   overflow: visible;
   font-size: 7px;

@@ -37,6 +37,32 @@ describe("TrendCard month view", () => {
     expect(axis).toHaveTextContent("30m");
   });
 
+  it("shows each hour on a 24-hour day axis", () => {
+    const snapshot = snapshotFromEntries([], "day", new Date(2026, 8, 9, 15));
+    render(<TrendCard buckets={snapshot.buckets} period="day" />);
+    const labels = [...screen.getByRole("img", { name: /Tracked time chart/ }).querySelectorAll(".bar-label")];
+    expect(labels).toHaveLength(24);
+    expect(labels.map((label) => label.textContent)).toEqual([
+      "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11",
+      "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23",
+    ]);
+    expect(labels[0].querySelector(".bar-label-period")).toBeNull();
+    fireEvent.pointerMove(labels[15].closest(".bar-item")!, { clientX: 20, clientY: 20 });
+    expect(screen.getByTestId("activity-bar-hover")).toHaveTextContent("15:00");
+  });
+
+  it("shows 12-hour numbers when that clock is selected", () => {
+    const snapshot = snapshotFromEntries([], "day", new Date(2026, 8, 9, 15));
+    render(<TrendCard buckets={snapshot.buckets} period="day" clockFormat="12" />);
+    const labels = [...screen.getByRole("img", { name: /Tracked time chart/ }).querySelectorAll(".bar-label")];
+    expect(labels.map((label) => label.textContent)).toEqual([
+      "12AM", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11",
+      "12PM", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11",
+    ]);
+    expect(labels[0].querySelector(".bar-label-period")).toHaveTextContent("AM");
+    expect(labels[12].querySelector(".bar-label-period")).toHaveTextContent("PM");
+  });
+
   it("stacks a bar by device and keeps an unsplit bar solid", () => {
     render(
       <TrendCard

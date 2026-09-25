@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockSegments, colorForCategory, durationAxisTicks, entriesToTimelines, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, weekNumber } from "./timeline";
+import { blockSegments, colorForCategory, dayAxisHour, dayHourTitle, dayTrackAxis, durationAxisTicks, entriesToTimelines, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, weekNumber } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import { toDateInput } from "./platform";
 import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
@@ -430,6 +430,10 @@ describe("insights snapshot", () => {
     expect(snapshot.sessionCount).toBe(7);
     expect(snapshot.categories[0].category).toBe("Development");
     expect(snapshot.buckets).toHaveLength(24);
+    expect(snapshot.buckets[0].label).toBe("12 AM");
+    expect(snapshot.buckets[9].label).toBe("9 AM");
+    expect(snapshot.buckets[12].label).toBe("12 PM");
+    expect(snapshot.buckets[15].label).toBe("3 PM");
   });
 
   it("counts only overlapping time inside the selected period", () => {
@@ -595,6 +599,18 @@ describe("today period windows", () => {
     const day = new Date(2026, 8, 9);
     const dayTicks = timelineAxisTicks(day, new Date(day.getTime() + 24 * 60 * 60 * 1000));
     expect(dayTicks.map((tick) => tick.label)).toEqual(["3:00", "6:00", "9:00", "12:00", "15:00", "18:00", "21:00"]);
+    expect(timelineAxisTicks(day, new Date(day.getTime() + 24 * 60 * 60 * 1000), "12").map((tick) => tick.label)).toEqual([
+      "3 AM", "6 AM", "9 AM", "12 PM", "3 PM", "6 PM", "9 PM",
+    ]);
+    expect(dayAxisHour(0, "24")).toEqual({ text: "0", period: "" });
+    expect(dayAxisHour(15, "24")).toEqual({ text: "15", period: "" });
+    expect(dayHourTitle(15, "24")).toBe("15:00");
+    expect(dayAxisHour(0, "12")).toEqual({ text: "12", period: "AM" });
+    expect(dayAxisHour(15, "12")).toEqual({ text: "3", period: "" });
+    expect(dayHourTitle(15, "12")).toBe("3 PM");
+    expect(dayTrackAxis("24").map((tick) => tick.label)).toEqual(["0:00", "3:00", "6:00", "9:00", "12:00", "15:00", "18:00", "21:00", "24:00"]);
+    expect(dayTrackAxis("12")[0].label).toBe("12 AM");
+    expect(dayTrackAxis("12")[4].label).toBe("12 PM");
     const weekStart = periodBounds("week", day).start;
     const weekTicks = timelineAxisTicks(weekStart, new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000));
     expect(weekTicks).toHaveLength(7);

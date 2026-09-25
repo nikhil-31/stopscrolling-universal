@@ -27,6 +27,7 @@ function snapshot(signedIn: boolean): AppSnapshot {
     settings: {
       startScreenTimeOnLaunch: true,
       appearance: "system",
+      clockFormat: "24",
       apiBaseUrl: "https://example.test",
       syncEnabled: true,
       showGoogleCalendarEvents: false,
@@ -70,6 +71,13 @@ describe("Settings time zone", () => {
     expect(picker).toHaveValue("America/Los_Angeles");
     await userEvents.selectOptions(picker, "America/New_York");
     expect(setTimeZone).toHaveBeenCalledWith("America/New_York");
+  });
+
+  it("saves a 12-hour clock", async () => {
+    const userEvents = userEvent.setup();
+    render(<SettingsScreen state={snapshot(true)} />);
+    await userEvents.selectOptions(screen.getByTestId("settings-clock-format"), "12");
+    expect(window.stopscrolling.updateSettings).toHaveBeenCalledWith({ clockFormat: "12" });
   });
 
   it("keeps the picker disabled until the account is signed in", () => {

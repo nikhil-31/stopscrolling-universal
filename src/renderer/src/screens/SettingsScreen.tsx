@@ -63,6 +63,20 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
                     : "Sign in to save a time zone on your account."}
                 </span>
               </label>
+              <label className="field">
+                <span className="field-label">Clock</span>
+                <select
+                  data-testid="settings-clock-format"
+                  value={settings.clockFormat === "12" ? "12" : "24"}
+                  onChange={(event) => window.stopscrolling.updateSettings({
+                    clockFormat: event.target.value === "12" ? "12" : "24",
+                  })}
+                >
+                  <option value="24">24-hour</option>
+                  <option value="12">12-hour</option>
+                </select>
+                <span className="field-hint">Hour labels on the activity trend, timelines, and calendar.</span>
+              </label>
               {state.capabilities.platform === "macos" ? (
                 <div className="connection-row" data-testid="settings-accessibility">
                   <Hand size={17} aria-hidden="true" />

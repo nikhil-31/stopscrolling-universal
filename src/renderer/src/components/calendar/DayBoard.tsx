@@ -1,8 +1,9 @@
-import { formatClock24, hourLabel24, isOngoingBlock } from "@shared/calendar-workspace";
+import { hourLabel24, isOngoingBlock } from "@shared/calendar-workspace";
 import { deviceColor, deviceKey, displayNameForDevice } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
 import { effectiveTimeZone, endOfDay, startOfDay } from "@shared/platform";
-import { formatClock } from "@shared/timeline";
+import { formatClock, hourLabelWithPeriod } from "@shared/timeline";
+import { useClockFormat } from "../../clock-format";
 import type { ForegroundContext, ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { SessionHoverCard } from "../timeline/SessionHoverCard";
@@ -15,6 +16,7 @@ const ENTRY_MIN = 110;
 const CALENDAR_MIN = 160;
 
 export function DayBoard({ state }: { state: AppSnapshot }) {
+  const clockFormat = useClockFormat();
   const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
   const dayStart = startOfDay(new Date(state.calendarAnchor), timeZone);
   const dayEnd = endOfDay(new Date(state.calendarAnchor), timeZone);
@@ -77,7 +79,7 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
       <div className="day-board-body" style={{ height: HEIGHT, gridTemplateColumns, minWidth: gridMinWidth }}>
         <div className="day-board-hours" aria-hidden="true">
           {HOURS.map((hour) => (
-            <div key={hour} style={{ height: HOUR_HEIGHT }}>{hourLabel24(hour)}</div>
+            <div key={hour} style={{ height: HOUR_HEIGHT }}>{clockFormat === "24" ? hourLabel24(hour) : hourLabelWithPeriod(hour)}</div>
           ))}
         </div>
         {timelines.map((timeline) => {
@@ -110,7 +112,7 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
                   ) : (
                     <>
                       <strong>{block.title}</strong>
-                      {style.height > 36 ? <span>{formatClock(block.start)}</span> : null}
+                      {style.height > 36 ? <span>{formatClock(block.start, clockFormat)}</span> : null}
                     </>
                   )}
                 </button>
@@ -128,11 +130,11 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
                 key={event.id}
                 className="day-block day-block-event is-solid"
                 style={{ ...style, ["--block-color" as string]: color }}
-                title={`${event.title}\n${formatClock24(event.start)} – ${formatClock24(event.end)}`}
+                title={`${event.title}\n${formatClock(event.start, clockFormat)} – ${formatClock(event.end, clockFormat)}`}
               >
                 <strong>{event.title}</strong>
                 {style.height > 34 ? (
-                  <span>{formatClock24(event.start)} – {formatClock24(event.end)}</span>
+                  <span>{formatClock(event.start, clockFormat)} – {formatClock(event.end, clockFormat)}</span>
                 ) : null}
               </div>
             );

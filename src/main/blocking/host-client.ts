@@ -55,6 +55,7 @@ function loadLibrary(path: string): HostClientLibrary {
 function takeCString(lib: HostClientLibrary, slot: unknown[]) {
   const pointer = slot[0];
   if (!pointer) return "";
+  if (typeof pointer === "string") return pointer;
   const text = koffi.decode(pointer, "str") as string;
   lib.free(pointer);
   return text;

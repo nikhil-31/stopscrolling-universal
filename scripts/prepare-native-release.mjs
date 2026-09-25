@@ -48,7 +48,6 @@ function stageMacNativeDirectory(root) {
   for (const entry of readdirSync(root)) {
     cpSync(join(root, entry), join(destination, entry), { recursive: true });
   }
-  const teamID = process.env.STOPSCROLLING_TEAM_ID;
   const entitlements = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
@@ -62,7 +61,7 @@ function stageMacNativeDirectory(root) {
     "  <true/>",
     "  <key>com.apple.security.application-groups</key>",
     "  <array>",
-    `    <string>${teamID ? `${teamID}.group.com.stopscrolling.shared` : "$(TeamIdentifierPrefix)group.com.stopscrolling.shared"}</string>`,
+    "    <string>$(TeamIdentifierPrefix)group.com.stopscrolling.shared</string>",
     "  </array>",
     "</dict>",
     "</plist>",

@@ -12,6 +12,8 @@ import { BlocklistComposer } from "../components/blocking/BlocklistComposer";
 import { BlocklistDetailDialog } from "../components/blocking/BlocklistDetailDialog";
 import { SessionComposer } from "../components/blocking/SessionComposer";
 import { SessionEditDialog } from "../components/blocking/SessionEditDialog";
+import { formatClock } from "@shared/timeline";
+import { useClockFormat } from "../clock-format";
 import {
   Plus,
   RefreshCw,
@@ -50,6 +52,7 @@ export function BlockingScreen({
   editingSchedule?: BlockingSchedule | null;
   onCloseEdit?: () => void;
 }) {
+  const clockFormat = useClockFormat();
   const [tab, setTab] = useState<SessionTab>("sessions");
   const [showCreateSession, setShowCreateSession] = useState(false);
   const [showCreateBlocklist, setShowCreateBlocklist] = useState(false);
@@ -153,7 +156,7 @@ export function BlockingScreen({
         <strong>{enforcementLabel}.</strong>{" "}
         {enforcement?.lastError || capabilities?.reason || (
           occurrence
-            ? `${occurrence.schedule_name} is active until ${new Date(occurrence.end_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`
+            ? `${occurrence.schedule_name} is active until ${formatClock(occurrence.end_at, clockFormat)}.`
             : "Permissions and native helper setup are complete."
         )}
       </Banner>

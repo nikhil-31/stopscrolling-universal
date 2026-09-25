@@ -3,16 +3,20 @@ import { createPortal } from "react-dom";
 import { deviceColor, displayNameForDevice } from "@shared/device";
 import {
   colorForCategory,
+  dayAxisHour,
+  dayHourTitle,
   durationAxisTicks,
   formatDuration,
 } from "@shared/timeline";
 import type {
+  ClockFormat,
   DeviceListEntry,
   InsightsPeriod,
   ScreenTimeBucketDevice,
   ScreenTimeCategoryBreakdown,
   ScreenTimePeriodBucket,
 } from "@shared/types";
+import { useClockFormat } from "../../clock-format";
 import { BarChart3, PieChart as PieChartIcon } from "lucide-react";
 import { hoverCardPosition } from "./SessionHoverCard";
 import { Card, EmptyState } from "../ui";
@@ -70,6 +74,32 @@ function deviceName(key: string, devices: DeviceListEntry[]) {
   return displayNameForDevice(platform, name, devices);
 }
 
+function dayBucketHour(bucket: ScreenTimePeriodBucket) {
+  const match = /^day-(\d+)$/.exec(bucket.id);
+  return match ? Number(match[1]) : null;
+}
+
+function DayAxisLabel({
+  bucket,
+  period,
+  clockFormat,
+}: {
+  bucket: ScreenTimePeriodBucket;
+  period?: InsightsPeriod;
+  clockFormat: ClockFormat;
+}) {
+  if (period !== "day") return <span className="bar-label">{bucket.label}</span>;
+  const hour = dayBucketHour(bucket);
+  if (hour == null) return <span className="bar-label">{bucket.label}</span>;
+  const { text, period: meridiem } = dayAxisHour(hour, clockFormat);
+  return (
+    <span className="bar-label">
+      {text}
+      {meridiem ? <span className="bar-label-period">{meridiem}</span> : null}
+    </span>
+  );
+}
+
 function periodDeviceKeys(buckets: ScreenTimePeriodBucket[]) {
   const keys = new Set<string>();
   for (const bucket of buckets) {
@@ -86,14 +116,18 @@ function orderedShares(shares: ScreenTimeBucketDevice[], devices: DeviceListEntr
 function ActivityBarHover({
   bucket,
   devices,
+  clockFormat,
   x,
   y,
 }: {
   bucket: ScreenTimePeriodBucket;
   devices: DeviceListEntry[];
+  clockFormat: ClockFormat;
   x: number;
   y: number;
 }) {
+  const hour = dayBucketHour(bucket);
+  const title = hour == null ? bucket.label : dayHourTitle(hour, clockFormat);
   const shares = orderedShares(bucket.devices ?? [], devices);
   const appRows = shares.reduce((sum, share) => sum + (share.apps?.length ?? 0), 0);
   const cardHeight = 48 + shares.length * 28 + appRows * 16;
@@ -101,7 +135,7 @@ function ActivityBarHover({
   return createPortal(
     <div className="native-hover-card activity-bar-hover" data-testid="activity-bar-hover" style={{ left, top }}>
       <div className="native-hover-heading">
-        <strong>{bucket.label}</strong>
+        <strong>{title}</strong>
         <span>{formatDuration(bucket.seconds)}</span>
       </div>
       {shares.length ? (
@@ -136,11 +170,14 @@ export function BucketBars({
   buckets,
   period,
   devices = [],
+  clockFormat,
 }: {
   buckets: ScreenTimePeriodBucket[];
   period?: InsightsPeriod;
   devices?: DeviceListEntry[];
+  clockFormat?: ClockFormat;
 }) {
+  const selectedFormat = clockFormat ?? useClockFormat();
   const [hover, setHover] = useState<{ bucket: ScreenTimePeriodBucket; x: number; y: number } | null>(null);
   const max = Math.max(0, ...buckets.map((bucket) => bucket.seconds));
   if (!buckets.length) {
@@ -174,7 +211,7 @@ export function BucketBars({
           ))}
         </div>
         <div
-          className={`bar-chart ${dense ? "bar-chart-month" : ""}`}
+          className={`bar-chart ${dense ? "bar-chart-month" : ""} ${period === "day" ? "bar-chart-day" : ""}`}
           role="img"
           aria-label={`Tracked time chart, 0 to ${formatDuration(axis.max)}`}
           style={{ ["--bucket-count" as string]: buckets.length }}
@@ -222,7 +259,7 @@ export function BucketBars({
                     />
                   ))}
                 </span>
-                <span className="bar-label">{bucket.label}</span>
+                <DayAxisLabel bucket={bucket} period={period} clockFormat={selectedFormat} />
               </div>
             );
           })}
@@ -238,7 +275,7 @@ export function BucketBars({
           ))}
         </div>
       ) : null}
-      {hover ? <ActivityBarHover bucket={hover.bucket} devices={devices} x={hover.x} y={hover.y} /> : null}
+      {hover ? <ActivityBarHover bucket={hover.bucket} devices={devices} clockFormat={selectedFormat} x={hover.x} y={hover.y} /> : null}
     </>
   );
 }
@@ -247,10 +284,12 @@ export const TrendCard = memo(function TrendCard({
   buckets,
   period,
   devices = [],
+  clockFormat,
 }: {
   buckets: ScreenTimePeriodBucket[];
   period?: InsightsPeriod;
   devices?: DeviceListEntry[];
+  clockFormat?: ClockFormat;
 }) {
   return (
     <Card className={`chart-card ${period === "month" ? "chart-card-month" : ""}`}>
@@ -260,7 +299,7 @@ export const TrendCard = memo(function TrendCard({
           <div className="data-card-subtitle">Tracked time across this period</div>
         </div>
       </div>
-      <BucketBars buckets={buckets} period={period} devices={devices} />
+      <BucketBars buckets={buckets} period={period} devices={devices} clockFormat={clockFormat} />
     </Card>
   );
 });

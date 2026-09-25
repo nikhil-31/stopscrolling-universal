@@ -17,6 +17,10 @@ struct HostSetupStatus: Codable, Sendable {
     )
 }
 
+struct HelperRegistrationFailure: Error {
+    var detail: String
+}
+
 enum HostActivationError: String, Error {
     case helperRegistrationFailed = "helper-registration-failed"
     case networkFilterActivationFailed = "network-filter-activation-failed"
@@ -43,23 +47,33 @@ final class HostActivation: NSObject, OSSystemExtensionRequestDelegate, @uncheck
     }
 
     func activate() -> HostSetupStatus {
-        do {
-            try registerHelper()
+        let helperError = capture { try registerHelper() }
+        let networkError = capture {
             try activateExtension(Self.networkFilterIdentifier)
             try enableNetworkFilter()
+        }
+        let endpointError = capture {
             try activateExtension(Self.endpointSecurityIdentifier)
             endpointSecurityApproved = true
-            var status = currentSetup()
-            status.lastError = nil
-            return status
+        }
+        var status = currentSetup()
+        let registrationError = status.helperRegistered
+            ? nil
+            : (helperError ?? "helper-not-enabled")
+        status.lastError = registrationError ?? networkError ?? endpointError
+        return status
+    }
+
+    private func capture(_ body: () throws -> Void) -> String? {
+        do {
+            try body()
+            return nil
         } catch let error as HostActivationError {
-            var status = currentSetup()
-            status.lastError = error.rawValue
-            return status
+            return error.rawValue
+        } catch let error as HelperRegistrationFailure {
+            return error.detail
         } catch {
-            var status = currentSetup()
-            status.lastError = mappedActivationError(error)
-            return status
+            return mappedActivationError(error)
         }
     }
 
@@ -69,7 +83,8 @@ final class HostActivation: NSObject, OSSystemExtensionRequestDelegate, @uncheck
         do {
             try service.register()
         } catch {
-            throw HostActivationError.helperRegistrationFailed
+            let nsError = error as NSError
+            throw HelperRegistrationFailure(detail: "helper-registration-failed \(nsError.domain) \(nsError.code)")
         }
         if service.status != .enabled {
             throw HostActivationError.userApprovalRequired
