@@ -14,6 +14,10 @@ export function calendarWorkspacePath() {
   return join(userDataDir(), "calendar-workspace.json");
 }
 
+export function timesheetSummariesPath() {
+  return join(userDataDir(), "timesheet-summaries.json");
+}
+
 export function tokensPath() {
   return join(userDataDir(), "auth-tokens.dat");
 }

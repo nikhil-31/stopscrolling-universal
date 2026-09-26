@@ -11,8 +11,10 @@ const views: CalendarView[] = ["day", "week", "month"];
 
 export function CalendarChrome({
   state,
+  title: pageTitle,
 }: {
   state: AppSnapshot;
+  title?: string;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const anchor = new Date(state.calendarAnchor);
@@ -30,7 +32,15 @@ export function CalendarChrome({
 
   return (
     <header className="calendar-chrome">
-      <h2 className="calendar-chrome-date">{title}</h2>
+      <h2 className="calendar-chrome-date">
+        {pageTitle ? (
+          <>
+            <span className="calendar-chrome-title">{pageTitle}</span>
+            <span className="calendar-chrome-sep" aria-hidden="true">/</span>
+          </>
+        ) : null}
+        {title}
+      </h2>
       <div className="calendar-chrome-controls">
         <div className="calendar-chrome-nav">
           <IconButton

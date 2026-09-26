@@ -3,11 +3,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { normalizedEmail, signInError, signUpError } from "@shared/auth-validation";
 import {
+  approveBlocks,
   assignLabel,
   assignLabelToApp,
   buildCalendarDayStats,
   collectDayBlocks,
   clearAssignment,
+  isOngoingBlock,
   mondayMonthGridBounds,
   mondayWeekBounds,
   deleteLabel,
@@ -15,6 +17,7 @@ import {
   reviewBlock,
   skipBlock,
   shouldShowReviewBar,
+  unapproveBlock,
   type CalendarAssignment,
   type CalendarDayStats,
   type CalendarLabel,
@@ -27,6 +30,12 @@ import { deviceKey, resolvedDeviceName, withComputedOnline } from "@shared/devic
 import { IPC } from "@shared/ipc";
 import { currentDevicePlatform, effectiveTimeZone as resolveTimeZone, toDateInput } from "@shared/platform";
 import { TIMER_BONUS_STEP_SECONDS, usesTodayWindow } from "@shared/timer";
+import {
+  blocksNeedingSummaries,
+  buildTimesheetRows,
+  timesheetEntryPayload,
+  type TimesheetSummaries,
+} from "@shared/timesheet";
 import type { AppSnapshot, AppStatePatch, AuthUiState, BlockingUiState, InspectorSelection, LeaderboardUiState } from "@shared/snapshot";
 import { emptyInspector, inspectorFromSelection, toStatePatch } from "@shared/snapshot";
 import {
@@ -72,6 +81,7 @@ import { GoogleCalendarService } from "./google-calendar";
 import { logObservability } from "./logger";
 import { deviceName as localDeviceName, hiddenDevicesPath, networkLogPath, observabilityLogPath } from "./paths";
 import { loadSettings, saveSettings } from "./settings-store";
+import { loadTimesheetSummaries, saveTimesheetSummaries } from "./timesheet-summary-store";
 import { clearTokens, loadSessionUser, loadTokens, saveSessionUser, saveTokens } from "./token-store";
 import { clearTypesafeApiKey, hasTypesafeApiKey, saveTypesafeApiKey } from "./typesafe-key-store";
 import { ScreenTimeTracker } from "./tracker";
@@ -121,6 +131,13 @@ const LIVE_SESSION_RESOLUTION_MS = 15_000;
 const SLOW_SNAPSHOT_MS = 50;
 const PREFETCH_DELAY_MS = 3_000;
 const SUMMARY_CACHE_LIMIT = 8;
+const TIMESHEET_SUMMARY_DEBOUNCE_MS = 1_500;
+const TIMESHEET_SUMMARY_POLL_MS = 30_000;
+const TIMESHEET_SUMMARY_BATCH = 200;
+
+function usesCalendarRange(navigation: NavigationItem) {
+  return navigation === "calendar" || navigation === "timesheet";
+}
 
 function rangeCacheKey(bounds: { start: Date; end: Date }, zone: string) {
   return `${bounds.start.getTime()}|${bounds.end.getTime()}|${zone}`;
@@ -172,6 +189,7 @@ export class AppController {
   calendarMonth = new Date();
   calendarView: CalendarView = "day";
   calendarWorkspace = loadCalendarWorkspace();
+  timesheetSummaries: TimesheetSummaries = loadTimesheetSummaries();
   reviewBarDismissedIds: string[] = [];
   insightsPeriod: InsightsPeriod = "day";
   insightsAnchor = new Date();
@@ -208,6 +226,8 @@ export class AppController {
   private summaryCache = new Map<string, PeriodSummaryResponse>();
   private prefetchTimer: NodeJS.Timeout | null = null;
   private timelineTimer: NodeJS.Timeout | null = null;
+  private timesheetSummaryTimer: NodeJS.Timeout | null = null;
+  private timesheetSummaryInFlight = false;
   private helperTimer: NodeJS.Timeout | null = null;
   private helperBoundaryTimer: NodeJS.Timeout | null = null;
   private lastPolicySignature: string | null = null;
@@ -271,7 +291,7 @@ export class AppController {
 
   visibleRange() {
     const zone = this.effectiveTimeZone();
-    if (this.navigation === "calendar") {
+    if (usesCalendarRange(this.navigation)) {
       if (this.calendarView === "month") return mondayMonthGridBounds(this.calendarMonth, zone);
       return { start: startOfMonth(this.calendarMonth, zone), end: endOfMonth(this.calendarMonth, zone) };
     }
@@ -304,6 +324,7 @@ export class AppController {
       calendarMonth: this.calendarMonth.toISOString(),
       calendarView: this.calendarView,
       calendarWorkspace: this.calendarWorkspace,
+      timesheetSummaries: this.timesheetSummaries,
       calendarDayStats: view.calendarDayStats,
       calendarReviewVisible: shouldShowReviewBar(
         view.calendarDayStats.unlabeledBlocks.map((block) => block.id),
@@ -410,10 +431,11 @@ export class AppController {
       ? filterEntriesForInsights(allEntries, deviceKeyForNav, this.hiddenDeviceKeys)
       : allEntries;
     const period = this.navigation === "insights" ? this.insightsPeriod : "day";
+    const calendarRange = usesCalendarRange(this.navigation);
     const anchor =
       this.navigation === "insights"
         ? this.insightsAnchor
-        : this.navigation === "calendar"
+        : calendarRange
           ? this.calendarAnchor
           : this.todayDay;
     const todayBounds = todayPeriodBounds("day", this.todayDay, zone);
@@ -431,9 +453,9 @@ export class AppController {
       name: device.device_name,
       timeZone: device.time_zone,
     }));
-    const timelineBounds = this.navigation === "calendar" && this.calendarView === "week"
+    const timelineBounds = calendarRange && this.calendarView === "week"
       ? mondayWeekBounds(anchor, zone)
-      : this.navigation === "calendar" && this.calendarView === "month"
+      : calendarRange && this.calendarView === "month"
         ? mondayMonthGridBounds(this.calendarMonth, zone)
         : snapshotBounds;
     const timelines = this.navigation === "insights" && period !== "day"
@@ -445,7 +467,7 @@ export class AppController {
           ),
           deviceKeyForNav,
         );
-    const calendarDayStats = this.navigation === "calendar"
+    const calendarDayStats = calendarRange
       ? buildCalendarDayStats(
           this.calendarWorkspace,
           collectDayBlocks(timelines),
@@ -458,7 +480,7 @@ export class AppController {
       devices,
       todayDeviceKey,
       insightsDeviceKey,
-      snapshot: this.navigation === "calendar"
+      snapshot: calendarRange
         ? { ...snapshot, trackedSecondsByDay: trackedSecondsByDay(entries, this.calendarMonth, zone) }
         : snapshot,
       timelines,
@@ -548,12 +570,55 @@ export class AppController {
       if (generation !== this.refreshGeneration) return;
     }
     this.broadcast();
+    this.scheduleTimesheetSummaries();
+  }
+
+  /** Requests AI descriptions for finished Timesheet entries, polling while any are queued. */
+  scheduleTimesheetSummaries(delay = TIMESHEET_SUMMARY_DEBOUNCE_MS) {
+    if (this.timesheetSummaryTimer) clearTimeout(this.timesheetSummaryTimer);
+    this.timesheetSummaryTimer = null;
+    if (this.navigation !== "timesheet" || !this.api.getTokens()) return;
+    this.timesheetSummaryTimer = setTimeout(() => {
+      this.timesheetSummaryTimer = null;
+      void this.requestTimesheetSummaries();
+    }, delay);
+  }
+
+  private async requestTimesheetSummaries() {
+    if (this.timesheetSummaryInFlight || this.navigation !== "timesheet" || !this.api.getTokens()) return;
+    const now = Date.now();
+    const rows = buildTimesheetRows({
+      timelines: this.dataView().timelines,
+      workspace: this.calendarWorkspace,
+      summaries: this.timesheetSummaries,
+      isLive: (block) => isOngoingBlock(block, now, this.tracker.isTracking),
+    });
+    const blocks = blocksNeedingSummaries(rows, this.timesheetSummaries).slice(0, TIMESHEET_SUMMARY_BATCH);
+    if (!blocks.length) return;
+    this.timesheetSummaryInFlight = true;
+    let waiting = false;
+    try {
+      const results = await this.api.timesheetSummaries(blocks.map(timesheetEntryPayload));
+      const next = { ...this.timesheetSummaries };
+      for (const result of results) {
+        next[result.entry_id] = { status: result.status, summary: result.summary };
+        if (result.status === "pending" || result.status === "processing") waiting = true;
+      }
+      this.timesheetSummaries = next;
+      saveTimesheetSummaries(next);
+      this.broadcast();
+    } catch (error) {
+      logObservability(`Timesheet summaries failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.timesheetSummaryInFlight = false;
+    }
+    if (waiting) this.scheduleTimesheetSummaries(TIMESHEET_SUMMARY_POLL_MS);
   }
 
   startTimelineRefresh() {
     if (this.timelineTimer) clearInterval(this.timelineTimer);
     this.timelineTimer = setInterval(() => {
-      if (["today", "timer", "calendar", "insights"].includes(this.navigation)) {
+      if (["today", "timer", "calendar", "timesheet", "insights"].includes(this.navigation)) {
         void this.refreshVisibleRange();
       }
       if (this.auth.user) void this.tracker.heartbeat();
@@ -806,6 +871,14 @@ export class AppController {
 
   skipCalendarBlock(blockId: string) {
     this.mutateWorkspace((workspace) => skipBlock(workspace, blockId));
+  }
+
+  approveTimesheetEntries(blocks: Array<Pick<ScreenTimeSessionBlock, "id" | "start" | "end" | "category">>) {
+    this.mutateWorkspace((workspace) => approveBlocks(workspace, blocks));
+  }
+
+  unapproveTimesheetEntry(blockId: string) {
+    this.mutateWorkspace((workspace) => unapproveBlock(workspace, blockId));
   }
 
   assignCalendarLabelToApp(payload: { appKey: string; labelId: string }) {

@@ -5,6 +5,7 @@ import {
   BarChart3,
   CalendarDays,
   CircleUserRound,
+  Sheet,
   Shield,
   Sparkles,
   SunMedium,
@@ -15,6 +16,7 @@ import { StatusPill, Tooltip } from "./ui";
 const icons: Record<string, LucideIcon> = {
   today: SunMedium,
   calendar: CalendarDays,
+  timesheet: Sheet,
   insights: BarChart3,
   blocking: Shield,
   account: CircleUserRound,

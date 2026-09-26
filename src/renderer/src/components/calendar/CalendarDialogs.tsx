@@ -1,4 +1,4 @@
-import { formatHourMinute, suggestLabel } from "@shared/calendar-workspace";
+import { formatHourMinute, suggestLabel, unlabeledBlocks } from "@shared/calendar-workspace";
 import type { AppSnapshot } from "@shared/snapshot";
 import { X } from "lucide-react";
 import { useState } from "react";
@@ -22,7 +22,7 @@ export function CalendarDialogs({
         {prompt.kind === "label" ? <LabelPrompt key={`${prompt.start}-${prompt.assignmentId ?? prompt.blockId ?? ""}`} state={state} prompt={prompt} onClose={onClose} /> : null}
         {prompt.kind === "app-label" ? <AppLabelPrompt key={prompt.appKey} state={state} prompt={prompt} onClose={onClose} /> : null}
         {prompt.kind === "task" ? <TaskPrompt key={prompt.taskId ?? prompt.start} prompt={prompt} onClose={onClose} /> : null}
-        {prompt.kind === "review" ? <ReviewPrompt state={state} onClose={onClose} /> : null}
+        {prompt.kind === "review" ? <ReviewPrompt state={state} blockIds={prompt.blockIds} onClose={onClose} /> : null}
         {prompt.kind === "target" ? <TargetPrompt state={state} onClose={onClose} /> : null}
         {prompt.kind === "labels" ? <LabelsPrompt state={state} onClose={onClose} /> : null}
       </div>
@@ -141,12 +141,14 @@ function TaskPrompt({
   );
 }
 
-function ReviewPrompt({ state, onClose }: { state: AppSnapshot; onClose: () => void }) {
-  const blocks = state.calendarDayStats.unlabeledBlocks;
+function ReviewPrompt({ state, blockIds, onClose }: { state: AppSnapshot; blockIds?: string[]; onClose: () => void }) {
+  const blocks = blockIds ? periodUnlabeledBlocks(state, blockIds) : state.calendarDayStats.unlabeledBlocks;
   return (
     <>
       <h3>Review time entries</h3>
-      <p className="muted">{blocks.length} unlabeled {blocks.length === 1 ? "block" : "blocks"} on this day.</p>
+      <p className="muted">
+        {blocks.length} unlabeled {blocks.length === 1 ? "block" : "blocks"} {blockIds ? "in this period" : "on this day"}.
+      </p>
       <div className="calendar-review-list">
         {blocks.map((block) => {
           const suggested = suggestLabel(block, state.calendarWorkspace.labels);
@@ -177,6 +179,17 @@ function ReviewPrompt({ state, onClose }: { state: AppSnapshot; onClose: () => v
       </div>
     </>
   );
+}
+
+function periodUnlabeledBlocks(state: AppSnapshot, blockIds: string[]) {
+  const ids = new Set(blockIds);
+  const seen = new Set<string>();
+  const blocks = state.timelines.flatMap((timeline) => timeline.blocks).filter((block) => {
+    if (!ids.has(block.id) || seen.has(block.id)) return false;
+    seen.add(block.id);
+    return true;
+  });
+  return unlabeledBlocks(blocks, state.calendarWorkspace);
 }
 
 function TargetPrompt({ state, onClose }: { state: AppSnapshot; onClose: () => void }) {

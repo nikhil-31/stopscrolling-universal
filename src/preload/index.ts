@@ -91,6 +91,8 @@ const api = {
   skipCalendarBlock: (blockId: string) => ipcRenderer.send(IPC.skipCalendarBlock, blockId),
   dismissCalendarReview: (unlabeledIds: string[]) => ipcRenderer.send(IPC.dismissCalendarReview, unlabeledIds),
   assignCalendarLabelToApp: (payload: { appKey: string; labelId: string }) => ipcRenderer.send(IPC.assignCalendarLabelToApp, payload),
+  approveTimesheetEntries: (blocks: Array<Pick<ScreenTimeSessionBlock, "id" | "start" | "end" | "category">>) => ipcRenderer.send(IPC.approveTimesheetEntries, blocks),
+  unapproveTimesheetEntry: (blockId: string) => ipcRenderer.send(IPC.unapproveTimesheetEntry, blockId),
   reportCrash: (report: RendererCrashReport) => ipcRenderer.send(IPC.reportCrash, report),
 };
 

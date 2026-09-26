@@ -68,6 +68,8 @@ interface StopScrollingDesktop {
   skipCalendarBlock: (blockId: string) => void;
   dismissCalendarReview: (unlabeledIds: string[]) => void;
   assignCalendarLabelToApp: (payload: { appKey: string; labelId: string }) => void;
+  approveTimesheetEntries: (blocks: Array<Pick<import("@shared/types").ScreenTimeSessionBlock, "id" | "start" | "end" | "category">>) => void;
+  unapproveTimesheetEntry: (blockId: string) => void;
   reportCrash: (report: import("@shared/crash").RendererCrashReport) => void;
 }
 

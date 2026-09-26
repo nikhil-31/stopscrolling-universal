@@ -64,6 +64,8 @@ export const IPC = {
   skipCalendarBlock: "app:skip-calendar-block",
   dismissCalendarReview: "app:dismiss-calendar-review",
   assignCalendarLabelToApp: "app:assign-calendar-label-to-app",
+  approveTimesheetEntries: "app:approve-timesheet-entries",
+  unapproveTimesheetEntry: "app:unapprove-timesheet-entry",
   reportCrash: "app:report-crash",
 } as const;
 

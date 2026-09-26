@@ -43,6 +43,7 @@ export interface CalendarWorkspace {
   tasks: CalendarTask[];
   assignments: CalendarAssignment[];
   skippedBlockIds: string[];
+  approvedBlockIds: string[];
 }
 
 export interface CalendarLabelTotal {
@@ -86,6 +87,7 @@ export function defaultWorkspace(): CalendarWorkspace {
     tasks: [],
     assignments: [],
     skippedBlockIds: [],
+    approvedBlockIds: [],
   };
 }
 
@@ -101,6 +103,7 @@ export function normalizeWorkspace(raw: Partial<CalendarWorkspace> | null | unde
       ? raw.assignments.map(normalizeAssignment).filter((item): item is CalendarAssignment => Boolean(item))
       : [],
     skippedBlockIds: Array.isArray(raw?.skippedBlockIds) ? raw.skippedBlockIds.filter((id) => typeof id === "string") : [],
+    approvedBlockIds: Array.isArray(raw?.approvedBlockIds) ? raw.approvedBlockIds.filter((id) => typeof id === "string") : [],
   };
 }
 
@@ -435,6 +438,27 @@ export function reviewBlock(
     ...assigned,
     skippedBlockIds: assigned.skippedBlockIds.filter((id) => id !== block.id),
   };
+}
+
+export function approveBlocks(
+  workspace: CalendarWorkspace,
+  blocks: Array<Pick<ScreenTimeSessionBlock, "id" | "start" | "end" | "category">>,
+): CalendarWorkspace {
+  let next = workspace;
+  for (const block of blocks) {
+    const labeled = next.assignments.some((assignment) => assignmentOverlapsBlock(assignment, block));
+    const suggested = labeled ? null : suggestLabel(block, next.labels);
+    if (suggested) next = reviewBlock(next, block, suggested.id);
+    if (!next.approvedBlockIds.includes(block.id)) {
+      next = { ...next, approvedBlockIds: [...next.approvedBlockIds, block.id] };
+    }
+  }
+  return next;
+}
+
+export function unapproveBlock(workspace: CalendarWorkspace, blockId: string): CalendarWorkspace {
+  if (!workspace.approvedBlockIds.includes(blockId)) return workspace;
+  return { ...workspace, approvedBlockIds: workspace.approvedBlockIds.filter((id) => id !== blockId) };
 }
 
 export function appKeyForSegment(segment: Pick<ScreenTimeTimelineSegment, "appName" | "subtitle" | "category">) {

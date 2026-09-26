@@ -1754,6 +1754,193 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
   border-radius: 10px;
 }
 
+.calendar-chrome-title { color: var(--text-secondary); font-weight: 620; }
+.calendar-chrome-sep { margin: 0 8px; color: var(--text-tertiary); font-weight: 400; }
+
+.timesheet-page { display: grid; align-content: start; gap: 12px; }
+.timesheet-page .calendar-chrome { margin-bottom: 2px; }
+.timesheet-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, auto)) minmax(200px, 1fr);
+  align-items: center;
+  gap: 28px;
+  padding: 14px 18px;
+  background: var(--surface-solid);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.timesheet-stat { display: grid; gap: 4px; }
+.timesheet-stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.timesheet-stat strong { font-size: 19px; font-weight: 720; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.timesheet-swatch { width: 8px; height: 8px; border-radius: 2px; }
+.timesheet-swatch.is-review, .timesheet-progress .is-review { background: var(--warning); }
+.timesheet-swatch.is-approved, .timesheet-progress .is-approved { background: var(--success); }
+.timesheet-progress .is-processing { background: var(--text-tertiary); }
+.timesheet-progress-wrap { display: grid; justify-items: end; gap: 6px; }
+.timesheet-progress {
+  display: flex;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  background: var(--surface-subtle);
+  border-radius: var(--radius-pill);
+}
+.timesheet-progress span { height: 100%; transition: width 200ms var(--ease); }
+.timesheet-progress-label { color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.timesheet-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.timesheet-toolbar-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.timesheet-kbd {
+  padding: 1px 4px;
+  font: inherit;
+  font-size: 9px;
+  opacity: 0.7;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+}
+.timesheet-popover { position: relative; display: inline-flex; }
+.timesheet-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 12;
+  display: grid;
+  min-width: 190px;
+  max-height: 340px;
+  overflow: auto;
+  padding: 6px;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+}
+.timesheet-menu.is-right { right: 0; left: auto; }
+.timesheet-menu-heading {
+  padding: 8px 8px 4px;
+  color: var(--text-tertiary);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.timesheet-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  text-align: left;
+  font-size: 11px;
+}
+.timesheet-menu-item:hover { background: var(--surface-hover); }
+.timesheet-menu-check { display: inline-grid; place-items: center; width: 12px; }
+.timesheet-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+
+.timesheet-table {
+  overflow: auto;
+  background: var(--surface-solid);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.timesheet-row {
+  display: grid;
+  align-items: center;
+  min-width: 760px;
+  border-bottom: 1px solid var(--line);
+}
+.timesheet-row:last-child { border-bottom: 0; }
+.timesheet-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  color: var(--text-tertiary);
+  background: var(--surface-solid);
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.timesheet-cell { min-width: 0; padding: 10px 8px; font-size: 12px; }
+.timesheet-head .timesheet-cell { padding-top: 9px; padding-bottom: 9px; font-size: 10px; }
+.timesheet-check { display: grid; place-items: center; padding-right: 0; padding-left: 10px; }
+.timesheet-num { text-align: right; font-variant-numeric: tabular-nums; }
+.timesheet-actions-head { text-align: right; padding-right: 14px; }
+.timesheet-group-head { background: var(--surface-subtle); }
+.timesheet-group-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  grid-column: 2 / -2;
+  padding: 8px;
+  font-size: 12px;
+}
+.timesheet-group-title span { color: var(--text-tertiary); font-size: 11px; }
+.timesheet-group-total {
+  grid-column: -2 / -1;
+  padding: 8px 14px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.timesheet-entry:hover { background: var(--surface-hover); }
+.timesheet-entry.is-approved .timesheet-desc-text { color: var(--text-secondary); }
+.timesheet-time { display: grid; gap: 2px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timesheet-time small { color: var(--text-tertiary); font-size: 10px; }
+.timesheet-desc { display: grid; gap: 3px; }
+.timesheet-desc-text {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.4;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.timesheet-ai { margin-right: 5px; color: var(--text-tertiary); vertical-align: -1px; }
+.timesheet-desc-meta { color: var(--text-tertiary); font-size: 10px; }
+.timesheet-desc-meta.is-live { color: var(--success); font-weight: 650; }
+.timesheet-device { display: flex; align-items: center; gap: 7px; }
+.timesheet-device span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timesheet-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 0 9px;
+  color: inherit;
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+}
+.timesheet-label span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timesheet-label.is-suggested { color: var(--text-secondary); background: transparent; border-style: dashed; border-color: var(--line-strong); }
+.timesheet-label:hover { border-color: var(--line-strong); background: var(--surface-hover); }
+.timesheet-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; padding-right: 8px; }
+.timesheet-empty {
+  padding: 40px 16px;
+  background: var(--surface-solid);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
 .calendar-month-board {
   overflow: auto;
   max-height: min(820px, calc(100vh - 180px));
@@ -2489,6 +2676,8 @@ html[data-platform="macos"] .settings-nav {
   .calendar-side { position: static; display: grid; grid-template-columns: minmax(250px, 1fr) minmax(220px, 0.7fr); gap: 12px; }
   .calendar-day-layout { grid-template-columns: 1fr; }
   .calendar-chrome, .today-chrome { flex-direction: column; align-items: flex-start; }
+  .timesheet-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .timesheet-progress-wrap { grid-column: 1 / -1; justify-items: start; }
   .activity-split { grid-template-columns: 1fr; }
   .activity-split > .activity-pie-panel { grid-column: auto; }
   .breakdown-layout { grid-template-columns: 1fr; }

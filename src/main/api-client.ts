@@ -25,6 +25,7 @@ import type {
   BypassRedeemInput,
   BypassIssueInput,
 } from "@shared/types";
+import type { TimesheetEntryPayload, TimesheetSummaryStatus } from "@shared/timesheet";
 import { logNetwork } from "./logger";
 
 export class APIError extends Error {
@@ -242,6 +243,14 @@ export class StopScrollingAPI {
       method: "POST",
       body: JSON.stringify({ events }),
     });
+  }
+
+  async timesheetSummaries(entries: TimesheetEntryPayload[]) {
+    const body = await this.request<{ summaries?: Array<{ entry_id: string; status: TimesheetSummaryStatus; summary: string }> }>(
+      "api/timesheet/summaries/",
+      { method: "POST", body: JSON.stringify({ entries }) },
+    );
+    return body.summaries ?? [];
   }
 
   async sessions(params: { day?: string; start?: string; end?: string; time_zone?: string }) {

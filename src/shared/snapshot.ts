@@ -1,4 +1,5 @@
 import type { CalendarDayStats, CalendarView, CalendarWorkspace } from "./calendar-workspace";
+import type { TimesheetSummaries } from "./timesheet";
 import type {
   AppSettings,
   AuthenticatedUser,
@@ -113,6 +114,7 @@ export interface AppSnapshot {
   calendarMonth: string;
   calendarView: CalendarView;
   calendarWorkspace: CalendarWorkspace;
+  timesheetSummaries: TimesheetSummaries;
   calendarDayStats: CalendarDayStats;
   calendarReviewVisible: boolean;
   typesafeApiKeyConfigured: boolean;

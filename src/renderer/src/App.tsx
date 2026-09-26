@@ -11,6 +11,7 @@ import { useAppState } from "./hooks/useAppState";
 import { AccountScreen } from "./screens/AccountScreen";
 import { BlockingScreen } from "./screens/BlockingScreen";
 import { CalendarScreen } from "./screens/CalendarScreen";
+import { TimesheetScreen } from "./screens/TimesheetScreen";
 import { LeaderboardScreen } from "./screens/LeaderboardScreen";
 import { TimerScreen } from "./screens/TimerScreen";
 import { TodayScreen } from "./screens/TodayScreen";
@@ -58,10 +59,11 @@ export function App() {
             data-testid="content-area"
             aria-label={`${state.navigation} content`}
           >
-            <div className={`content-canvas ${["today", "timer", "calendar"].includes(state.navigation) ? "content-canvas-calendar" : ""}`} key={state.navigation}>
+            <div className={`content-canvas ${["today", "timer", "calendar", "timesheet"].includes(state.navigation) ? "content-canvas-calendar" : ""}`} key={state.navigation}>
               {state.navigation === "today" && <TodayScreen state={state} />}
               {state.navigation === "timer" && <TimerScreen state={state} />}
               {state.navigation === "calendar" && <CalendarScreen state={state} />}
+              {state.navigation === "timesheet" && <TimesheetScreen state={state} />}
               {state.navigation === "insights" && (
                 <Suspense fallback={<LoadingState label="Building your insights…" />}>
                   <InsightsScreen state={state} />

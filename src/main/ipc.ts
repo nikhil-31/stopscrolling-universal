@@ -251,6 +251,12 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.assignCalendarLabelToApp, (_event, payload: { appKey: string; labelId: string }) => {
     controller.assignCalendarLabelToApp(payload);
   });
+  ipcMain.on(IPC.approveTimesheetEntries, (_event, blocks) => {
+    controller.approveTimesheetEntries(blocks);
+  });
+  ipcMain.on(IPC.unapproveTimesheetEntry, (_event, blockId: string) => {
+    controller.unapproveTimesheetEntry(blockId);
+  });
 }
 
 export function installApplicationMenu(controller: AppController) {
@@ -306,6 +312,7 @@ export function installApplicationMenu(controller: AppController) {
       submenu: [
         { label: "Today", accelerator: "CmdOrCtrl+1", click: () => controller.selectNavigation("today") },
         { label: "Calendar", accelerator: "CmdOrCtrl+2", click: () => controller.selectNavigation("calendar") },
+        { label: "Timesheet", accelerator: "CmdOrCtrl+6", click: () => controller.selectNavigation("timesheet") },
         { label: "Insights", accelerator: "CmdOrCtrl+3", click: () => controller.selectNavigation("insights") },
         { label: "Blocking", accelerator: "CmdOrCtrl+4", click: () => controller.selectNavigation("blocking") },
         { label: "Account", accelerator: "CmdOrCtrl+5", click: () => controller.selectNavigation("account") },
