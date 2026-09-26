@@ -1,8 +1,9 @@
 import { websiteHostname } from "@shared/browser";
 import { clipInterval, formatHourMinute, mondayMonthGridDays } from "@shared/calendar-workspace";
+import { deviceColor, deviceKey } from "@shared/device";
 import { effectiveTimeZone, endOfDay, startOfDay, startOfMonth, toDateInput } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
-import { colorForCategory, formatMonthLabel, itemBreakdownKey } from "@shared/timeline";
+import { formatMonthLabel, itemBreakdownKey } from "@shared/timeline";
 import type { ScreenTimeSessionBlock } from "@shared/types";
 
 const VISIBLE_CHIPS = 4;
@@ -69,9 +70,10 @@ export function MonthBoard({ state }: { state: AppSnapshot }) {
 function chipsForDay(day: Date, state: AppSnapshot, timeZone: string): DayChip[] {
   const dayStart = startOfDay(day, timeZone);
   const dayEnd = endOfDay(day, timeZone);
-  const totals = new Map<string, DayChip & { blockSeconds: number }>();
+  const totals = new Map<string, DayChip & { blockSeconds: number; deviceSeconds: Map<string, number> }>();
   for (const timeline of state.timelines) {
     for (const block of timeline.blocks) {
+      const sourceKey = deviceKey(block.devicePlatform || timeline.devicePlatform, block.deviceName || timeline.deviceName);
       for (const item of block.items) {
         const clipped = clipInterval(item.start, item.end, dayStart, dayEnd);
         if (!clipped) continue;
@@ -79,20 +81,38 @@ function chipsForDay(day: Date, state: AppSnapshot, timeZone: string): DayChip[]
         const key = itemBreakdownKey(item);
         const existing = totals.get(key);
         const blockSeconds = (existing?.blockSeconds ?? 0) < seconds ? seconds : existing?.blockSeconds ?? 0;
+        const deviceSeconds = new Map(existing?.deviceSeconds);
+        deviceSeconds.set(sourceKey, (deviceSeconds.get(sourceKey) ?? 0) + seconds);
         totals.set(key, {
           key,
           label: websiteHostname(item.url) || item.appName || item.title,
           seconds: (existing?.seconds ?? 0) + seconds,
-          color: colorForCategory(item.category || block.category),
+          color: "",
           block: blockSeconds === seconds ? block : existing?.block ?? block,
           blockSeconds,
+          deviceSeconds,
         });
       }
     }
   }
   return [...totals.values()]
     .sort((a, b) => b.seconds - a.seconds || a.label.localeCompare(b.label))
-    .map(({ blockSeconds: _blockSeconds, ...chip }) => chip);
+    .map(({ blockSeconds: _blockSeconds, deviceSeconds, ...chip }) => ({
+      ...chip,
+      color: deviceColor(leadingDevice(deviceSeconds), state.devices),
+    }));
+}
+
+function leadingDevice(deviceSeconds: Map<string, number>) {
+  let key = "";
+  let seconds = -1;
+  for (const [device, amount] of deviceSeconds) {
+    if (amount > seconds) {
+      key = device;
+      seconds = amount;
+    }
+  }
+  return key;
 }
 
 function openDay(day: Date) {

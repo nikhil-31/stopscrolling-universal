@@ -343,6 +343,21 @@ describe("CalendarScreen", () => {
       <CalendarScreen
         state={snapshot({
           calendarView: "month",
+          devices: [{
+            visibilityKey: "macos|Studio Mac",
+            deviceName: "Studio Mac",
+            nickname: "",
+            devicePlatform: "macos",
+            deviceID: "mac-1",
+            sessionCount: 4,
+            timeZone: "UTC",
+            lastSeenAt: null,
+            lastOnlineAt: null,
+            reportedOnline: null,
+            isOnline: true,
+            isRegistered: true,
+            colorIndex: 0,
+          }],
           timelines: [
             timeline({
               id: "macos|Studio Mac",
@@ -377,6 +392,7 @@ describe("CalendarScreen", () => {
     expect(screen.getByTestId("calendar-month-day-2026-09-26")).toHaveClass("is-today");
 
     const saturday = screen.getByTestId("calendar-month-day-2026-09-12");
+    expect(within(saturday).getByRole("button", { name: /Safari/ })).toHaveStyle({ "--block-color": "var(--device-0)" });
     expect(within(saturday).getByText("Safari")).toBeVisible();
     expect(within(saturday).getByText("50 min")).toBeVisible();
     expect(within(saturday).getByText("Notes")).toBeVisible();
