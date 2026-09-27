@@ -249,7 +249,9 @@ describe("CalendarScreen", () => {
       </SessionTitleProvider>,
     );
     const day = screen.getByTestId("calendar-day-board");
-    expect(within(day).getByText("Wrote the launch post in Writing.")).toBeVisible();
+    const titled = within(day).getByRole("button", { name: /Wrote the launch post in Writing\./ });
+    expect(titled).toHaveAttribute("title", "Wrote the launch post in Writing.");
+    expect(titled).toHaveTextContent("Wrote the launch post in Writing.");
     expect(within(day).getByText("github.com")).toBeVisible();
     expect(within(day).queryByText("Pull requests")).toBeNull();
 
@@ -259,8 +261,61 @@ describe("CalendarScreen", () => {
       </SessionTitleProvider>,
     );
     const saturday = screen.getByTestId("calendar-week-day-2026-09-12-macos|Studio Mac");
+    const weekTitle = within(saturday).getByRole("button", { name: /Wrote the launch post in Writing\./ });
+    expect(weekTitle).toHaveAttribute("title", "Wrote the launch post in Writing.");
     expect(within(saturday).getByText("Wrote the launch post in Writing.")).toBeVisible();
     expect(within(saturday).getByText("github.com")).toBeVisible();
+  });
+
+  it("combines calendar sessions that start less than 10 minutes apart", () => {
+    render(
+      <CalendarScreen
+        state={snapshot({
+          timelines: [
+            timeline({
+              id: "macos|Studio Mac",
+              deviceName: "Studio Mac",
+              devicePlatform: "macos",
+              blocks: [
+                block({
+                  id: "writing",
+                  title: "Writing",
+                  deviceName: "Studio Mac",
+                  devicePlatform: "macos",
+                  start: new Date(2026, 8, 12, 9).toISOString(),
+                  end: new Date(2026, 8, 12, 9, 20).toISOString(),
+                  durationSeconds: 20 * 60,
+                }),
+                block({
+                  id: "mail",
+                  title: "Mail",
+                  deviceName: "Studio Mac",
+                  devicePlatform: "macos",
+                  start: new Date(2026, 8, 12, 9, 28).toISOString(),
+                  end: new Date(2026, 8, 12, 9, 40).toISOString(),
+                  durationSeconds: 12 * 60,
+                }),
+                block({
+                  id: "notes",
+                  title: "Notes",
+                  deviceName: "Studio Mac",
+                  devicePlatform: "macos",
+                  start: new Date(2026, 8, 12, 9, 50).toISOString(),
+                  end: new Date(2026, 8, 12, 10).toISOString(),
+                  durationSeconds: 10 * 60,
+                }),
+              ],
+            }),
+          ],
+        })}
+      />,
+    );
+    const column = screen.getByTestId("calendar-device-column-macos|Studio Mac");
+    const buttons = within(column).getAllByRole("button");
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]).toHaveAccessibleName(/Writing/);
+    expect(buttons[0]).toHaveAccessibleName(/Mail/);
+    expect(buttons[1]).toHaveAccessibleName(/^Notes,/);
   });
 
   it("marks Tracking... only on the local device live block", () => {
@@ -377,8 +432,10 @@ describe("CalendarScreen", () => {
     const mondayMac = screen.getByTestId("calendar-week-day-2026-09-07-macos|Studio Mac");
     const saturdayMac = screen.getByTestId("calendar-week-day-2026-09-12-macos|Studio Mac");
     const saturdayPhone = screen.getByTestId("calendar-week-day-2026-09-12-ios|iPhone");
-    expect(within(mondayMac).getByText("Mail")).toBeVisible();
-    expect(within(mondayMac).getByText("0:07")).toBeVisible();
+    const shortBlock = within(mondayMac).getByRole("button", { name: /Mail/ });
+    expect(shortBlock).toHaveTextContent("Mail");
+    expect(shortBlock).not.toHaveTextContent("0:07");
+    expect(shortBlock).toHaveAttribute("title", "Mail");
     expect(within(saturdayMac).getByText("Writing")).toBeVisible();
     expect(within(saturdayMac).queryByText("Safari")).toBeNull();
     expect(within(saturdayPhone).getByText("Safari")).toBeVisible();

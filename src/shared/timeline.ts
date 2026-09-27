@@ -572,6 +572,36 @@ export function blockSegments(segments: ScreenTimeTimelineSegment[]): ScreenTime
   return blocks;
 }
 
+/** Calendar draws one block when the next session starts less than 10 minutes after the previous one ends. */
+export const calendarSessionGap = 10 * 60 * 1000;
+
+export function combineSessionBlocks(
+  blocks: ScreenTimeSessionBlock[],
+  gapMs = calendarSessionGap,
+): ScreenTimeSessionBlock[] {
+  const sorted = [...blocks].sort(
+    (a, b) => Date.parse(a.start) - Date.parse(b.start) || Date.parse(a.end) - Date.parse(b.end),
+  );
+  const combined: ScreenTimeSessionBlock[] = [];
+  for (const block of sorted) {
+    const previous = combined.at(-1);
+    const gap = previous ? Date.parse(block.start) - Date.parse(previous.end) : Number.POSITIVE_INFINITY;
+    if (!previous || gap >= gapMs) {
+      combined.push(block);
+      continue;
+    }
+    const items = [...previous.items, ...block.items];
+    combined[combined.length - 1] = {
+      ...previous,
+      end: Date.parse(block.end) > Date.parse(previous.end) ? block.end : previous.end,
+      durationSeconds: previous.durationSeconds + block.durationSeconds,
+      subtitle: items.length === 1 ? previous.subtitle : `${items.length} activities`,
+      items,
+    };
+  }
+  return combined;
+}
+
 function createBlock(segments: ScreenTimeTimelineSegment[]): ScreenTimeSessionBlock {
   const first = segments[0];
   const last = segments[segments.length - 1];

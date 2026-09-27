@@ -2,7 +2,7 @@ import { clipInterval, hourLabel24, mondayWeekDays } from "@shared/calendar-work
 import { deviceColor, deviceKey, displayNameForDevice } from "@shared/device";
 import { effectiveTimeZone, endOfDay, startOfDay, toDateInput } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
-import { formatClock, hourLabelWithPeriod } from "@shared/timeline";
+import { combineSessionBlocks, formatClock, hourLabelWithPeriod } from "@shared/timeline";
 import type { ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useClockFormat } from "../../clock-format";
@@ -146,6 +146,8 @@ export function WeekBoard({
               const live = isLocalLiveBlock(item.block, item.timeline, state, now);
               const placed = placeDayBlock(new Date(item.start).toISOString(), new Date(item.end).toISOString(), column.dayStart, column.dayEnd);
               const color = deviceColor(deviceKey(item.timeline.devicePlatform, item.timeline.deviceName), state.devices);
+              const sentence = titleFor(item.block);
+              const range = `${formatClock(new Date(item.start), clockFormat)} – ${formatClock(new Date(item.end), clockFormat)}`;
               const showHover = (event: ReactMouseEvent) => {
                 setHover({ block: item.block, x: event.clientX, y: event.clientY });
               };
@@ -159,6 +161,8 @@ export function WeekBoard({
                     height: placed.height,
                     ["--block-color" as string]: color,
                   }}
+                  title={sentence}
+                  aria-label={live ? `Tracking, ${sentence}, ${range}` : `${sentence}, ${range}`}
                   onMouseEnter={showHover}
                   onMouseMove={showHover}
                   onMouseLeave={() => setHover(null)}
@@ -177,12 +181,8 @@ export function WeekBoard({
                     </>
                   ) : (
                     <>
-                      <strong>{titleFor(item.block)}</strong>
-                      <span>
-                        {placed.height > RANGE_HEIGHT
-                          ? `${formatClock(new Date(item.start), clockFormat)} – ${formatClock(new Date(item.end), clockFormat)}`
-                          : compactDuration(item.start, item.end)}
-                      </span>
+                      <strong>{sentence}</strong>
+                      {placed.height > RANGE_HEIGHT ? <span>{range}</span> : null}
                     </>
                   )}
                 </button>
@@ -208,7 +208,7 @@ function dayDeviceColumn(
   const dayStart = startOfDay(day, timeZone);
   const dayEnd = endOfDay(day, timeZone);
   const items: DayItem[] = [];
-  for (const block of timeline.blocks) {
+  for (const block of combineSessionBlocks(timeline.blocks)) {
     const clipped = clipInterval(block.start, block.end, dayStart, dayEnd);
     if (!clipped) continue;
     const end = isLocalLiveBlock(block, timeline, state, now) ? Math.max(clipped[1], now) : clipped[1];
@@ -246,13 +246,6 @@ function earliestTop(columns: Array<{ dayStart: Date; dayEnd: Date; items: DayIt
     }
   }
   return top;
-}
-
-function compactDuration(start: number, end: number) {
-  const safe = Math.max(0, Math.round((end - start) / 1000));
-  const hours = Math.floor(safe / 3600);
-  const minutes = Math.floor((safe % 3600) / 60);
-  return `${hours}:${String(minutes).padStart(2, "0")}`;
 }
 
 function weekdayName(date: Date, timeZone: string) {

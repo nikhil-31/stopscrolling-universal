@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { blockItemShareLabel, blockSegments, buildDeviceSeries, colorForCategory, dayAxisHour, dayHourTitle, dayTrackAxis, durationAxisTicks, entriesToTimelines, entryFromSession, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, formatTrackedDuration, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, weekNumber } from "./timeline";
+import { blockItemShareLabel, blockSegments, buildDeviceSeries, colorForCategory, combineSessionBlocks, dayAxisHour, dayHourTitle, dayTrackAxis, durationAxisTicks, entriesToTimelines, entryFromSession, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, formatTrackedDuration, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, weekNumber } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import { toDateInput } from "./platform";
-import type { ScreenTimeEntry, ScreenTimePeriodBucket, ScreenTimeTimelineSegment } from "./types";
+import type { ScreenTimeEntry, ScreenTimePeriodBucket, ScreenTimeSessionBlock, ScreenTimeTimelineSegment } from "./types";
 
 function entry(partial: Partial<ScreenTimeEntry> & Pick<ScreenTimeEntry, "startTimeUTC" | "endTimeUTC" | "appName">): ScreenTimeEntry {
   return {
@@ -231,6 +231,46 @@ describe("session blocks", () => {
       },
     ];
     expect(blockSegments(segments)).toHaveLength(2);
+  });
+});
+
+describe("combineSessionBlocks", () => {
+  function session(id: string, start: string, end: string, appName: string): ScreenTimeSessionBlock {
+    return {
+      id,
+      start,
+      end,
+      title: appName,
+      subtitle: appName,
+      category: "Productivity",
+      devicePlatform: "macos",
+      deviceName: "Mac",
+      durationSeconds: (Date.parse(end) - Date.parse(start)) / 1000,
+      items: [{
+        id: `${id}-item`,
+        title: appName,
+        subtitle: appName,
+        url: "",
+        category: "Productivity",
+        appName,
+        start,
+        end,
+        durationSeconds: (Date.parse(end) - Date.parse(start)) / 1000,
+      }],
+    };
+  }
+
+  it("joins sessions whose gap is under 10 minutes and leaves a 10-minute gap split", () => {
+    const combined = combineSessionBlocks([
+      session("mail", "2026-06-22T09:28:00.000Z", "2026-06-22T09:40:00.000Z", "Mail"),
+      session("writing", "2026-06-22T09:00:00.000Z", "2026-06-22T09:20:00.000Z", "Writing"),
+      session("slack", "2026-06-22T09:50:00.000Z", "2026-06-22T10:00:00.000Z", "Slack"),
+    ]);
+    expect(combined.map((block) => block.id)).toEqual(["writing", "slack"]);
+    expect(combined[0].end).toBe("2026-06-22T09:40:00.000Z");
+    expect(combined[0].items.map((item) => item.appName)).toEqual(["Writing", "Mail"]);
+    expect(combined[0].durationSeconds).toBe(32 * 60);
+    expect(combined[1].items.map((item) => item.appName)).toEqual(["Slack"]);
   });
 });
 

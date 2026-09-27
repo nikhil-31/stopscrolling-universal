@@ -2,7 +2,7 @@ import { hourLabel24, isOngoingBlock } from "@shared/calendar-workspace";
 import { deviceColor, deviceKey, displayNameForDevice } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
 import { effectiveTimeZone, endOfDay, startOfDay } from "@shared/platform";
-import { formatClock, hourLabelWithPeriod } from "@shared/timeline";
+import { combineSessionBlocks, formatClock, hourLabelWithPeriod } from "@shared/timeline";
 import { useClockFormat } from "../../clock-format";
 import { useSessionTitle } from "../../session-title";
 import type { ForegroundContext, ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
@@ -93,17 +93,22 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
             data-testid={`calendar-device-column-${timeline.id}`}
             aria-label={manyDevices ? `Time entries · ${deviceLabel(timeline, state.devices)}` : "Time Entries"}
           >
-            {timeline.blocks.map((block) => {
+            {combineSessionBlocks(timeline.blocks).map((block) => {
               const live = isLocalLiveBlock(block, timeline, state, now);
               const style = placeDayBlock(block.start, block.end, dayStart, dayEnd);
+              const sentence = titleFor(block);
+              const range = `${formatClock(block.start, clockFormat)} – ${formatClock(block.end, clockFormat)}`;
               const showHover = (event: ReactMouseEvent) => {
                 setHover({ block, x: event.clientX, y: event.clientY });
               };
               return (
                 <button
                   key={block.id}
+                  type="button"
                   className={`day-block day-block-entry is-solid ${live ? "is-live" : ""}`}
                   style={{ ...style, ["--block-color" as string]: blockColor }}
+                  title={sentence}
+                  aria-label={live ? `Tracking, ${sentence}, ${range}` : `${sentence}, ${range}`}
                   onMouseEnter={showHover}
                   onMouseMove={showHover}
                   onMouseLeave={() => setHover(null)}
@@ -113,7 +118,7 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
                     <strong>Tracking...</strong>
                   ) : (
                     <>
-                      <strong>{titleFor(block)}</strong>
+                      <strong>{sentence}</strong>
                       {style.height > 36 ? <span>{formatClock(block.start, clockFormat)}</span> : null}
                     </>
                   )}

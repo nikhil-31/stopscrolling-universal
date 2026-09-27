@@ -1518,11 +1518,21 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
 .day-block-entry,
 .day-block-entry.is-solid,
 .day-block-entry.is-hatched {
+  padding: 3px 8px;
   background: color-mix(in srgb, var(--block-color) 28%, var(--surface-solid));
   border: 0;
   border-left: 3px solid var(--block-color);
   box-shadow: none;
   color: var(--text);
+}
+.day-block-entry strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.15;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .day-block-entry span { color: var(--text-secondary); }
 .day-block-label { left: 18%; right: 18%; padding: 0; }
