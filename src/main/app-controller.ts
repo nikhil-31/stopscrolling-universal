@@ -536,6 +536,13 @@ export class AppController {
     if (item === "blocking") void this.refreshBlocking();
     void this.refreshVisibleRange();
     this.broadcast();
+    this.scheduleTimesheetSummaries();
+  }
+
+  /** Screens that render session titles, which come from timesheet summaries. */
+  private showsSessions() {
+    if (this.navigation === "insights") return this.insightsPeriod === "day";
+    return ["today", "timer", "calendar", "timesheet"].includes(this.navigation);
   }
 
   async refreshVisibleRange() {
@@ -573,11 +580,11 @@ export class AppController {
     this.scheduleTimesheetSummaries();
   }
 
-  /** Requests AI descriptions for finished Timesheet entries, polling while any are queued. */
+  /** Requests AI titles for the visible finished sessions, polling while any are queued. */
   scheduleTimesheetSummaries(delay = TIMESHEET_SUMMARY_DEBOUNCE_MS) {
     if (this.timesheetSummaryTimer) clearTimeout(this.timesheetSummaryTimer);
     this.timesheetSummaryTimer = null;
-    if (this.navigation !== "timesheet" || !this.api.getTokens()) return;
+    if (!this.showsSessions() || !this.api.getTokens()) return;
     this.timesheetSummaryTimer = setTimeout(() => {
       this.timesheetSummaryTimer = null;
       void this.requestTimesheetSummaries();
@@ -585,11 +592,12 @@ export class AppController {
   }
 
   private async requestTimesheetSummaries() {
-    if (this.timesheetSummaryInFlight || this.navigation !== "timesheet" || !this.api.getTokens()) return;
+    if (this.timesheetSummaryInFlight || !this.showsSessions() || !this.api.getTokens()) return;
     const now = Date.now();
     const rows = buildTimesheetRows({
       timelines: this.dataView().timelines,
-      workspace: this.calendarWorkspace,
+      // Skipped sessions leave the Timesheet but still show elsewhere, so they need titles too.
+      workspace: { ...this.calendarWorkspace, skippedBlockIds: [] },
       summaries: this.timesheetSummaries,
       isLive: (block) => isOngoingBlock(block, now, this.tracker.isTracking),
     });

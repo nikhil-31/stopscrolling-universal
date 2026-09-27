@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
+import { effectiveTimeZone } from "@shared/platform";
 import {
   buildBreakdowns,
+  buildPeriodBuckets,
   filterSegmentsForApp,
   filterTimelinesForApp,
   normalizeTodayTab,
@@ -12,6 +14,7 @@ import { Banner, Button, Tabs } from "../components/ui";
 import { CalendarDialogs } from "../components/calendar/CalendarDialogs";
 import type { CalendarPrompt } from "../components/calendar/types";
 import { EventLog } from "../components/timeline";
+import { ActivityLineChart } from "../components/today/ActivityLineChart";
 import { ActivityPie } from "../components/today/ActivityPie";
 import { ActivityTimeline } from "../components/today/ActivityTimeline";
 import { AppsWebsitesList } from "../components/today/AppsWebsitesList";
@@ -43,6 +46,17 @@ export function TodayScreen({ state }: { state: AppSnapshot }) {
     [selectedAppKey, filteredSegments, state.snapshot.categories],
   );
   const tab = normalizeTodayTab(state.todayTab);
+  const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
+  const lineBuckets = useMemo(
+    () => buildPeriodBuckets(
+      selectedAppKey ? filteredSegments : state.snapshot.timelineSegments,
+      state.todayPeriod ?? "day",
+      new Date(state.todayDay),
+      undefined,
+      timeZone,
+    ),
+    [selectedAppKey, filteredSegments, state.snapshot.timelineSegments, state.todayPeriod, state.todayDay, timeZone],
+  );
   const clearFilter = () => setSelectedAppKey(null);
 
   return (
@@ -89,6 +103,7 @@ export function TodayScreen({ state }: { state: AppSnapshot }) {
 
       {tab === "timeline" ? (
         <div className="activity-board">
+          <ActivityLineChart state={state} buckets={lineBuckets} />
           <ActivityTimeline state={state} timelines={filteredTimelines} />
           <div className="activity-split">
             <ActivityPie state={state} categories={filteredCategories} />

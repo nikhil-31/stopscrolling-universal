@@ -116,6 +116,6 @@ describe("TimerScreen", () => {
     const user = userEvent.setup();
     render(<TimerScreen state={snapshot()} />);
     await user.click(screen.getByRole("tab", { name: "Timeline" }));
-    expect(screen.getByText("Writing")).toBeVisible();
+    expect(screen.getByText("Notes")).toBeVisible();
   });
 });

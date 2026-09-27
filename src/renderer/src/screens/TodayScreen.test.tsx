@@ -159,7 +159,7 @@ describe("TodayScreen app filter", () => {
     const user = userEvent.setup();
     const { rerender } = render(<TodayScreen state={snapshot()} />);
     expect(screen.getByRole("button", { name: /^Cursor,/ })).toBeVisible();
-    expect(screen.getByRole("button", { name: /^Safari,/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^github\.com,/ })).toBeVisible();
     expect(screen.getByText("Social")).toBeVisible();
     expect(screen.getByTestId("category-pie-chart")).toHaveAttribute("aria-label", expect.stringContaining("Social"));
 
@@ -167,7 +167,7 @@ describe("TodayScreen app filter", () => {
     expect(screen.getByRole("button", { name: "Highlight Cursor on the timeline" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("status")).toHaveTextContent("Showing only Cursor");
     expect(screen.getByRole("button", { name: /^Cursor,/ })).toBeVisible();
-    expect(screen.queryByRole("button", { name: /^Safari,/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^github\.com,/ })).toBeNull();
     expect(screen.queryByTestId("timeline-highlight")).toBeNull();
     expect(screen.queryByText("Social")).toBeNull();
     expect(screen.getByTestId("category-pie-chart")).toHaveAttribute("aria-label", expect.stringContaining("Development 1h, 100 percent"));
@@ -181,7 +181,7 @@ describe("TodayScreen app filter", () => {
     await user.click(screen.getByRole("button", { name: "Show all" }));
     rerender(<TodayScreen state={snapshot()} />);
     expect(screen.queryByRole("status")).toBeNull();
-    expect(screen.getByRole("button", { name: /^Safari,/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^github\.com,/ })).toBeVisible();
     expect(screen.getByText("Social")).toBeVisible();
   });
 
@@ -192,7 +192,44 @@ describe("TodayScreen app filter", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Showing only Cursor");
     await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
     expect(screen.queryByRole("status")).toBeNull();
-    expect(screen.getByRole("button", { name: /^Safari,/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^github\.com,/ })).toBeVisible();
     expect(screen.getByText("Social")).toBeVisible();
+  });
+});
+
+describe("TodayScreen device lines", () => {
+  it("shows a line per device on the timeline and follows the app filter", async () => {
+    const user = userEvent.setup();
+    const base = snapshot();
+    const segments = [
+      base.snapshot.listSegments[0],
+      {
+        ...base.snapshot.listSegments[1],
+        devicePlatform: "ios",
+        deviceName: "iPhone",
+      },
+    ];
+    const state = snapshot({
+      todayPeriod: "day",
+      devices: [
+        { visibilityKey: "macos|Studio Mac", devicePlatform: "macos", deviceName: "Studio Mac", nickname: "", colorIndex: 0 },
+        { visibilityKey: "ios|iPhone", devicePlatform: "ios", deviceName: "iPhone", nickname: "Phone", colorIndex: 1 },
+      ] as AppSnapshot["devices"],
+      snapshot: {
+        ...base.snapshot,
+        timelineSegments: segments,
+        listSegments: segments,
+      },
+    });
+    const { rerender } = render(<TodayScreen state={state} />);
+    expect(screen.getByRole("img", { name: "Activity by device, Studio Mac 1h, Phone 20m" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
+    expect(screen.getByRole("img", { name: "Activity by device, Studio Mac 1h" })).toBeVisible();
+    expect(screen.queryByRole("img", { name: /Phone/ })).toBeNull();
+
+    rerender(<TodayScreen state={{ ...state, todayTab: "eventLog" }} />);
+    expect(screen.queryByRole("img", { name: /Activity by device/ })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Activity by device" })).toBeNull();
   });
 });

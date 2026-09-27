@@ -100,6 +100,12 @@ export function fallbackDescription(block: ScreenTimeSessionBlock) {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
+/** The title every screen shows for a session: its AI sentence when ready, else the top apps. */
+export function sessionTitle(block: ScreenTimeSessionBlock, summaries: TimesheetSummaries) {
+  const summary = summaries[block.id];
+  return summary?.status === "ready" && summary.summary ? summary.summary : fallbackDescription(block);
+}
+
 export function timesheetEntryPayload(block: ScreenTimeSessionBlock): TimesheetEntryPayload {
   const items = [...block.items]
     .sort((a, b) => itemSeconds(b) - itemSeconds(a))
@@ -163,7 +169,7 @@ export function buildTimesheetRows({
         status,
         live,
         seconds: blockSeconds(block),
-        description: aiDescription ? summary.summary : fallbackDescription(block),
+        description: sessionTitle(block, summaries),
         aiDescription,
         label,
         suggestedLabel: label ? null : suggestLabel(block, workspace.labels),

@@ -217,6 +217,19 @@ export function formatDuration(seconds: number) {
   return `${hours}h ${minutes}m`;
 }
 
+/** Duration for one activity row. Visits under a minute stay visible as seconds. */
+export function formatTrackedDuration(seconds: number) {
+  const safe = Math.max(0, Math.round(seconds));
+  if (safe < 60) return `${safe}s`;
+  return formatDuration(safe);
+}
+
+/** Share of a block, as a 0–1 ratio or an already-percent value. */
+export function blockItemShareLabel(itemSeconds: number, blockSeconds: number) {
+  if (blockSeconds <= 0 || itemSeconds <= 0) return "0%";
+  return percentLabel(itemSeconds / blockSeconds);
+}
+
 const DURATION_AXIS_CEILINGS = [
   15 * 60,
   30 * 60,
@@ -492,7 +505,7 @@ export function entryFromSession(
   const entry: ScreenTimeEntry = {
     id: "",
     startTimeUTC: session.started_at,
-    endTimeUTC: session.ended_at,
+    endTimeUTC: sessionEnd(session),
     title,
     url: session.url || "",
     bundleID: session.app_bundle_id || "",
@@ -505,6 +518,17 @@ export function entryFromSession(
   };
   entry.id = persistenceKey(entry);
   return entry;
+}
+
+function sessionEnd(session: ScreenTimeSyncSession) {
+  const startMs = Date.parse(session.started_at);
+  const endMs = Date.parse(session.ended_at);
+  const spanMs = endMs - startMs;
+  const reported = Number(session.duration_seconds);
+  if (Number.isFinite(startMs) && Number.isFinite(reported) && reported >= 1 && (!Number.isFinite(spanMs) || spanMs < 1000)) {
+    return new Date(startMs + reported * 1000).toISOString();
+  }
+  return session.ended_at;
 }
 
 export function segmentFromEntry(entry: ScreenTimeEntry): ScreenTimeTimelineSegment {
@@ -866,6 +890,38 @@ function scaleDeviceShares(
       apps: share.apps.map((app) => ({ label: app.label, seconds: app.seconds * ratio })),
     }))
     .filter((share) => share.seconds > 0);
+}
+
+export interface DeviceSeriesPoint {
+  bucketId: string;
+  start: string;
+  seconds: number;
+}
+
+export interface DeviceSeries {
+  key: string;
+  points: DeviceSeriesPoint[];
+  totalSeconds: number;
+}
+
+/** One line per device across the period. Missing buckets are zero so every line spans the axis. */
+export function buildDeviceSeries(buckets: ScreenTimePeriodBucket[]): DeviceSeries[] {
+  const keys = new Set<string>();
+  for (const bucket of buckets) {
+    for (const share of bucket.devices ?? []) keys.add(share.key);
+  }
+  return [...keys].sort((a, b) => a.localeCompare(b)).map((key) => {
+    const points = buckets.map((bucket) => ({
+      bucketId: bucket.id,
+      start: bucket.start,
+      seconds: bucket.devices?.find((share) => share.key === key)?.seconds ?? 0,
+    }));
+    return {
+      key,
+      points,
+      totalSeconds: points.reduce((sum, point) => sum + point.seconds, 0),
+    };
+  });
 }
 
 export function trackedSecondsByDay(

@@ -10,12 +10,13 @@ import {
   scheduleWhen,
   WEEKDAYS,
 } from "@shared/blocking";
-import { formatClock, formatDuration } from "@shared/timeline";
+import { blockItemShareLabel, formatClock, formatDuration, formatTrackedDuration } from "@shared/timeline";
 import { displayNameForDevice } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { BlockingSchedule } from "@shared/types";
 import { Clock3, Globe2, Laptop2, Layers3, Shield, X } from "lucide-react";
 import { useClockFormat } from "../clock-format";
+import { useSessionTitle } from "../session-title";
 import { Badge, Button, IconButton } from "./ui";
 
 function closeInspector() {
@@ -179,6 +180,7 @@ export function Inspector({
   onEditSchedule?: (schedule: BlockingSchedule) => void;
 }) {
   const clockFormat = useClockFormat();
+  const titleFor = useSessionTitle();
   if (state.inspector.kind === "none") return null;
   if (state.inspector.kind === "schedule" && state.inspector.schedule) {
     return <ScheduleInspector schedule={state.inspector.schedule} state={state} onEdit={onEditSchedule} />;
@@ -230,7 +232,7 @@ export function Inspector({
           onClick={closeInspector}
         />
         <div className="inspector-kicker">Activity block</div>
-        <h2>{block.title}</h2>
+        <h2>{titleFor(block)}</h2>
         <p className="muted">{block.subtitle}</p>
         <div className="inspector-meta">
           <Badge tone="accent">{block.category}</Badge>
@@ -247,9 +249,14 @@ export function Inspector({
           <div className="data-row" key={item.id}>
             <span className="row-copy">
               <span className="row-title">{item.title}</span>
-              <span className="row-subtitle">{item.appName}</span>
+              <span className="row-subtitle">
+                {formatClock(item.start, clockFormat)} – {formatClock(item.end, clockFormat)}
+                {item.appName ? ` · ${item.appName}` : ""}
+              </span>
             </span>
-            <span className="row-value">{formatDuration(item.durationSeconds)}</span>
+            <span className="row-value">
+              {formatTrackedDuration(item.durationSeconds)} · {blockItemShareLabel(item.durationSeconds, block.durationSeconds)}
+            </span>
           </div>
         ))}
       </aside>

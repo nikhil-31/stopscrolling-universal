@@ -4,6 +4,7 @@ import type { AppSnapshot } from "@shared/snapshot";
 import { effectiveTimeZone, endOfDay, startOfDay } from "@shared/platform";
 import { formatClock, hourLabelWithPeriod } from "@shared/timeline";
 import { useClockFormat } from "../../clock-format";
+import { useSessionTitle } from "../../session-title";
 import type { ForegroundContext, ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { SessionHoverCard } from "../timeline/SessionHoverCard";
@@ -17,6 +18,7 @@ const CALENDAR_MIN = 160;
 
 export function DayBoard({ state }: { state: AppSnapshot }) {
   const clockFormat = useClockFormat();
+  const titleFor = useSessionTitle();
   const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
   const dayStart = startOfDay(new Date(state.calendarAnchor), timeZone);
   const dayEnd = endOfDay(new Date(state.calendarAnchor), timeZone);
@@ -111,7 +113,7 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
                     <strong>Tracking...</strong>
                   ) : (
                     <>
-                      <strong>{block.title}</strong>
+                      <strong>{titleFor(block)}</strong>
                       {style.height > 36 ? <span>{formatClock(block.start, clockFormat)}</span> : null}
                     </>
                   )}

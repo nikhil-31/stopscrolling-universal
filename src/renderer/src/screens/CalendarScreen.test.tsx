@@ -7,6 +7,7 @@ import { toDateInput } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
 import { dayBoardScrollTop } from "../components/calendar/DayBoard";
+import { SessionTitleProvider } from "../session-title";
 import { CalendarScreen } from "./CalendarScreen";
 
 const desktop = {
@@ -209,6 +210,57 @@ describe("CalendarScreen", () => {
 
     fireEvent.mouseLeave(entry);
     expect(screen.queryByTestId("session-hover-card")).toBeNull();
+  });
+
+  it("titles day and week blocks like the Timesheet", () => {
+    const summaries = { "mac-block": { status: "ready" as const, summary: "Wrote the launch post in Writing." } };
+    const timelines = [
+      timeline({
+        id: "macos|Studio Mac",
+        deviceName: "Studio Mac",
+        devicePlatform: "macos",
+        blocks: [
+          block({ id: "mac-block", title: "Writing", deviceName: "Studio Mac", devicePlatform: "macos" }),
+          block({
+            id: "mac-safari",
+            title: "Pull requests",
+            deviceName: "Studio Mac",
+            devicePlatform: "macos",
+            start: new Date(2026, 8, 12, 11).toISOString(),
+            end: new Date(2026, 8, 12, 12).toISOString(),
+            items: [{
+              id: "github",
+              title: "Pull requests",
+              subtitle: "github.com",
+              url: "https://github.com/pulls",
+              category: "Productivity",
+              appName: "Safari",
+              start: new Date(2026, 8, 12, 11).toISOString(),
+              end: new Date(2026, 8, 12, 12).toISOString(),
+              durationSeconds: 3600,
+            }],
+          }),
+        ],
+      }),
+    ];
+    const { rerender } = render(
+      <SessionTitleProvider value={summaries}>
+        <CalendarScreen state={snapshot({ timelines })} />
+      </SessionTitleProvider>,
+    );
+    const day = screen.getByTestId("calendar-day-board");
+    expect(within(day).getByText("Wrote the launch post in Writing.")).toBeVisible();
+    expect(within(day).getByText("github.com")).toBeVisible();
+    expect(within(day).queryByText("Pull requests")).toBeNull();
+
+    rerender(
+      <SessionTitleProvider value={summaries}>
+        <CalendarScreen state={snapshot({ timelines, calendarView: "week" })} />
+      </SessionTitleProvider>,
+    );
+    const saturday = screen.getByTestId("calendar-week-day-2026-09-12-macos|Studio Mac");
+    expect(within(saturday).getByText("Wrote the launch post in Writing.")).toBeVisible();
+    expect(within(saturday).getByText("github.com")).toBeVisible();
   });
 
   it("marks Tracking... only on the local device live block", () => {

@@ -7,6 +7,7 @@ import {
   groupTimesheetRows,
   rowsForTab,
   rowsInPeriod,
+  sessionTitle,
   timesheetEntryPayload,
   timesheetPeriodBounds,
   timesheetStats,
@@ -86,6 +87,24 @@ describe("fallbackDescription", () => {
 
   it("falls back to the block title without items", () => {
     expect(fallbackDescription(block("empty", morning.start, morning.end, [], { title: "Idle" }))).toBe("Idle");
+  });
+});
+
+describe("sessionTitle", () => {
+  it("uses a ready summary and falls back for anything else", () => {
+    expect(sessionTitle(morning, { [morning.id]: { status: "ready", summary: "Shipped the build." } })).toBe("Shipped the build.");
+    for (const status of ["pending", "processing", "failed", "disabled"] as const) {
+      expect(sessionTitle(morning, { [morning.id]: { status, summary: "" } })).toBe("Xcode");
+    }
+    expect(sessionTitle(morning, { [morning.id]: { status: "ready", summary: "" } })).toBe("Xcode");
+    expect(sessionTitle(morning, {})).toBe("Xcode");
+  });
+
+  it("matches the Timesheet row description", () => {
+    const summaries = { [morning.id]: { status: "ready" as const, summary: "Shipped the build." } };
+    for (const row of rows({ summaries })) {
+      expect(row.description).toBe(sessionTitle(row.block, summaries));
+    }
   });
 });
 

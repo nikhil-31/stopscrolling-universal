@@ -2,6 +2,7 @@ import { formatHourMinute, suggestLabel, unlabeledBlocks } from "@shared/calenda
 import type { AppSnapshot } from "@shared/snapshot";
 import { X } from "lucide-react";
 import { useState } from "react";
+import { useSessionTitle } from "../../session-title";
 import { Button, IconButton, TextField } from "../ui";
 import type { CalendarPrompt } from "./types";
 
@@ -143,6 +144,7 @@ function TaskPrompt({
 
 function ReviewPrompt({ state, blockIds, onClose }: { state: AppSnapshot; blockIds?: string[]; onClose: () => void }) {
   const blocks = blockIds ? periodUnlabeledBlocks(state, blockIds) : state.calendarDayStats.unlabeledBlocks;
+  const titleFor = useSessionTitle();
   return (
     <>
       <h3>Review time entries</h3>
@@ -155,7 +157,7 @@ function ReviewPrompt({ state, blockIds, onClose }: { state: AppSnapshot; blockI
           return (
             <div key={block.id} className="calendar-review-row">
               <div>
-                <strong>{block.title}</strong>
+                <strong>{titleFor(block)}</strong>
                 <span className="muted">{formatHourMinute(block.durationSeconds)}</span>
               </div>
               <div className="form-actions">

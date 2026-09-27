@@ -2,11 +2,13 @@ import { memo, useState, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { deviceColor, displayNameForDevice } from "@shared/device";
 import {
+  buildDeviceSeries,
   colorForCategory,
   dayAxisHour,
   dayHourTitle,
   durationAxisTicks,
   formatDuration,
+  type DeviceSeries,
 } from "@shared/timeline";
 import type {
   ClockFormat,
@@ -17,7 +19,7 @@ import type {
   ScreenTimePeriodBucket,
 } from "@shared/types";
 import { useClockFormat } from "../../clock-format";
-import { BarChart3, PieChart as PieChartIcon } from "lucide-react";
+import { BarChart3, LineChart as LineChartIcon, PieChart as PieChartIcon } from "lucide-react";
 import { hoverCardPosition } from "./SessionHoverCard";
 import { Card, EmptyState } from "../ui";
 
@@ -303,3 +305,211 @@ export const TrendCard = memo(function TrendCard({
     </Card>
   );
 });
+
+function chartToken(key: string) {
+  return key.replace(/[^A-Za-z0-9_-]/g, "-");
+}
+
+function orderedDeviceSeries(series: DeviceSeries[], devices: DeviceListEntry[]) {
+  const order = new Map(devices.map((device, index) => [device.visibilityKey, index]));
+  return [...series].sort((a, b) => {
+    const rank = (order.get(a.key) ?? devices.length) - (order.get(b.key) ?? devices.length);
+    return rank || a.key.localeCompare(b.key);
+  });
+}
+
+function pathCoord(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+/** Fritsch–Carlson monotone cubic so a line never crosses back through a peak or the baseline. */
+function monotoneCurve(points: Array<{ x: number; y: number }>) {
+  if (!points.length) return "";
+  if (points.length === 1) return `M ${pathCoord(points[0].x)} ${pathCoord(points[0].y)}`;
+  const slopes: number[] = [];
+  const gaps: number[] = [];
+  for (let index = 0; index < points.length - 1; index += 1) {
+    gaps[index] = points[index + 1].x - points[index].x;
+    slopes[index] = (points[index + 1].y - points[index].y) / gaps[index];
+  }
+  const tangents = points.map((_, index) => {
+    if (index === 0) return slopes[0];
+    if (index === points.length - 1) return slopes[slopes.length - 1];
+    if (slopes[index - 1] * slopes[index] <= 0) return 0;
+    return (slopes[index - 1] + slopes[index]) / 2;
+  });
+  for (let index = 0; index < slopes.length; index += 1) {
+    if (slopes[index] === 0) {
+      tangents[index] = 0;
+      tangents[index + 1] = 0;
+      continue;
+    }
+    const alpha = tangents[index] / slopes[index];
+    const beta = tangents[index + 1] / slopes[index];
+    const magnitude = Math.hypot(alpha, beta);
+    if (magnitude > 3) {
+      const scale = 3 / magnitude;
+      tangents[index] = scale * alpha * slopes[index];
+      tangents[index + 1] = scale * beta * slopes[index];
+    }
+  }
+  let path = `M ${pathCoord(points[0].x)} ${pathCoord(points[0].y)}`;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const gap = gaps[index];
+    const controlStartX = points[index].x + gap / 3;
+    const controlStartY = points[index].y + tangents[index] * gap / 3;
+    const controlEndX = points[index + 1].x - gap / 3;
+    const controlEndY = points[index + 1].y - tangents[index + 1] * gap / 3;
+    path += ` C ${pathCoord(controlStartX)} ${pathCoord(controlStartY)} ${pathCoord(controlEndX)} ${pathCoord(controlEndY)} ${pathCoord(points[index + 1].x)} ${pathCoord(points[index + 1].y)}`;
+  }
+  return path;
+}
+
+export function DeviceLineChart({
+  buckets,
+  period,
+  devices = [],
+  clockFormat,
+}: {
+  buckets: ScreenTimePeriodBucket[];
+  period?: InsightsPeriod;
+  devices?: DeviceListEntry[];
+  clockFormat?: ClockFormat;
+}) {
+  const selectedFormat = clockFormat ?? useClockFormat();
+  const [hover, setHover] = useState<{ index: number; x: number; y: number } | null>(null);
+  const series = orderedDeviceSeries(buildDeviceSeries(buckets), devices);
+  const peak = Math.max(0, ...series.flatMap((line) => line.points.map((point) => point.seconds)));
+  if (!series.some((line) => line.totalSeconds > 0)) {
+    return <EmptyState title="No activity yet" body="Each device draws its own line once it records time." icon={LineChartIcon} />;
+  }
+
+  const axis = durationAxisTicks(peak);
+  const plotHeight = 100;
+  const pointFor = (seconds: number, index: number) => ({
+    x: index + 0.5,
+    y: plotHeight * (1 - seconds / axis.max),
+  });
+  const curves = series.map((line) => {
+    const points = line.points.map((point, index) => pointFor(point.seconds, index));
+    const curve = monotoneCurve(points);
+    const area = `${curve} L ${pathCoord(points[points.length - 1].x)} ${plotHeight} L ${pathCoord(points[0].x)} ${plotHeight} Z`;
+    return { line, curve, area };
+  });
+  const ariaLabel = `Activity by device, ${series
+    .map((line) => `${deviceName(line.key, devices)} ${formatDuration(line.totalSeconds)}`)
+    .join(", ")}`;
+  const trackHover = (event: PointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0;
+    const index = Math.min(buckets.length - 1, Math.max(0, Math.floor(ratio * buckets.length)));
+    setHover({ index, x: event.clientX, y: event.clientY });
+  };
+  const hoveredBucket = hover == null ? null : buckets[hover.index];
+  return (
+    <>
+      <div className="line-chart-frame">
+        <div className="bar-y-axis line-chart-y-axis" data-testid="activity-line-y-axis" aria-hidden="true">
+          {axis.ticks.map((tick) => (
+            <span key={tick.seconds} className="bar-y-tick" style={{ bottom: `${tick.fraction * 100}%` }}>
+              {tick.label}
+            </span>
+          ))}
+        </div>
+        <div
+          className="line-chart-plot"
+          onPointerEnter={trackHover}
+          onPointerMove={trackHover}
+          onPointerLeave={() => setHover(null)}
+        >
+          <div className="bar-grid" aria-hidden="true">
+            {axis.ticks.map((tick) => (
+              <span
+                key={tick.seconds}
+                className={`bar-grid-line ${tick.fraction === 0 ? "is-baseline" : ""}`}
+                style={{ bottom: `${tick.fraction * 100}%` }}
+              />
+            ))}
+          </div>
+          <svg
+            className="line-chart"
+            viewBox={`0 0 ${buckets.length} ${plotHeight}`}
+            preserveAspectRatio="none"
+            role="img"
+            aria-label={ariaLabel}
+          >
+            <defs>
+              {series.map((line) => {
+                const token = chartToken(line.key);
+                const color = deviceColor(line.key, devices);
+                return (
+                  <g key={line.key}>
+                    <linearGradient id={`line-${token}`} x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor={color} stopOpacity={0.55} />
+                      <stop offset="100%" stopColor={color} stopOpacity={1} />
+                    </linearGradient>
+                    <linearGradient id={`area-${token}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={color} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={color} stopOpacity={0} />
+                    </linearGradient>
+                  </g>
+                );
+              })}
+            </defs>
+            {curves.map(({ line, area }) => (
+              <path key={`area-${line.key}`} className="line-chart-area" d={area} fill={`url(#area-${chartToken(line.key)})`} />
+            ))}
+            {curves.map(({ line, curve }) => (
+              <path
+                key={`line-${line.key}`}
+                className="line-chart-line"
+                d={curve}
+                fill="none"
+                stroke={`url(#line-${chartToken(line.key)})`}
+              />
+            ))}
+          </svg>
+          {hover && hoveredBucket ? (
+            <>
+              <span
+                className="line-chart-guide"
+                style={{ left: `${((hover.index + 0.5) / buckets.length) * 100}%` }}
+              />
+              {series.map((line) => (
+                <span
+                  key={line.key}
+                  className="line-chart-dot"
+                  style={{
+                    left: `${((hover.index + 0.5) / buckets.length) * 100}%`,
+                    bottom: `${((line.points[hover.index]?.seconds ?? 0) / axis.max) * 100}%`,
+                    background: deviceColor(line.key, devices),
+                  }}
+                />
+              ))}
+            </>
+          ) : null}
+        </div>
+        <div className={`line-chart-axis ${period === "day" ? "is-day" : ""} ${period === "month" ? "is-month" : ""}`}>
+          {buckets.map((bucket) => (
+            <div className="line-chart-tick" key={bucket.id}>
+              <DayAxisLabel bucket={bucket} period={period} clockFormat={selectedFormat} />
+            </div>
+          ))}
+        </div>
+      </div>
+      {series.length >= 2 ? (
+        <div className="legend" data-testid="activity-line-legend">
+          {series.map((line) => (
+            <span className="legend-item" key={line.key}>
+              <span className="legend-dot" style={{ ["--swatch" as string]: deviceColor(line.key, devices) }} />
+              {deviceName(line.key, devices)}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {hover && hoveredBucket ? (
+        <ActivityBarHover bucket={hoveredBucket} devices={devices} clockFormat={selectedFormat} x={hover.x} y={hover.y} />
+      ) : null}
+    </>
+  );
+}

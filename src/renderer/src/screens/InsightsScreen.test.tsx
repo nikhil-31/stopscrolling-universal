@@ -352,7 +352,7 @@ describe("InsightsScreen", () => {
     const { rerender } = render(<InsightsScreen state={snapshot(dayFilterState())} />);
     expect(screen.getByText("1h 20m", { selector: ".metric-value" })).toBeVisible();
     expect(screen.getByRole("button", { name: /^Cursor,/ })).toBeVisible();
-    expect(screen.getByRole("button", { name: /^Safari,/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^github\.com,/ })).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
     expect(screen.getByRole("button", { name: "Highlight Cursor on the timeline" })).toHaveAttribute("aria-pressed", "true");
@@ -362,7 +362,7 @@ describe("InsightsScreen", () => {
     expect(screen.getAllByText("1h", { selector: ".metric-value" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Across this day · Cursor")).toBeVisible();
     expect(screen.getByRole("button", { name: /^Cursor,/ })).toBeVisible();
-    expect(screen.queryByRole("button", { name: /^Safari,/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^github\.com,/ })).toBeNull();
     expect(screen.queryByTestId("timeline-highlight")).toBeNull();
     expect(screen.getByRole("button", { name: "Highlight github.com on the timeline" })).toBeVisible();
 
@@ -375,7 +375,7 @@ describe("InsightsScreen", () => {
     rerender(<InsightsScreen state={snapshot(dayFilterState())} />);
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByText("1h 20m", { selector: ".metric-value" })).toBeVisible();
-    expect(screen.getByRole("button", { name: /^Safari,/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^github\.com,/ })).toBeVisible();
   });
 
   it("clears the app filter when the same row is clicked again", async () => {
@@ -386,7 +386,7 @@ describe("InsightsScreen", () => {
     await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByText("1h 20m", { selector: ".metric-value" })).toBeVisible();
-    expect(screen.getByRole("button", { name: /^Safari,/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^github\.com,/ })).toBeVisible();
   });
 
   it("shows the selected device in metric copy and ignores hidden devices", () => {

@@ -11,6 +11,7 @@ import { Sidebar } from "./Sidebar";
 import { Toolbar } from "./Toolbar";
 import { AccountScreen } from "../screens/AccountScreen";
 import { TimelineGroup } from "./timeline";
+import { SessionTitleProvider } from "../session-title";
 import { Banner, Button, EmptyState, LoadingState, Tabs, Toggle } from "./ui";
 
 const desktop = {
@@ -460,7 +461,7 @@ describe("native timeline", () => {
       />,
     );
     expect(screen.getByRole("img", { name: /1 blocks, 1h tracked/ })).toBeVisible();
-    await user.click(screen.getByRole("button", { name: /^Writing,/ }));
+    await user.click(screen.getByRole("button", { name: /^Notes,/ }));
     expect(desktop.selectInspector).toHaveBeenCalledWith(expect.objectContaining({ kind: "block" }));
   });
 
@@ -519,11 +520,11 @@ describe("native timeline", () => {
 
     fireEvent.mouseMove(track, { clientX: 950, clientY: 20 });
     const card = screen.getByTestId("session-hover-card");
-    expect(within(card).getByText("Writing")).toBeVisible();
+    expect(card.querySelector(".native-hover-title")).toHaveTextContent("Notes");
     expect(within(card).getAllByText("1h").length).toBeGreaterThan(0);
-    expect(within(card).getByText("Notes")).toBeVisible();
-    const label = screen.getByRole("button", { name: /^Writing,/ }).getAttribute("aria-label") ?? "";
-    const range = label.replace(/^Writing, /, "").replace(/, 1h$/, "").replace(" to ", " – ");
+    expect(within(card.querySelector(".native-hover-items") as HTMLElement).getByText("Notes")).toBeVisible();
+    const label = screen.getByRole("button", { name: /^Notes,/ }).getAttribute("aria-label") ?? "";
+    const range = label.replace(/^Notes, /, "").replace(/, 1h$/, "").replace(" to ", " – ");
     expect(within(card).getByText(range)).toBeVisible();
     expect(track.querySelector(".native-hover-time")).toBeNull();
 
@@ -624,7 +625,83 @@ describe("native timeline", () => {
       />,
     );
     expect(container.querySelectorAll('[data-testid="timeline-highlight"]')).toHaveLength(1);
-    expect(screen.getByRole("button", { name: /^Writing,/ })).not.toHaveClass("is-dimmed");
-    expect(screen.getByRole("button", { name: /^Safari,/ })).toHaveClass("is-dimmed");
+    expect(screen.getByRole("button", { name: /^Notes,/ })).not.toHaveClass("is-dimmed");
+    expect(screen.getByRole("button", { name: /^github\.com,/ })).toHaveClass("is-dimmed");
+  });
+
+  it("uses the Timesheet's AI session title in the timeline and inspector", () => {
+    const block = {
+      id: "block-1",
+      start: "2026-09-09T09:00:00Z",
+      end: "2026-09-09T10:00:00Z",
+      title: "Writing",
+      subtitle: "Notes",
+      category: "Productivity",
+      devicePlatform: "macos",
+      deviceName: "Studio Mac",
+      durationSeconds: 3600,
+      items: [],
+    };
+    const summaries = { "block-1": { status: "ready" as const, summary: "Drafted release notes in Notes." } };
+    render(
+      <SessionTitleProvider value={summaries}>
+        <TimelineGroup
+          timelines={[{
+            id: "timeline-1",
+            deviceName: "Studio Mac",
+            devicePlatform: "macos",
+            timeZoneIdentifier: "UTC",
+            dayStart: "2026-09-09T00:00:00Z",
+            dayEnd: "2026-09-10T00:00:00Z",
+            segments: [],
+            blocks: [block],
+          }]}
+        />
+        <Inspector state={snapshot({ inspector: { kind: "block", segment: null, block, schedule: null } })} />
+      </SessionTitleProvider>,
+    );
+    expect(screen.getByRole("button", { name: /^Drafted release notes in Notes\.,/ })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Drafted release notes in Notes." })).toBeVisible();
+  });
+
+  it("shows each activity entry's time and share of the block", () => {
+    const block = {
+      id: "block-pages",
+      start: "2026-09-09T09:00:00Z",
+      end: "2026-09-09T09:40:00Z",
+      title: "github.com",
+      subtitle: "2 activities",
+      category: "Development",
+      devicePlatform: "macos",
+      deviceName: "Studio Mac",
+      durationSeconds: 40 * 60,
+      items: [
+        {
+          id: "pulls",
+          title: "Pull requests",
+          subtitle: "Safari",
+          url: "https://github.com/org/repo/pulls",
+          category: "Development",
+          appName: "Safari",
+          start: "2026-09-09T09:00:00Z",
+          end: "2026-09-09T09:10:00Z",
+          durationSeconds: 10 * 60,
+        },
+        {
+          id: "issue",
+          title: "Issue 12",
+          subtitle: "Safari",
+          url: "https://github.com/org/repo/issues/12",
+          category: "Development",
+          appName: "Safari",
+          start: "2026-09-09T09:10:00Z",
+          end: "2026-09-09T09:40:00Z",
+          durationSeconds: 30 * 60,
+        },
+      ],
+    };
+    render(<Inspector state={snapshot({ inspector: { kind: "block", segment: null, block, schedule: null } })} />);
+    expect(screen.getByText("10m · 25%")).toBeVisible();
+    expect(screen.getByText("30m · 75%")).toBeVisible();
   });
 });

@@ -4,7 +4,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { snapshotFromEntries } from "@shared/timeline";
 import type { DeviceListEntry, ScreenTimePeriodBucket } from "@shared/types";
-import { TrendCard } from "./Charts";
+import { DeviceLineChart, TrendCard } from "./Charts";
 
 const devices = [
   { visibilityKey: "macos|Studio Mac", devicePlatform: "macos", deviceName: "Studio Mac", nickname: "", colorIndex: 0 },
@@ -194,5 +194,75 @@ describe("TrendCard month view", () => {
     expect(plain).toHaveTextContent("10");
     expect(plain).toHaveTextContent("20m");
     expect(plain.querySelector(".native-hover-items")).toBeNull();
+  });
+});
+
+describe("DeviceLineChart", () => {
+  it("draws a gradient line for each device", () => {
+    render(
+      <DeviceLineChart
+        period="day"
+        devices={devices}
+        buckets={[
+          bucket({
+            id: "day-9",
+            label: "9",
+            seconds: 5400,
+            devices: [
+              { key: "ios|iPhone", seconds: 1800, apps: [] },
+              { key: "macos|Studio Mac", seconds: 3600, apps: [] },
+            ],
+          }),
+          bucket({
+            id: "day-10",
+            label: "10",
+            seconds: 600,
+            devices: [{ key: "ios|iPhone", seconds: 600, apps: [] }],
+          }),
+        ]}
+      />,
+    );
+    const chart = screen.getByRole("img", { name: "Activity by device, Studio Mac 1h, Phone 40m" });
+    const lines = chart.querySelectorAll(".line-chart-line");
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toHaveAttribute("stroke", "url(#line-macos-Studio-Mac)");
+    expect(lines[1]).toHaveAttribute("stroke", "url(#line-ios-iPhone)");
+    expect(chart.querySelectorAll("#line-macos-Studio-Mac stop")[0]).toHaveAttribute("stop-color", "var(--device-0)");
+    expect(chart.querySelectorAll("#line-macos-Studio-Mac stop")[1]).toHaveAttribute("stop-color", "var(--device-0)");
+    expect(chart.querySelector("#line-ios-iPhone stop")).toHaveAttribute("stop-color", "var(--device-1)");
+    expect(chart.querySelector("#area-macos-Studio-Mac stop")).toHaveAttribute("stop-color", "var(--device-0)");
+    expect(chart.querySelector("#area-ios-iPhone stop")).toHaveAttribute("stop-color", "var(--device-1)");
+    const legend = screen.getByTestId("activity-line-legend");
+    expect(legend).toHaveTextContent("Studio Mac");
+    expect(legend).toHaveTextContent("Phone");
+  });
+
+  it("skips the legend when the period has one device", () => {
+    render(
+      <DeviceLineChart
+        period="day"
+        devices={devices}
+        buckets={[
+          bucket({
+            id: "day-9",
+            label: "9",
+            seconds: 1800,
+            devices: [{ key: "ios|iPhone", seconds: 1800, apps: [] }],
+          }),
+        ]}
+      />,
+    );
+    const chart = screen.getByRole("img", { name: "Activity by device, Phone 30m" });
+    expect(chart.querySelectorAll(".line-chart-line")).toHaveLength(1);
+    expect(chart.querySelector(".line-chart-line")).toHaveAttribute("stroke", "url(#line-ios-iPhone)");
+    expect(screen.queryByTestId("activity-line-legend")).toBeNull();
+  });
+
+  it("shows an empty state when no device recorded time", () => {
+    const { rerender } = render(<DeviceLineChart period="day" buckets={[]} />);
+    expect(screen.getByText("No activity yet")).toBeVisible();
+    expect(screen.queryByRole("img", { name: /Activity by device/ })).toBeNull();
+    rerender(<DeviceLineChart period="day" buckets={[bucket({ id: "day-9", label: "9", seconds: 0 })]} />);
+    expect(screen.getByText("No activity yet")).toBeVisible();
   });
 });

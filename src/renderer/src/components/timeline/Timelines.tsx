@@ -21,6 +21,7 @@ import type {
 } from "@shared/types";
 import { Globe2, Laptop2 } from "lucide-react";
 import { useClockFormat } from "../../clock-format";
+import { useSessionTitle } from "../../session-title";
 import { Card } from "../ui";
 import { SessionHoverCard } from "./SessionHoverCard";
 
@@ -65,6 +66,7 @@ function NativeMacTimeline({
   highlightedAppKey?: string | null;
 }) {
   const clockFormat = useClockFormat();
+  const titleFor = useSessionTitle();
   const [hover, setHover] = useState<{
     x: number;
     clientX: number;
@@ -140,7 +142,7 @@ function NativeMacTimeline({
                 width: `${width * 100}%`,
                 ["--block-color" as string]: blockColor,
               }}
-              aria-label={`${block.title}, ${formatClock(block.start, clockFormat)} to ${formatClock(block.end, clockFormat)}, ${formatDuration(block.durationSeconds)}`}
+              aria-label={`${titleFor(block)}, ${formatClock(block.start, clockFormat)} to ${formatClock(block.end, clockFormat)}, ${formatDuration(block.durationSeconds)}`}
               onClick={() => window.stopscrolling.selectInspector({ kind: "block", block })}
             />
           );
@@ -221,6 +223,7 @@ export function VerticalDay({
     : new Date(fallbackStart.getTime() + 24 * 60 * 60 * 1000);
   const placements = sessionBlockPlacements(blocks, dayStart, dayEnd);
   const clockFormat = useClockFormat();
+  const titleFor = useSessionTitle();
   const height = VERTICAL_TIMELINE_HOUR_HEIGHT * 24;
   const now = Date.now();
   const isToday = now >= dayStart.getTime() && now < dayEnd.getTime();
@@ -246,6 +249,7 @@ export function VerticalDay({
             const block = blocks.find((item) => item.id === placement.id);
             if (!block) return null;
             const blockHeight = Math.max(22, placement.heightFraction * height);
+            const title = titleFor(block);
             return (
               <button
                 key={placement.id}
@@ -257,10 +261,10 @@ export function VerticalDay({
                   width: `${placement.widthFraction * 100}%`,
                   background: colorForCategory(block.category),
                 }}
-                title={`${block.title}\n${formatDuration(block.durationSeconds)}\n${displayNameForDevice(block.devicePlatform, block.deviceName, devices)}`}
+                title={`${title}\n${formatDuration(block.durationSeconds)}\n${displayNameForDevice(block.devicePlatform, block.deviceName, devices)}`}
                 onClick={() => window.stopscrolling.selectInspector({ kind: "block", block })}
               >
-                <strong>{block.title}</strong>
+                <strong>{title}</strong>
                 {blockHeight > 34 ? (
                   <span className="block-time">{formatClock(block.start, clockFormat)} – {formatClock(block.end, clockFormat)}</span>
                 ) : null}

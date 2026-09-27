@@ -15,6 +15,7 @@ import type {
 } from "@shared/types";
 import { Boxes, List, Shapes } from "lucide-react";
 import { useClockFormat } from "../../clock-format";
+import { useSessionTitle } from "../../session-title";
 import { Card, EmptyState, Grouped } from "../ui";
 import { AppsWebsitesShareRow } from "../today/AppsWebsitesList";
 import { PieChart } from "./Charts";
@@ -109,6 +110,7 @@ export const EventLog = memo(function EventLog({
 
 export function BlockList({ timelines, devices = [] }: { timelines: ScreenTimeDeviceTimeline[]; devices?: DeviceListEntry[] }) {
   const blocks = timelines.flatMap((timeline) => timeline.blocks);
+  const titleFor = useSessionTitle();
   if (!blocks.length) {
     return <EmptyState title="No focused blocks" body="Nearby sessions are grouped into blocks after you track activity." icon={Boxes} />;
   }
@@ -133,7 +135,7 @@ export function BlockList({ timelines, devices = [] }: { timelines: ScreenTimeDe
                 style={{ ["--swatch" as string]: colorForCategory(block.category) }}
               />
               <span className="row-copy">
-                <span className="row-title">{block.title}</span>
+                <span className="row-title">{titleFor(block)}</span>
                 <span className="row-subtitle">{block.subtitle} · {displayNameForDevice(block.devicePlatform, block.deviceName, devices)}</span>
               </span>
             </span>

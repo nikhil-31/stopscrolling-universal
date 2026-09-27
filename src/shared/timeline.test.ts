@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { blockSegments, colorForCategory, dayAxisHour, dayHourTitle, dayTrackAxis, durationAxisTicks, entriesToTimelines, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, weekNumber } from "./timeline";
+import { blockItemShareLabel, blockSegments, buildDeviceSeries, colorForCategory, dayAxisHour, dayHourTitle, dayTrackAxis, durationAxisTicks, entriesToTimelines, entryFromSession, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, formatTrackedDuration, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, weekNumber } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import { toDateInput } from "./platform";
-import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
+import type { ScreenTimeEntry, ScreenTimePeriodBucket, ScreenTimeTimelineSegment } from "./types";
 
 function entry(partial: Partial<ScreenTimeEntry> & Pick<ScreenTimeEntry, "startTimeUTC" | "endTimeUTC" | "appName">): ScreenTimeEntry {
   return {
@@ -155,6 +155,46 @@ describe("session blocks", () => {
       },
     ];
     expect(blockSegments(segments)).toHaveLength(1);
+  });
+
+  it("keeps each page's time and its share of the block", () => {
+    const segments: ScreenTimeTimelineSegment[] = [
+      {
+        id: "pulls",
+        start: "2026-06-22T09:00:00.000Z",
+        end: "2026-06-22T09:10:00.000Z",
+        label: "Pull requests",
+        subtitle: "https://github.com/org/repo/pulls",
+        url: "https://github.com/org/repo/pulls",
+        bundleID: "com.apple.Safari",
+        category: "Development",
+        appName: "Safari",
+        devicePlatform: "macos",
+        deviceName: "Mac",
+        timeZoneIdentifier: "UTC",
+        isLive: false,
+      },
+      {
+        id: "issue",
+        start: "2026-06-22T09:10:00.000Z",
+        end: "2026-06-22T09:40:00.000Z",
+        label: "Issue 12",
+        subtitle: "https://github.com/org/repo/issues/12",
+        url: "https://github.com/org/repo/issues/12",
+        bundleID: "com.apple.Safari",
+        category: "Development",
+        appName: "Safari",
+        devicePlatform: "macos",
+        deviceName: "Mac",
+        timeZoneIdentifier: "UTC",
+        isLive: false,
+      },
+    ];
+    const [block] = blockSegments(segments);
+    expect(block.durationSeconds).toBe(40 * 60);
+    expect(block.items.map((item) => item.durationSeconds)).toEqual([10 * 60, 30 * 60]);
+    expect(block.items.map((item) => blockItemShareLabel(item.durationSeconds, block.durationSeconds))).toEqual(["25%", "75%"]);
+    expect(formatTrackedDuration(45)).toBe("45s");
   });
 
   it("splits after a gap larger than 5 minutes", () => {
@@ -409,6 +449,40 @@ describe("payload mapping", () => {
     expect(payload.duration_seconds).toBe(300);
     expect(payload.device_platform).toBe("macos");
   });
+
+  it("restores a page duration when the session start and end are the same instant", () => {
+    const restored = entryFromSession({
+      started_at: "2026-06-22T09:00:00.000Z",
+      ended_at: "2026-06-22T09:00:00.000Z",
+      title: "Pull requests",
+      url: "https://github.com/org/repo/pulls",
+      process_name: "Safari",
+      app_name: "Safari",
+      app_category: "Development",
+      app_bundle_id: "com.apple.Safari",
+      device_platform: "macos",
+      device_name: "Mac",
+      duration_seconds: 600,
+      time_zone: "UTC",
+    });
+    expect(Date.parse(restored.endTimeUTC) - Date.parse(restored.startTimeUTC)).toBe(600 * 1000);
+
+    const kept = entryFromSession({
+      started_at: "2026-06-22T09:00:00.000Z",
+      ended_at: "2026-06-22T09:30:00.000Z",
+      title: "Issue 12",
+      url: "https://github.com/org/repo/issues/12",
+      process_name: "Safari",
+      app_name: "Safari",
+      app_category: "Development",
+      app_bundle_id: "com.apple.Safari",
+      device_platform: "macos",
+      device_name: "Mac",
+      duration_seconds: 600,
+      time_zone: "UTC",
+    });
+    expect(kept.endTimeUTC).toBe("2026-06-22T09:30:00.000Z");
+  });
 });
 
 describe("insights snapshot", () => {
@@ -626,6 +700,55 @@ describe("today period windows", () => {
     expect(durationAxisTicks(3600).max).toBe(3600);
     expect(durationAxisTicks(3600).ticks.map((tick) => tick.label)).toEqual(["0", "15m", "30m", "45m", "1h"]);
     expect(durationAxisTicks(0).ticks[0]).toEqual({ seconds: 0, fraction: 0, label: "0" });
+  });
+});
+
+describe("buildDeviceSeries", () => {
+  function seriesBucket(
+    id: string,
+    devices: Array<{ key: string; seconds: number }>,
+  ): ScreenTimePeriodBucket {
+    return {
+      id,
+      label: id,
+      start: "2026-09-10T09:00:00.000Z",
+      end: "2026-09-10T10:00:00.000Z",
+      seconds: devices.reduce((sum, device) => sum + device.seconds, 0),
+      devices: devices.map((device) => ({ ...device, apps: [] })),
+    };
+  }
+
+  it("returns nothing when no bucket names a device", () => {
+    expect(buildDeviceSeries([])).toEqual([]);
+    expect(buildDeviceSeries([seriesBucket("day-9", [])])).toEqual([]);
+  });
+
+  it("zero-fills hours a single device did not record", () => {
+    const series = buildDeviceSeries([
+      seriesBucket("day-9", [{ key: "macos|Studio Mac", seconds: 3600 }]),
+      seriesBucket("day-10", []),
+      seriesBucket("day-11", [{ key: "macos|Studio Mac", seconds: 600 }]),
+    ]);
+    expect(series).toHaveLength(1);
+    expect(series[0].key).toBe("macos|Studio Mac");
+    expect(series[0].points.map((point) => point.seconds)).toEqual([3600, 0, 600]);
+    expect(series[0].points.map((point) => point.bucketId)).toEqual(["day-9", "day-10", "day-11"]);
+    expect(series[0].totalSeconds).toBe(4200);
+  });
+
+  it("orders multiple devices by key and keeps each line the full width", () => {
+    const series = buildDeviceSeries([
+      seriesBucket("day-9", [
+        { key: "macos|Studio Mac", seconds: 3600 },
+        { key: "ios|iPhone", seconds: 1200 },
+      ]),
+      seriesBucket("day-10", [{ key: "ios|iPhone", seconds: 300 }]),
+    ]);
+    expect(series.map((line) => line.key)).toEqual(["ios|iPhone", "macos|Studio Mac"]);
+    expect(series[0].points.map((point) => point.seconds)).toEqual([1200, 300]);
+    expect(series[1].points.map((point) => point.seconds)).toEqual([3600, 0]);
+    expect(series[0].totalSeconds).toBe(1500);
+    expect(series[1].totalSeconds).toBe(3600);
   });
 });
 

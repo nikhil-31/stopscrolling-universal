@@ -6,6 +6,7 @@ import { formatClock, hourLabelWithPeriod } from "@shared/timeline";
 import type { ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useClockFormat } from "../../clock-format";
+import { useSessionTitle } from "../../session-title";
 import { SessionHoverCard } from "../timeline/SessionHoverCard";
 import {
   DAY_BOARD_HEIGHT,
@@ -35,6 +36,7 @@ export function WeekBoard({
   onSuggest: (block: ScreenTimeSessionBlock) => void;
 }) {
   const clockFormat = useClockFormat();
+  const titleFor = useSessionTitle();
   const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
   const anchor = new Date(state.calendarAnchor);
   const days = mondayWeekDays(anchor, timeZone);
@@ -175,7 +177,7 @@ export function WeekBoard({
                     </>
                   ) : (
                     <>
-                      <strong>{item.block.title}</strong>
+                      <strong>{titleFor(item.block)}</strong>
                       <span>
                         {placed.height > RANGE_HEIGHT
                           ? `${formatClock(new Date(item.start), clockFormat)} – ${formatClock(new Date(item.end), clockFormat)}`
