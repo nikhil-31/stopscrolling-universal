@@ -1,3 +1,4 @@
+import { topBlockApps } from "@shared/timesheet";
 import { formatClock, formatDuration, formatTrackedDuration } from "@shared/timeline";
 import type { ScreenTimeSessionBlock } from "@shared/types";
 import { AppWindow, Clock3, Globe2, Layers3 } from "lucide-react";
@@ -33,6 +34,8 @@ export function SessionHoverCard({
 }) {
   const clockFormat = useClockFormat();
   const title = useSessionTitle()(block);
+  const topApps = topBlockApps(block);
+  const topTotal = topApps.reduce((sum, item) => sum + item.seconds, 0);
   const { left, top } = hoverCardPosition(x, y);
   return createPortal(
     <div
@@ -49,15 +52,21 @@ export function SessionHoverCard({
         <span><Clock3 size={11} />{formatDuration(block.durationSeconds)}</span>
         <span><Layers3 size={11} />{block.items.length} {block.items.length === 1 ? "item" : "items"}</span>
       </div>
-      {block.items.length ? (
+      {topApps.length ? (
         <div className="native-hover-items">
-          {block.items.slice(0, 4).map((item) => (
-            <div key={item.id}>
-              {item.url ? <Globe2 size={11} /> : <AppWindow size={11} />}
-              <span>{item.appName}</span>
-              <span>{formatTrackedDuration(item.durationSeconds)}</span>
+          {topApps.map((item) => (
+            <div key={item.key}>
+              {item.website ? <Globe2 size={11} /> : <AppWindow size={11} />}
+              <span>{item.name}</span>
+              <span>{formatTrackedDuration(item.seconds)}</span>
             </div>
           ))}
+          {topApps.length > 1 ? (
+            <div className="native-hover-total">
+              <span>Top {topApps.length}</span>
+              <span>{formatTrackedDuration(topTotal)}</span>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>,

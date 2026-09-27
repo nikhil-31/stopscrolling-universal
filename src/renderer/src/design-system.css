@@ -1024,6 +1024,16 @@ a { color: var(--brand); }
 .native-hover-items > div { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 5px; font-size: 9px; }
 .native-hover-items > div > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .native-hover-items > div > span:last-child { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.native-hover-items > .native-hover-total {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+  color: var(--text-secondary);
+  font-weight: 650;
+}
+.native-hover-items > .native-hover-total span:last-child { color: var(--text-secondary); }
 .native-hour-axis {
   position: relative;
   height: 21px;

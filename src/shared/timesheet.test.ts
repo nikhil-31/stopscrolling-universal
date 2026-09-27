@@ -8,6 +8,7 @@ import {
   rowsForTab,
   rowsInPeriod,
   sessionTitle,
+  topBlockApps,
   timesheetEntryPayload,
   timesheetPeriodBounds,
   timesheetStats,
@@ -87,6 +88,25 @@ describe("fallbackDescription", () => {
 
   it("falls back to the block title without items", () => {
     expect(fallbackDescription(block("empty", morning.start, morning.end, [], { title: "Idle" }))).toBe("Idle");
+  });
+});
+
+describe("topBlockApps", () => {
+  it("adds repeat visits and keeps the three longest apps and websites", () => {
+    const mixed = block("mixed", "2026-09-14T09:00:00.000Z", "2026-09-14T10:00:00.000Z", [
+      item("1", "Safari", "2026-09-14T09:00:00.000Z", "2026-09-14T09:10:00.000Z", "https://github.com/pulls"),
+      item("2", "Xcode", "2026-09-14T09:10:00.000Z", "2026-09-14T09:30:00.000Z"),
+      item("3", "Slack", "2026-09-14T09:30:00.000Z", "2026-09-14T09:35:00.000Z"),
+      item("4", "Notes", "2026-09-14T09:35:00.000Z", "2026-09-14T09:37:00.000Z"),
+      item("5", "Safari", "2026-09-14T09:37:00.000Z", "2026-09-14T09:47:00.000Z", "https://github.com/issues"),
+      item("6", "Xcode", "2026-09-14T09:47:00.000Z", "2026-09-14T09:57:00.000Z"),
+    ]);
+    const top = topBlockApps(mixed);
+    expect(top.map((entry) => entry.name)).toEqual(["Xcode", "github.com", "Slack"]);
+    expect(top.map((entry) => entry.seconds)).toEqual([30 * 60, 20 * 60, 5 * 60]);
+    expect(top[1].website).toBe(true);
+    expect(top[0].website).toBe(false);
+    expect(top.reduce((sum, entry) => sum + entry.seconds, 0)).toBe(55 * 60);
   });
 });
 

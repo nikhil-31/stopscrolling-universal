@@ -532,6 +532,101 @@ describe("native timeline", () => {
     expect(screen.queryByTestId("session-hover-card")).toBeNull();
   });
 
+  it("shows the combined time of the top three apps and websites", () => {
+    render(
+      <TimelineGroup
+        timelines={[{
+          id: "timeline-1",
+          deviceName: "Studio Mac",
+          devicePlatform: "macos",
+          timeZoneIdentifier: "UTC",
+          dayStart: "2026-09-09T00:00:00Z",
+          dayEnd: "2026-09-10T00:00:00Z",
+          segments: [],
+          blocks: [{
+            id: "block-1",
+            start: "2026-09-09T09:00:00Z",
+            end: "2026-09-09T10:00:00Z",
+            title: "Writing",
+            subtitle: "Notes",
+            category: "Productivity",
+            devicePlatform: "macos",
+            deviceName: "Studio Mac",
+            durationSeconds: 3600,
+            items: [
+              {
+                id: "safari-a",
+                title: "Pulls",
+                subtitle: "github.com",
+                url: "https://github.com/pulls",
+                category: "Productivity",
+                appName: "Safari",
+                start: "2026-09-09T09:00:00Z",
+                end: "2026-09-09T09:10:00Z",
+                durationSeconds: 600,
+              },
+              {
+                id: "xcode",
+                title: "Xcode",
+                subtitle: "Xcode",
+                url: "",
+                category: "Productivity",
+                appName: "Xcode",
+                start: "2026-09-09T09:10:00Z",
+                end: "2026-09-09T09:40:00Z",
+                durationSeconds: 1800,
+              },
+              {
+                id: "slack",
+                title: "Slack",
+                subtitle: "Slack",
+                url: "",
+                category: "Productivity",
+                appName: "Slack",
+                start: "2026-09-09T09:40:00Z",
+                end: "2026-09-09T09:45:00Z",
+                durationSeconds: 300,
+              },
+              {
+                id: "notes",
+                title: "Notes",
+                subtitle: "Notes",
+                url: "",
+                category: "Productivity",
+                appName: "Notes",
+                start: "2026-09-09T09:45:00Z",
+                end: "2026-09-09T09:47:00Z",
+                durationSeconds: 120,
+              },
+              {
+                id: "safari-b",
+                title: "Issues",
+                subtitle: "github.com",
+                url: "https://github.com/issues",
+                category: "Productivity",
+                appName: "Safari",
+                start: "2026-09-09T09:47:00Z",
+                end: "2026-09-09T09:57:00Z",
+                durationSeconds: 600,
+              },
+            ],
+          }],
+        }]}
+      />,
+    );
+    const track = screen.getByRole("img", { name: /1 blocks/ });
+    vi.spyOn(track, "getBoundingClientRect").mockReturnValue({
+      x: 0, y: 0, top: 0, left: 0, right: 2400, bottom: 150, width: 2400, height: 150, toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent.mouseMove(track, { clientX: 950, clientY: 20 });
+    const items = screen.getByTestId("session-hover-card").querySelector(".native-hover-items") as HTMLElement;
+    const rows = [...items.children].filter((row) => !row.classList.contains("native-hover-total"));
+    expect(rows.map((row) => row.textContent)).toEqual(["Xcode30m", "github.com20m", "Slack5m"]);
+    expect(items.querySelector(".native-hover-total")).toHaveTextContent("Top 3");
+    expect(items.querySelector(".native-hover-total")).toHaveTextContent("55m");
+    expect(within(items).queryByText("Notes")).toBeNull();
+  });
+
   it("colors blocks with the device's stored color, including compact tracks", () => {
     const timeline = {
       id: "timeline-phone",

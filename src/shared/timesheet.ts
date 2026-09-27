@@ -80,21 +80,38 @@ function itemSeconds(item: ScreenTimeSessionBlock["items"][number]) {
   return Math.max(0, (Date.parse(item.end) - Date.parse(item.start)) / 1000);
 }
 
-/** Apps and websites in the block, most time first, merged by hostname or app. */
-function rankedItemNames(block: ScreenTimeSessionBlock) {
-  const totals = new Map<string, { name: string; seconds: number }>();
+export interface RankedBlockApp {
+  key: string;
+  name: string;
+  seconds: number;
+  website: boolean;
+}
+
+/** Apps and websites in the block, most time first. Repeat visits to the same app or site are added together. */
+export function rankedBlockApps(block: ScreenTimeSessionBlock): RankedBlockApp[] {
+  const totals = new Map<string, RankedBlockApp>();
   for (const item of block.items) {
     const key = itemBreakdownKey(item);
-    const name = websiteHostname(item.url) || item.appName || item.title;
+    const host = websiteHostname(item.url);
+    const name = host || item.appName || item.title;
     if (!name) continue;
     const existing = totals.get(key);
-    totals.set(key, { name, seconds: (existing?.seconds ?? 0) + itemSeconds(item) });
+    totals.set(key, {
+      key,
+      name,
+      seconds: (existing?.seconds ?? 0) + itemSeconds(item),
+      website: Boolean(host),
+    });
   }
   return [...totals.values()].sort((a, b) => b.seconds - a.seconds || a.name.localeCompare(b.name));
 }
 
+export function topBlockApps(block: ScreenTimeSessionBlock, limit = 3) {
+  return rankedBlockApps(block).slice(0, limit);
+}
+
 export function fallbackDescription(block: ScreenTimeSessionBlock) {
-  const names = rankedItemNames(block).slice(0, 3).map((item) => item.name);
+  const names = topBlockApps(block).map((item) => item.name);
   if (!names.length) return block.title || "Untitled activity";
   if (names.length === 1) return names[0];
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
