@@ -731,6 +731,35 @@ export function continuousActivityEvents(block: Pick<ScreenTimeSessionBlock, "it
   return events.map(({ key: _key, ...event }) => event);
 }
 
+export interface CumulativeActivityTotal {
+  key: string;
+  name: string;
+  seconds: number;
+  website: boolean;
+}
+
+/** Every visit to an app or website in the session, most time first. */
+export function cumulativeActivityTotals(block: Pick<ScreenTimeSessionBlock, "items">): CumulativeActivityTotal[] {
+  const totals = new Map<string, CumulativeActivityTotal>();
+  for (const item of block.items) {
+    const name = websiteHostname(item.url) || item.appName || item.title;
+    if (!name) continue;
+    const key = itemBreakdownKey(item);
+    const existing = totals.get(key);
+    if (existing) {
+      existing.seconds += item.durationSeconds;
+      continue;
+    }
+    totals.set(key, {
+      key,
+      name,
+      seconds: item.durationSeconds,
+      website: Boolean(websiteHostname(item.url)),
+    });
+  }
+  return [...totals.values()].sort((a, b) => b.seconds - a.seconds || a.name.localeCompare(b.name));
+}
+
 export interface TimelineHighlightRange {
   id: string;
   start: Date;

@@ -10,7 +10,7 @@ import {
   scheduleWhen,
   WEEKDAYS,
 } from "@shared/blocking";
-import { blockItemShareLabel, continuousActivityEvents, formatClock, formatDuration, formatTrackedDuration } from "@shared/timeline";
+import { appShareBarPercent, blockItemShareLabel, continuousActivityEvents, cumulativeActivityTotals, formatClock, formatDuration, formatTrackedDuration, percentLabel } from "@shared/timeline";
 import { displayNameForDevice } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { BlockingSchedule, ScreenTimeSessionBlock } from "@shared/types";
@@ -182,6 +182,8 @@ function SessionDetailsModal({
   const clockFormat = useClockFormat();
   const title = useSessionTitle()(block);
   const events = continuousActivityEvents(block);
+  const totals = cumulativeActivityTotals(block);
+  const totalSeconds = totals.reduce((sum, item) => sum + item.seconds, 0);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -221,21 +223,51 @@ function SessionDetailsModal({
           <strong>{formatDuration(block.durationSeconds)}</strong>
           <span className="small muted">{formatClock(block.start, clockFormat)} – {formatClock(block.end, clockFormat)}</span>
         </div>
-        <div className="inspector-kicker">Activity</div>
-        {events.map((item) => (
-          <div className="data-row" key={item.id}>
-            <span className="row-copy">
-              <span className="row-title">{item.title}</span>
-              <span className="row-subtitle">
-                {formatClock(item.start, clockFormat)} – {formatClock(item.end, clockFormat)}
-                {item.appName ? ` · ${item.appName}` : ""}
+        {totals.length ? (
+          <section aria-label="Apps and websites">
+            <div className="inspector-kicker">Apps & websites</div>
+            <div className="activity-app-list session-details-totals">
+              {totals.map((item) => {
+                const share = totalSeconds > 0 ? item.seconds / totalSeconds : 0;
+                return (
+                  <div className="activity-app-row" key={item.key}>
+                    <div className="activity-app-main">
+                      <span className="activity-app-pct">{percentLabel(share)}</span>
+                      <span className="activity-app-bar" aria-hidden="true">
+                        <span style={{ width: `${appShareBarPercent(share)}%` }} />
+                      </span>
+                      <span className="activity-app-name">{item.name}</span>
+                      <span className="activity-app-time">{formatTrackedDuration(item.seconds)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="activity-app-row session-details-total">
+                <div className="activity-app-main">
+                  <span className="activity-app-name">Total</span>
+                  <span className="activity-app-time">{formatTrackedDuration(totalSeconds)}</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
+        <section aria-label="Activity">
+          <div className="inspector-kicker">Activity</div>
+          {events.map((item) => (
+            <div className="data-row" key={item.id}>
+              <span className="row-copy">
+                <span className="row-title">{item.title}</span>
+                <span className="row-subtitle">
+                  {formatClock(item.start, clockFormat)} – {formatClock(item.end, clockFormat)}
+                  {item.appName ? ` · ${item.appName}` : ""}
+                </span>
               </span>
-            </span>
-            <span className="row-value">
-              {formatTrackedDuration(item.durationSeconds)} · {blockItemShareLabel(item.durationSeconds, block.durationSeconds)}
-            </span>
-          </div>
-        ))}
+              <span className="row-value">
+                {formatTrackedDuration(item.durationSeconds)} · {blockItemShareLabel(item.durationSeconds, block.durationSeconds)}
+              </span>
+            </div>
+          ))}
+        </section>
       </div>
     </div>
   );

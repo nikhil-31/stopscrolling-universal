@@ -1758,6 +1758,10 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
 .calendar-dialog-close { position: absolute; top: 12px; right: 12px; }
 .session-details-dialog { width: min(520px, calc(100vw - 32px)); }
 .session-details-dialog h2 { max-width: none; margin: 4px 0 3px; font-size: 18px; line-height: 1.2; letter-spacing: -0.03em; }
+.session-details-totals { margin: 4px 0 16px; }
+.session-details-total .activity-app-main { grid-template-columns: minmax(0, 1fr) auto; }
+.session-details-total .activity-app-name,
+.session-details-total .activity-app-time { font-weight: 650; }
 .blocking-dialog-scrim {
   position: fixed;
   inset: 0;
