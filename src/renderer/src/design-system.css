@@ -1756,6 +1756,8 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
 }
 .calendar-dialog h3 { margin: 0 0 6px; font-size: 18px; }
 .calendar-dialog-close { position: absolute; top: 12px; right: 12px; }
+.session-details-dialog { width: min(520px, calc(100vw - 32px)); }
+.session-details-dialog h2 { max-width: none; margin: 4px 0 3px; font-size: 18px; line-height: 1.2; letter-spacing: -0.03em; }
 .blocking-dialog-scrim {
   position: fixed;
   inset: 0;

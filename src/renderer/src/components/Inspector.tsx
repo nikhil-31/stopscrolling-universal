@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   clockLabel,
   formatRemaining,
@@ -10,10 +10,10 @@ import {
   scheduleWhen,
   WEEKDAYS,
 } from "@shared/blocking";
-import { blockItemShareLabel, formatClock, formatDuration, formatTrackedDuration } from "@shared/timeline";
+import { blockItemShareLabel, continuousActivityEvents, formatClock, formatDuration, formatTrackedDuration } from "@shared/timeline";
 import { displayNameForDevice } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
-import type { BlockingSchedule } from "@shared/types";
+import type { BlockingSchedule, ScreenTimeSessionBlock } from "@shared/types";
 import { Clock3, Globe2, Laptop2, Layers3, Shield, X } from "lucide-react";
 import { useClockFormat } from "../clock-format";
 import { useSessionTitle } from "../session-title";
@@ -172,6 +172,75 @@ function ScheduleInspector({
   );
 }
 
+function SessionDetailsModal({
+  block,
+  devices,
+}: {
+  block: ScreenTimeSessionBlock;
+  devices: AppSnapshot["devices"];
+}) {
+  const clockFormat = useClockFormat();
+  const title = useSessionTitle()(block);
+  const events = continuousActivityEvents(block);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      closeInspector();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  return (
+    <div className="calendar-dialog-scrim" onClick={closeInspector}>
+      <div
+        className="calendar-dialog session-details-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="session-details-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <IconButton
+          className="calendar-dialog-close"
+          label="Close session details"
+          icon={X}
+          onClick={closeInspector}
+        />
+        <div className="inspector-kicker">Activity block</div>
+        <h2 id="session-details-title">{title}</h2>
+        <p className="muted">{block.subtitle}</p>
+        <div className="inspector-meta">
+          <Badge tone="accent">{block.category}</Badge>
+          <Badge><Laptop2 size={11} aria-hidden="true" />{displayNameForDevice(block.devicePlatform, block.deviceName, devices)}</Badge>
+          <Badge><Layers3 size={11} aria-hidden="true" />{events.length} {events.length === 1 ? "session" : "sessions"}</Badge>
+        </div>
+        <div className="inspector-duration">
+          <span className="small muted">Focused block</span>
+          <strong>{formatDuration(block.durationSeconds)}</strong>
+          <span className="small muted">{formatClock(block.start, clockFormat)} – {formatClock(block.end, clockFormat)}</span>
+        </div>
+        <div className="inspector-kicker">Activity</div>
+        {events.map((item) => (
+          <div className="data-row" key={item.id}>
+            <span className="row-copy">
+              <span className="row-title">{item.title}</span>
+              <span className="row-subtitle">
+                {formatClock(item.start, clockFormat)} – {formatClock(item.end, clockFormat)}
+                {item.appName ? ` · ${item.appName}` : ""}
+              </span>
+            </span>
+            <span className="row-value">
+              {formatTrackedDuration(item.durationSeconds)} · {blockItemShareLabel(item.durationSeconds, block.durationSeconds)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Inspector({
   state,
   onEditSchedule,
@@ -180,7 +249,6 @@ export function Inspector({
   onEditSchedule?: (schedule: BlockingSchedule) => void;
 }) {
   const clockFormat = useClockFormat();
-  const titleFor = useSessionTitle();
   if (state.inspector.kind === "none") return null;
   if (state.inspector.kind === "schedule" && state.inspector.schedule) {
     return <ScheduleInspector schedule={state.inspector.schedule} state={state} onEdit={onEditSchedule} />;
@@ -221,46 +289,8 @@ export function Inspector({
       </aside>
     );
   }
-  if (state.inspector.block) {
-    const block = state.inspector.block;
-    return (
-      <aside className="inspector" aria-label="Activity block inspector">
-        <IconButton
-          className="inspector-close"
-          label="Close inspector"
-          icon={X}
-          onClick={closeInspector}
-        />
-        <div className="inspector-kicker">Activity block</div>
-        <h2>{titleFor(block)}</h2>
-        <p className="muted">{block.subtitle}</p>
-        <div className="inspector-meta">
-          <Badge tone="accent">{block.category}</Badge>
-          <Badge><Laptop2 size={11} aria-hidden="true" />{displayNameForDevice(block.devicePlatform, block.deviceName, state.devices)}</Badge>
-          <Badge><Layers3 size={11} aria-hidden="true" />{block.items.length} sessions</Badge>
-        </div>
-        <div className="inspector-duration">
-          <span className="small muted">Focused block</span>
-          <strong>{formatDuration(block.durationSeconds)}</strong>
-          <span className="small muted">{formatClock(block.start, clockFormat)} – {formatClock(block.end, clockFormat)}</span>
-        </div>
-        <div className="inspector-kicker">Activity</div>
-        {block.items.map((item) => (
-          <div className="data-row" key={item.id}>
-            <span className="row-copy">
-              <span className="row-title">{item.title}</span>
-              <span className="row-subtitle">
-                {formatClock(item.start, clockFormat)} – {formatClock(item.end, clockFormat)}
-                {item.appName ? ` · ${item.appName}` : ""}
-              </span>
-            </span>
-            <span className="row-value">
-              {formatTrackedDuration(item.durationSeconds)} · {blockItemShareLabel(item.durationSeconds, block.durationSeconds)}
-            </span>
-          </div>
-        ))}
-      </aside>
-    );
+  if (state.inspector.kind === "block" && state.inspector.block) {
+    return <SessionDetailsModal block={state.inspector.block} devices={state.devices} />;
   }
   return null;
 }

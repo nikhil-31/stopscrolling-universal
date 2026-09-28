@@ -690,6 +690,47 @@ export function itemBreakdownKey(item: Pick<ScreenTimeSessionBlock["items"][numb
   return appBreakdownKey({ url: item.url, appName: item.appName, label: item.title });
 }
 
+export interface ContinuousActivityEvent {
+  id: string;
+  title: string;
+  appName: string;
+  start: string;
+  end: string;
+  durationSeconds: number;
+}
+
+function activityEventTitle(item: Pick<ScreenTimeSessionBlock["items"][number], "url" | "appName" | "title">) {
+  return websiteHostname(item.url) || item.appName || item.title || "Activity";
+}
+
+/** Consecutive slices of the same app or website, for the session-details list. */
+export function continuousActivityEvents(block: Pick<ScreenTimeSessionBlock, "items">): ContinuousActivityEvent[] {
+  const sorted = [...block.items].sort(
+    (a, b) => Date.parse(a.start) - Date.parse(b.start) || Date.parse(a.end) - Date.parse(b.end),
+  );
+  const events: Array<ContinuousActivityEvent & { key: string }> = [];
+  for (const item of sorted) {
+    const key = itemBreakdownKey(item);
+    const previous = events.at(-1);
+    if (previous && previous.key === key) {
+      if (Date.parse(item.end) > Date.parse(previous.end)) previous.end = item.end;
+      previous.durationSeconds += item.durationSeconds;
+      previous.id = `${previous.id}:${item.id}`;
+      continue;
+    }
+    events.push({
+      key,
+      id: item.id,
+      title: activityEventTitle(item),
+      appName: item.appName,
+      start: item.start,
+      end: item.end,
+      durationSeconds: item.durationSeconds,
+    });
+  }
+  return events.map(({ key: _key, ...event }) => event);
+}
+
 export interface TimelineHighlightRange {
   id: string;
   start: Date;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockItemShareLabel, blockSegments, buildDeviceSeries, colorForCategory, combineSessionBlocks, dayAxisHour, dayHourTitle, dayTrackAxis, durationAxisTicks, entriesToTimelines, entryFromSession, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, formatTrackedDuration, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, weekNumber } from "./timeline";
+import { blockItemShareLabel, blockSegments, buildDeviceSeries, colorForCategory, combineSessionBlocks, continuousActivityEvents, dayAxisHour, dayHourTitle, dayTrackAxis, durationAxisTicks, entriesToTimelines, entryFromSession, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, formatTrackedDuration, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, weekNumber } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import { toDateInput } from "./platform";
 import type { ScreenTimeEntry, ScreenTimePeriodBucket, ScreenTimeSessionBlock, ScreenTimeTimelineSegment } from "./types";
@@ -271,6 +271,95 @@ describe("combineSessionBlocks", () => {
     expect(combined[0].items.map((item) => item.appName)).toEqual(["Writing", "Mail"]);
     expect(combined[0].durationSeconds).toBe(32 * 60);
     expect(combined[1].items.map((item) => item.appName)).toEqual(["Slack"]);
+  });
+});
+
+describe("continuousActivityEvents", () => {
+  function item(
+    partial: Partial<ScreenTimeSessionBlock["items"][number]> & Pick<ScreenTimeSessionBlock["items"][number], "id" | "start" | "end" | "appName">,
+  ): ScreenTimeSessionBlock["items"][number] {
+    const durationSeconds = partial.durationSeconds ?? (Date.parse(partial.end) - Date.parse(partial.start)) / 1000;
+    return {
+      title: partial.title ?? partial.appName,
+      subtitle: partial.subtitle ?? "",
+      url: partial.url ?? "",
+      category: partial.category ?? "Application",
+      durationSeconds,
+      ...partial,
+    };
+  }
+
+  it("merges continuous pages on the same website and keeps a site switch split", () => {
+    const events = continuousActivityEvents({
+      items: [
+        item({
+          id: "pulls",
+          start: "2026-06-22T09:00:00.000Z",
+          end: "2026-06-22T09:10:00.000Z",
+          title: "Pull requests",
+          appName: "Safari",
+          url: "https://github.com/org/repo/pulls",
+          durationSeconds: 10 * 60,
+        }),
+        item({
+          id: "issue",
+          start: "2026-06-22T09:10:00.000Z",
+          end: "2026-06-22T09:40:00.000Z",
+          title: "Issue 12",
+          appName: "Safari",
+          url: "https://github.com/org/repo/issues/12",
+          durationSeconds: 30 * 60,
+        }),
+        item({
+          id: "docs",
+          start: "2026-06-22T09:40:00.000Z",
+          end: "2026-06-22T09:55:00.000Z",
+          title: "Doc",
+          appName: "Safari",
+          url: "https://docs.google.com/document/d/1",
+          durationSeconds: 15 * 60,
+        }),
+      ],
+    });
+    expect(events.map((event) => event.title)).toEqual(["github.com", "docs.google.com"]);
+    expect(events[0]).toMatchObject({
+      start: "2026-06-22T09:00:00.000Z",
+      end: "2026-06-22T09:40:00.000Z",
+      durationSeconds: 40 * 60,
+      appName: "Safari",
+    });
+  });
+
+  it("keeps a return to the same app as its own event", () => {
+    const events = continuousActivityEvents({
+      items: [
+        item({ id: "cursor-a", start: "2026-06-22T09:00:00.000Z", end: "2026-06-22T09:10:00.000Z", appName: "Cursor" }),
+        item({ id: "slack", start: "2026-06-22T09:10:00.000Z", end: "2026-06-22T09:20:00.000Z", appName: "Slack" }),
+        item({ id: "cursor-b", start: "2026-06-22T09:20:00.000Z", end: "2026-06-22T09:35:00.000Z", appName: "Cursor" }),
+      ],
+    });
+    expect(events.map((event) => [event.title, event.durationSeconds])).toEqual([
+      ["Cursor", 10 * 60],
+      ["Slack", 10 * 60],
+      ["Cursor", 15 * 60],
+    ]);
+  });
+
+  it("sums tracked time across a short gap", () => {
+    const events = continuousActivityEvents({
+      items: [
+        item({ id: "a", start: "2026-06-22T09:00:00.000Z", end: "2026-06-22T09:10:00.000Z", appName: "Cursor", durationSeconds: 10 * 60 }),
+        item({ id: "b", start: "2026-06-22T09:12:00.000Z", end: "2026-06-22T09:20:00.000Z", appName: "Cursor", durationSeconds: 8 * 60 }),
+      ],
+    });
+    expect(events).toEqual([
+      expect.objectContaining({
+        title: "Cursor",
+        start: "2026-06-22T09:00:00.000Z",
+        end: "2026-06-22T09:20:00.000Z",
+        durationSeconds: 18 * 60,
+      }),
+    ]);
   });
 });
 

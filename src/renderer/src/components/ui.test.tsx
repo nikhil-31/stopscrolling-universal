@@ -759,7 +759,8 @@ describe("native timeline", () => {
     expect(screen.getByRole("heading", { name: "Drafted release notes in Notes." })).toBeVisible();
   });
 
-  it("shows each activity entry's time and share of the block", () => {
+  it("shows continuous use of one website as one event in the session details modal", async () => {
+    const user = userEvent.setup();
     const block = {
       id: "block-pages",
       start: "2026-09-09T09:00:00Z",
@@ -795,8 +796,76 @@ describe("native timeline", () => {
         },
       ],
     };
+    const view = render(<Inspector state={snapshot({ inspector: { kind: "block", segment: null, block, schedule: null } })} />);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(within(dialog).getByRole("heading", { name: "github.com" })).toBeVisible();
+    expect(within(dialog).getByText("1 session")).toBeVisible();
+    expect(within(dialog).getByText("40m · 100%")).toBeVisible();
+    expect(within(dialog).queryByText("Pull requests")).toBeNull();
+    expect(screen.queryByRole("complementary", { name: "Activity block inspector" })).toBeNull();
+
+    fireEvent.click(dialog.parentElement as HTMLElement);
+    await user.click(within(dialog).getByRole("button", { name: "Close session details" }));
+    view.rerender(<Inspector state={snapshot({ inspector: { kind: "block", segment: null, block, schedule: null } })} />);
+    await user.keyboard("{Escape}");
+    expect(desktop.selectInspector).toHaveBeenCalledTimes(3);
+    expect(desktop.selectInspector).toHaveBeenCalledWith({ kind: "none" });
+  });
+
+  it("keeps an app switch and a return to the same app as separate events", () => {
+    const block = {
+      id: "block-switch",
+      start: "2026-09-09T09:00:00Z",
+      end: "2026-09-09T09:35:00Z",
+      title: "Cursor",
+      subtitle: "3 activities",
+      category: "Development",
+      devicePlatform: "macos",
+      deviceName: "Studio Mac",
+      durationSeconds: 35 * 60,
+      items: [
+        {
+          id: "cursor-a",
+          title: "main.ts",
+          subtitle: "Cursor",
+          url: "",
+          category: "Development",
+          appName: "Cursor",
+          start: "2026-09-09T09:00:00Z",
+          end: "2026-09-09T09:10:00Z",
+          durationSeconds: 10 * 60,
+        },
+        {
+          id: "slack",
+          title: "Slack",
+          subtitle: "Slack",
+          url: "",
+          category: "Communication",
+          appName: "Slack",
+          start: "2026-09-09T09:10:00Z",
+          end: "2026-09-09T09:20:00Z",
+          durationSeconds: 10 * 60,
+        },
+        {
+          id: "cursor-b",
+          title: "Inspector.tsx",
+          subtitle: "Cursor",
+          url: "",
+          category: "Development",
+          appName: "Cursor",
+          start: "2026-09-09T09:20:00Z",
+          end: "2026-09-09T09:35:00Z",
+          durationSeconds: 15 * 60,
+        },
+      ],
+    };
     render(<Inspector state={snapshot({ inspector: { kind: "block", segment: null, block, schedule: null } })} />);
-    expect(screen.getByText("10m · 25%")).toBeVisible();
-    expect(screen.getByText("30m · 75%")).toBeVisible();
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("3 sessions")).toBeVisible();
+    expect(within(dialog).getAllByText("Cursor")).toHaveLength(2);
+    expect(within(dialog).getByText("Slack")).toBeVisible();
+    expect(within(dialog).getAllByText("10m · 29%")).toHaveLength(2);
+    expect(within(dialog).getByText("15m · 43%")).toBeVisible();
   });
 });
