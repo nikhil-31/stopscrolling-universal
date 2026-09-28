@@ -10,11 +10,12 @@ import {
   scheduleWhen,
   WEEKDAYS,
 } from "@shared/blocking";
+import { formatFullDate } from "@shared/calendar-workspace";
 import { appShareBarPercent, blockItemShareLabel, continuousActivityEvents, cumulativeActivityTotals, formatClock, formatDuration, formatTrackedDuration, percentLabel } from "@shared/timeline";
 import { displayNameForDevice } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { BlockingSchedule, ScreenTimeSessionBlock } from "@shared/types";
-import { Clock3, Globe2, Laptop2, Layers3, Shield, X } from "lucide-react";
+import { Clock3, Globe2, Laptop2, Shield, X } from "lucide-react";
 import { useClockFormat } from "../clock-format";
 import { useSessionTitle } from "../session-title";
 import { Badge, Button, IconButton } from "./ui";
@@ -210,18 +211,18 @@ function SessionDetailsModal({
           icon={X}
           onClick={closeInspector}
         />
-        <div className="inspector-kicker">Activity block</div>
+        <div className="inspector-kicker">Session details</div>
         <h2 id="session-details-title">{title}</h2>
-        <p className="muted">{block.subtitle}</p>
         <div className="inspector-meta">
           <Badge tone="accent">{block.category}</Badge>
           <Badge><Laptop2 size={11} aria-hidden="true" />{displayNameForDevice(block.devicePlatform, block.deviceName, devices)}</Badge>
-          <Badge><Layers3 size={11} aria-hidden="true" />{events.length} {events.length === 1 ? "session" : "sessions"}</Badge>
         </div>
-        <div className="inspector-duration">
-          <span className="small muted">Focused block</span>
-          <strong>{formatDuration(block.durationSeconds)}</strong>
-          <span className="small muted">{formatClock(block.start, clockFormat)} – {formatClock(block.end, clockFormat)}</span>
+        <div className="inspector-duration session-details-summary">
+          <span className="small muted">Tracked</span>
+          <strong>{formatDuration(totalSeconds)}</strong>
+          <span className="small muted">
+            {formatFullDate(new Date(block.start))} · {formatClock(block.start, clockFormat)} – {formatClock(block.end, clockFormat)}
+          </span>
         </div>
         {totals.length ? (
           <section aria-label="Apps and websites">
@@ -242,17 +243,11 @@ function SessionDetailsModal({
                   </div>
                 );
               })}
-              <div className="activity-app-row session-details-total">
-                <div className="activity-app-main">
-                  <span className="activity-app-name">Total</span>
-                  <span className="activity-app-time">{formatTrackedDuration(totalSeconds)}</span>
-                </div>
-              </div>
             </div>
           </section>
         ) : null}
         <section aria-label="Activity">
-          <div className="inspector-kicker">Activity</div>
+          <div className="inspector-kicker">Activity · {events.length}</div>
           {events.map((item) => (
             <div className="data-row" key={item.id}>
               <span className="row-copy">
