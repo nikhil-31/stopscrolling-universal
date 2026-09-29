@@ -83,6 +83,7 @@ export class ScreenTimeTracker {
     classifier?: JevClassifier,
     productivityAgent?: JevProductivityAgent,
     private readonly sendTitles: () => boolean = () => true,
+    private readonly publishLive: () => boolean = () => false,
     private readonly now: () => number = () => Date.now(),
   ) {
     this.classifier = classifier ?? new JevClassifier({
@@ -265,6 +266,7 @@ export class ScreenTimeTracker {
     this.observeProductivity(snapshot, this.openContext?.category ?? "");
     if (contextEquals(this.currentContext, snapshot)) {
       this.maybeCheckpoint();
+      if (this.publishLive()) this.onChange();
       return;
     }
     await this.closeOpenSession("switch", this.lastActiveAt ?? new Date());

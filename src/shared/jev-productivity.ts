@@ -1,5 +1,5 @@
 import { JEV_CONFIDENCE_THRESHOLD, JEV_MODEL, parseJevChoice } from "./jev";
-import type { ScreenTimeTimelineSegment } from "./types";
+import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 import { appBreakdownKey, segmentSeconds } from "./timeline";
 
 export const JEV_PRODUCTIVITY_CRITERIA = {
@@ -131,22 +131,34 @@ export function verdictForTitle(
   return best?.entry;
 }
 
-/** Rolls a day's segments up per app or site, with a verdict per window title. */
+/** A session that just started has no duration yet. Give it one second so the current app shows up immediately. */
+export function ensureLiveEntryVisible(entries: ScreenTimeEntry[]): ScreenTimeEntry[] {
+  return entries.map((entry) => {
+    if (entry.source !== "live") return entry;
+    const start = Date.parse(entry.startTimeUTC);
+    if (Date.parse(entry.endTimeUTC) > start) return entry;
+    return { ...entry, endTimeUTC: new Date(start + 1000).toISOString() };
+  });
+}
+
+/** Rolls a day's segments up per app or site, newest activity first, with a verdict per window title. */
 export function buildAgentView(
   segments: ScreenTimeTimelineSegment[],
   cache: ProductivityCache,
   meta: { reviewing: boolean; progress: { done: number; total: number }; keyConfigured: boolean },
 ): AgentState {
-  const groups = new Map<string, { segment: ScreenTimeTimelineSegment; seconds: number; titles: Map<string, { title: string; seconds: number }> }>();
+  const groups = new Map<string, { segment: ScreenTimeTimelineSegment; seconds: number; lastEnd: string; titles: Map<string, { title: string; seconds: number; lastEnd: string }> }>();
   for (const segment of segments) {
     const key = appBreakdownKey(segment);
     const seconds = segmentSeconds(segment);
     const titleKey = productivityKey(key, segment.label);
-    const group = groups.get(key) ?? { segment, seconds: 0, titles: new Map() };
+    const group = groups.get(key) ?? { segment, seconds: 0, lastEnd: segment.end, titles: new Map() };
     group.seconds += seconds;
+    if (segment.end > group.lastEnd) group.lastEnd = segment.end;
     if (group.segment && seconds > segmentSeconds(group.segment)) group.segment = segment;
-    const title = group.titles.get(titleKey) ?? { title: normalizeTitle(segment.label), seconds: 0 };
+    const title = group.titles.get(titleKey) ?? { title: normalizeTitle(segment.label), seconds: 0, lastEnd: segment.end };
     title.seconds += seconds;
+    if (segment.end > title.lastEnd) title.lastEnd = segment.end;
     group.titles.set(titleKey, title);
     groups.set(key, group);
   }
@@ -155,6 +167,7 @@ export function buildAgentView(
   const totals: AgentState["totals"] = { Productive: 0, Neutral: 0, Distracting: 0, unrated: 0 };
   for (const [key, group] of groups) {
     const titles: AgentTitleVerdict[] = [...group.titles.entries()]
+      .sort((a, b) => Date.parse(b[1].lastEnd) - Date.parse(a[1].lastEnd))
       .map(([titleKey, value]) => {
         const entry = verdictForTitle(cache, key, titleKey);
         const raw = cache[titleKey];
@@ -167,8 +180,7 @@ export function buildAgentView(
           confidence: entry ? entry.confidence : unsure ? raw.confidence : null,
           source: entry ? entry.source : unsure ? "jev" : null,
         };
-      })
-      .sort((a, b) => b.seconds - a.seconds);
+      });
     const byVerdict = new Map<ProductivityVerdict, { seconds: number; confidence: number; source: ProductivityCacheEntry["source"] }>();
     for (const title of titles) {
       if (!title.verdict) continue;
@@ -198,7 +210,7 @@ export function buildAgentView(
     });
     totals[winner?.verdict ?? "unrated"] += group.seconds;
   }
-  items.sort((a, b) => b.seconds - a.seconds);
+  items.sort((a, b) => Date.parse(groups.get(b.key)?.lastEnd ?? "") - Date.parse(groups.get(a.key)?.lastEnd ?? ""));
 
   let lastReviewAt: string | null = null;
   for (const entry of Object.values(cache)) {

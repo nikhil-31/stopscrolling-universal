@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import { JEV_MODEL } from "./jev";
 import {
   buildAgentView,
+  ensureLiveEntryVisible,
   jevProductivityRequest,
   normalizeTitle,
   parseJevProductivity,
   productivityKey,
   type ProductivityCache,
 } from "./jev-productivity";
+import type { ScreenTimeEntry } from "./types";
 import type { ScreenTimeTimelineSegment } from "./types";
 
 function segment(patch: Partial<ScreenTimeTimelineSegment>): ScreenTimeTimelineSegment {
@@ -74,6 +76,35 @@ describe("productivity titles", () => {
   });
 });
 
+describe("live entries", () => {
+  function entry(source: ScreenTimeEntry["source"], start: string, end: string): ScreenTimeEntry {
+    return {
+      id: "entry",
+      startTimeUTC: start,
+      endTimeUTC: end,
+      title: "Chrome",
+      url: "https://youtube.com",
+      bundleID: "com.google.Chrome",
+      appName: "Google Chrome",
+      category: "Video",
+      platform: "macos",
+      deviceName: "Mac",
+      timeZoneIdentifier: "UTC",
+      source,
+    };
+  }
+
+  it("keeps a session that just started visible and leaves finished entries alone", () => {
+    const live = entry("live", "2026-09-20T12:00:00.000Z", "2026-09-20T12:00:00.000Z");
+    const done = entry("local", "2026-09-20T11:00:00.000Z", "2026-09-20T11:00:00.000Z");
+    const grown = entry("live", "2026-09-20T12:00:00.000Z", "2026-09-20T12:05:00.000Z");
+    const [visibleLive, visibleDone, visibleGrown] = ensureLiveEntryVisible([live, done, grown]);
+    expect(Date.parse(visibleLive.endTimeUTC) - Date.parse(visibleLive.startTimeUTC)).toBe(1000);
+    expect(visibleDone).toBe(done);
+    expect(visibleGrown).toBe(grown);
+  });
+});
+
 describe("agent view", () => {
   const cache: ProductivityCache = {
     "web|youtube.com#Intro to Rust": { verdict: "Productive", confidence: 0.9, model: "jev", at: "2026-09-20T09:00:00.000Z", source: "jev" },
@@ -93,6 +124,8 @@ describe("agent view", () => {
       cache,
       meta,
     );
+
+    expect(view.items.map((item) => item.label)).toEqual(["Cursor", "youtube.com", "news.example"]);
 
     const youtube = view.items.find((item) => item.key === "web|youtube.com");
     expect(youtube?.label).toBe("youtube.com");

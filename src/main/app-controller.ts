@@ -27,7 +27,7 @@ import {
   upsertTask,
 } from "@shared/calendar-workspace";
 import { deviceKey, resolvedDeviceName, withComputedOnline } from "@shared/device";
-import { buildAgentView, JEV_PRODUCTIVITY_CRITERIA, normalizeTitle, productivityKey, type ProductivityVerdict } from "@shared/jev-productivity";
+import { buildAgentView, ensureLiveEntryVisible, JEV_PRODUCTIVITY_CRITERIA, normalizeTitle, productivityKey, type ProductivityVerdict } from "@shared/jev-productivity";
 import { IPC } from "@shared/ipc";
 import { currentDevicePlatform, effectiveTimeZone as resolveTimeZone, toDateInput } from "@shared/platform";
 import { TIMER_BONUS_STEP_SECONDS, usesTodayWindow } from "@shared/timer";
@@ -68,6 +68,7 @@ import type {
   NavigationItem,
   PeriodSummaryResponse,
   ScreenTimeSessionBlock,
+  ScreenTimeTimelineSegment,
   TodayPeriod,
   TodayTab,
   BlocklistWritePayload,
@@ -221,6 +222,7 @@ export class AppController {
     undefined,
     undefined,
     () => this.settings.agentSendTitles,
+    () => this.navigation === "agent",
   );
 
   private windows = new Set<BrowserWindow>();
@@ -366,7 +368,7 @@ export class AppController {
       },
       leaderboard: this.leaderboard,
       blocking: this.blocking,
-      agent: buildAgentView(view.snapshot.timelineSegments, this.tracker.productivityAgent.cache, {
+      agent: buildAgentView(this.agentSegments(view.snapshot.timelineSegments), this.tracker.productivityAgent.cache, {
         reviewing: this.tracker.productivityAgent.reviewing,
         progress: this.tracker.productivityAgent.progress,
         keyConfigured: hasTypesafeApiKey(),
@@ -374,6 +376,21 @@ export class AppController {
       commandPaletteOpen: this.commandPaletteOpen,
       dataVersion: view.version,
     };
+  }
+
+  /** Today's segments, including the session that is open right now. */
+  private agentSegments(cached: ScreenTimeTimelineSegment[]): ScreenTimeTimelineSegment[] {
+    if (this.navigation !== "agent") return cached;
+    const zone = this.effectiveTimeZone();
+    const bounds = todayPeriodBounds("day", this.todayDay, zone);
+    return snapshotFromRange(
+      ensureLiveEntryVisible(this.tracker.mergedEntries()),
+      bounds,
+      undefined,
+      undefined,
+      this.tracker.categoryCache(),
+      zone,
+    ).timelineSegments;
   }
 
   /** Rates every unrated title in the current view, then refreshes the agent tab. */
@@ -672,7 +689,7 @@ export class AppController {
   startTimelineRefresh() {
     if (this.timelineTimer) clearInterval(this.timelineTimer);
     this.timelineTimer = setInterval(() => {
-      if (["today", "timer", "calendar", "timesheet", "insights"].includes(this.navigation)) {
+      if (["today", "timer", "calendar", "timesheet", "insights", "agent"].includes(this.navigation)) {
         void this.refreshVisibleRange();
       }
       if (this.auth.user) void this.tracker.heartbeat();
