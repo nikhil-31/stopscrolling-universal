@@ -139,6 +139,9 @@ describe("calendar workspace math", () => {
     expect(stats.reviewCount).toBe(1);
     expect(stats.labelTotals[0]?.name).toBe("Research");
     expect(stats.trackedSeconds).toBe(3 * 3600);
+    expect(stats.deviceTotals).toEqual([
+      { key: "macos|Mac", devicePlatform: "macos", deviceName: "Mac", seconds: 3 * 3600 },
+    ]);
   });
 
   it("sums session time inside a block and leaves out gaps", () => {
@@ -147,6 +150,8 @@ describe("calendar workspace math", () => {
         id: "gap",
         start: "2026-09-09T09:00:00",
         end: "2026-09-09T10:00:00",
+        devicePlatform: "macos",
+        deviceName: "Studio Mac",
         items: [
           {
             id: "gap-a",
@@ -172,8 +177,35 @@ describe("calendar workspace math", () => {
           },
         ],
       }),
+      block({
+        id: "phone",
+        start: "2026-09-09T13:00:00",
+        end: "2026-09-09T13:30:00",
+        devicePlatform: "ios",
+        deviceName: "iPhone",
+      }),
+      block({
+        id: "alpha",
+        start: "2026-09-09T15:00:00",
+        end: "2026-09-09T15:20:00",
+        devicePlatform: "windows",
+        deviceName: "Alpha",
+      }),
+      block({
+        id: "zebra",
+        start: "2026-09-09T16:00:00",
+        end: "2026-09-09T16:20:00",
+        devicePlatform: "windows",
+        deviceName: "Zebra",
+      }),
     ], day, 8 * 3600);
-    expect(stats.trackedSeconds).toBe(55 * 60);
+    expect(stats.trackedSeconds).toBe(55 * 60 + 30 * 60 + 40 * 60);
+    expect(stats.deviceTotals).toEqual([
+      { key: "macos|Studio Mac", devicePlatform: "macos", deviceName: "Studio Mac", seconds: 55 * 60 },
+      { key: "ios|iPhone", devicePlatform: "ios", deviceName: "iPhone", seconds: 30 * 60 },
+      { key: "windows|Alpha", devicePlatform: "windows", deviceName: "Alpha", seconds: 20 * 60 },
+      { key: "windows|Zebra", devicePlatform: "windows", deviceName: "Zebra", seconds: 20 * 60 },
+    ]);
   });
 
   it("counts only the part of a session that falls on the selected day", () => {

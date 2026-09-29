@@ -14,6 +14,15 @@ export function shouldHideWindowOnClose(quittingState = quitting) {
   return !quittingState;
 }
 
+export function shouldShowWindowOnLaunch(wasOpenedAsHidden: boolean) {
+  return !wasOpenedAsHidden;
+}
+
+export function syncLaunchAtLogin(openAtLogin: boolean) {
+  if (!app.isPackaged) return;
+  app.setLoginItemSettings({ openAtLogin, openAsHidden: true });
+}
+
 export function shouldBlockQuit(helperConfirmedStrictMode: boolean) {
   return helperConfirmedStrictMode;
 }

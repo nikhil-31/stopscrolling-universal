@@ -1,4 +1,4 @@
-import { displayNameForDevice } from "@shared/device";
+import { deviceColor, displayNameForDevice } from "@shared/device";
 import { ALL_DEVICES, normalizeInsightsDeviceKey } from "@shared/timeline";
 import type { DeviceListEntry } from "@shared/types";
 
@@ -55,6 +55,11 @@ export function DevicePicker({
             className={deviceKey === device.visibilityKey ? "active" : ""}
             onClick={() => onChange(device.visibilityKey)}
           >
+            <span
+              className="device-picker-dot"
+              aria-hidden="true"
+              style={{ background: deviceColor(device.visibilityKey, visibleDevices) }}
+            />
             {label}
           </button>
         );

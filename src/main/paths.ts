@@ -66,6 +66,10 @@ export function jevCategoriesPath() {
   return join(userDataDir(), "jev-categories.json");
 }
 
+export function jevProductivityPath() {
+  return join(userDataDir(), "jev-productivity.json");
+}
+
 export function typesafeKeyPath() {
   return join(userDataDir(), "typesafe-api-key.dat");
 }

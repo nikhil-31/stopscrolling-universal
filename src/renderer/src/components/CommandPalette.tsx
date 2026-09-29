@@ -3,6 +3,7 @@ import { navigationItems } from "@shared/navigation";
 import type { AppSnapshot } from "@shared/snapshot";
 import {
   BarChart3,
+  Bot,
   CalendarDays,
   CircleUserRound,
   Command,
@@ -30,6 +31,7 @@ const navIcons: Record<string, LucideIcon> = {
   calendar: CalendarDays,
   insights: BarChart3,
   blocking: Shield,
+  agent: Bot,
   account: CircleUserRound,
 };
 

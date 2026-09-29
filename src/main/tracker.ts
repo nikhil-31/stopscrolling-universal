@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { isUnresolvedCategory, resolveCategory } from "@shared/categories";
 import { acceptedJevCategory, overlayCategory, type JevCategoryCache, type JevCategoryCacheEntry } from "@shared/jev";
+import { acceptedProductivityVerdict, normalizeTitle, productivityKey, type ProductivityCacheEntry } from "@shared/jev-productivity";
 import { entryToPayload, persistenceKey } from "@shared/payload";
 import { appBreakdownKey, entryFromSession } from "@shared/timeline";
 import { currentDevicePlatform, localTimeZone } from "@shared/platform";
@@ -22,7 +23,8 @@ import { decideIdle, IDLE_THRESHOLD_SECONDS, recoveredSessionEnd } from "./idle-
 import { logObservability } from "./logger";
 import { PendingUploadStore } from "./outbox";
 import { JevClassifier } from "./jev-classifier";
-import { deviceName, jevCategoriesPath, localDeviceIdPath } from "./paths";
+import { JevProductivityAgent, type ProductivityInput } from "./jev-productivity-agent";
+import { deviceName, jevCategoriesPath, jevProductivityPath, localDeviceIdPath } from "./paths";
 import { resolveTypesafeApiKey } from "./typesafe-key-store";
 import type { StopScrollingAPI } from "./api-client";
 
@@ -69,19 +71,30 @@ export class ScreenTimeTracker {
   private lastCheckpoint = 0;
   private idle = false;
   private lastActiveAt: Date | null = null;
+  private dwellKey: string | null = null;
+  private dwellSince = 0;
   readonly classifier: JevClassifier;
+  readonly productivityAgent: JevProductivityAgent;
 
   constructor(
     private readonly api: StopScrollingAPI,
     private readonly onChange: () => void,
     private readonly syncReady: () => boolean,
     classifier?: JevClassifier,
+    productivityAgent?: JevProductivityAgent,
+    private readonly sendTitles: () => boolean = () => true,
+    private readonly now: () => number = () => Date.now(),
   ) {
     this.classifier = classifier ?? new JevClassifier({
       getApiKey: resolveTypesafeApiKey,
       cachePath: jevCategoriesPath(),
     });
     this.classifier.onResolved = (key, entry) => this.applyClassification(key, entry);
+    this.productivityAgent = productivityAgent ?? new JevProductivityAgent({
+      getApiKey: resolveTypesafeApiKey,
+      cachePath: jevProductivityPath(),
+    });
+    this.productivityAgent.onResolved = (_key, entry) => this.applyProductivity(entry);
     this.pendingUploadCount = this.outbox.count();
     this.recoverCheckpoint();
     powerMonitor.on("lock-screen", () => {
@@ -94,6 +107,34 @@ export class ScreenTimeTracker {
 
   categoryCache(): JevCategoryCache {
     return this.classifier.cache;
+  }
+
+  /** Titles that have held the foreground for `dwellMs` are queued for a productivity verdict. */
+  observeProductivity(snapshot: ActivitySnapshot, category: string, dwellMs = 30_000) {
+    const key = this.contextKey({ url: snapshot.url, appName: snapshot.appName, title: snapshot.title });
+    const titleKey = this.sendTitles() ? productivityKey(key, snapshot.title) : key;
+    const now = this.now();
+    if (titleKey !== this.dwellKey) {
+      this.dwellKey = titleKey;
+      this.dwellSince = now;
+      return;
+    }
+    if (now - this.dwellSince < dwellMs) return;
+    this.productivityAgent.enqueue(this.productivityInput(snapshot, key, titleKey, category));
+  }
+
+  productivityInput(snapshot: ActivitySnapshot, key: string, titleKey: string, category: string): ProductivityInput {
+    const sendTitle = this.sendTitles();
+    return {
+      key: titleKey,
+      breakdownKey: key,
+      appName: snapshot.appName,
+      bundleID: snapshot.bundleID,
+      url: snapshot.url,
+      title: sendTitle ? normalizeTitle(snapshot.title) : "",
+      category,
+      sendTitle,
+    };
   }
 
   capabilities(): TrackingCapabilities {
@@ -221,6 +262,7 @@ export class ScreenTimeTracker {
       return;
     }
     const snapshot = result.snapshot;
+    this.observeProductivity(snapshot, this.openContext?.category ?? "");
     if (contextEquals(this.currentContext, snapshot)) {
       this.maybeCheckpoint();
       return;
@@ -492,6 +534,11 @@ export class ScreenTimeTracker {
       this.currentContext = this.openContext;
       this.maybeCheckpoint(true);
     }
+    this.onChange();
+  }
+
+  private applyProductivity(entry: ProductivityCacheEntry) {
+    if (entry.source === "jev" && !acceptedProductivityVerdict(entry.verdict, entry.confidence)) return;
     this.onChange();
   }
 

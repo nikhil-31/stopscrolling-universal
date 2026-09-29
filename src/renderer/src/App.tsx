@@ -10,6 +10,7 @@ import { ClockFormatProvider } from "./clock-format";
 import { SessionTitleProvider } from "./session-title";
 import { useAppState } from "./hooks/useAppState";
 import { AccountScreen } from "./screens/AccountScreen";
+import { AgentScreen } from "./screens/AgentScreen";
 import { BlockingScreen } from "./screens/BlockingScreen";
 import { CalendarScreen } from "./screens/CalendarScreen";
 import { TimesheetScreen } from "./screens/TimesheetScreen";
@@ -80,6 +81,7 @@ export function App() {
               )}
               {state.navigation === "leaderboard" && <LeaderboardScreen state={state} />}
               {state.navigation === "account" && <AccountScreen state={state} />}
+              {state.navigation === "agent" && <AgentScreen state={state} />}
             </div>
           </main>
           <Inspector state={state} onEditSchedule={setEditingSchedule} />

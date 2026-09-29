@@ -75,6 +75,10 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
       targetSeconds: 28800,
       percentOfTarget: 12,
       labelTotals: [{ labelId: "label-research", name: "Research", color: "#1fb894", seconds: 3600 }],
+      deviceTotals: [
+        { key: "macos|Studio Mac", devicePlatform: "macos", deviceName: "Studio Mac", seconds: 2 * 3600 },
+        { key: "ios|iPhone", devicePlatform: "ios", deviceName: "iPhone", seconds: 30 * 60 },
+      ],
       productivity: { focus: 3600, meetings: 0, breaks: 0, other: 0 },
       unlabeledBlocks: [],
       reviewCount: 2,
@@ -96,11 +100,28 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("CalendarScreen", () => {
   it("keeps time entries and calendar without labels or tasks", () => {
-    render(<CalendarScreen state={snapshot()} />);
+    render(<CalendarScreen state={snapshot({
+      devices: [{
+        visibilityKey: "macos|Studio Mac",
+        deviceName: "Studio Mac",
+        nickname: "Work Mac",
+        devicePlatform: "macos",
+        deviceID: "mac-1",
+        sessionCount: 4,
+        timeZone: "UTC",
+        lastSeenAt: null,
+        lastOnlineAt: null,
+        reportedOnline: null,
+        isOnline: true,
+        isRegistered: true,
+        colorIndex: 0,
+      }],
+    })} />);
 
     expect(screen.getByText("Time Entries")).toBeVisible();
     expect(screen.getByText("Calendar")).toBeVisible();
@@ -108,6 +129,13 @@ describe("CalendarScreen", () => {
     expect(within(summary).getByText("Day total")).toBeVisible();
     expect(summary.querySelector(".calendar-work-value")).toHaveTextContent("1 hr 30 min");
     expect(within(summary).getByText("Work Hours").nextElementSibling).toHaveTextContent("1 hr");
+    expect(within(summary).getByText("Work Mac")).toBeVisible();
+    expect(within(summary).getByText("2 hr")).toBeVisible();
+    expect(within(summary).getByText("iPhone")).toBeVisible();
+    expect(within(summary).getByText("30 min")).toBeVisible();
+    expect(within(summary).queryByText("Focus")).toBeNull();
+    expect(within(summary).queryByText("Meetings")).toBeNull();
+    expect(within(summary).queryByText("Breaks")).toBeNull();
     expect(screen.queryByText("Labels")).toBeNull();
     expect(screen.queryByText("Tasks")).toBeNull();
     expect(screen.queryByText("Write PR")).toBeNull();
@@ -172,8 +200,8 @@ describe("CalendarScreen", () => {
     );
 
     expect(screen.queryByText("Time Entries")).toBeNull();
-    expect(screen.getByText("Work Mac")).toBeVisible();
-    expect(screen.getByText("iPhone")).toBeVisible();
+    expect(screen.getAllByText("Work Mac")).toHaveLength(2);
+    expect(screen.getAllByText("iPhone")).toHaveLength(2);
     expect(screen.queryByText("Studio Mac")).toBeNull();
 
     const mac = screen.getByTestId("calendar-device-column-macos|Studio Mac");
@@ -446,7 +474,8 @@ describe("CalendarScreen", () => {
   });
 
   it("lists four month chips and the rest as more", () => {
-    vi.spyOn(Date, "now").mockReturnValue(new Date(2026, 8, 26, 12).getTime());
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 26, 12));
     const titles = ["Writing", "Reading", "Mail", "Notes", "Safari"];
     render(
       <CalendarScreen

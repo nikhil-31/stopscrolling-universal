@@ -77,6 +77,15 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
                 </select>
                 <span className="field-hint">Hour labels on the activity trend, timelines, and calendar.</span>
               </label>
+              <div className="setting-row">
+                <Toggle
+                  label="Launch at login"
+                  description="Starts with your computer and stays in the menu bar until you choose Quit."
+                  checked={settings.launchAtLogin}
+                  onChange={(launchAtLogin) => window.stopscrolling.updateSettings({ launchAtLogin })}
+                  testId="settings-launch-at-login"
+                />
+              </div>
               {state.capabilities.platform === "macos" ? (
                 <div className="connection-row" data-testid="settings-accessibility">
                   <Hand size={17} aria-hidden="true" />
@@ -236,8 +245,17 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
                     const value = event.target.value.trim();
                     if (value) window.stopscrolling.setTypesafeApiKey(value);
                   }}
-                  hint="Stored encrypted on this device. Unknown apps and websites are classified with Jev."
+                  hint="Stored encrypted on this device. Jev classifies unknown apps and websites, and rates them as productive, neutral, or distracting."
                   data-testid="settings-typesafe-api-key"
+                />
+              </div>
+              <div className="setting-row">
+                <Toggle
+                  label="Send window titles to Jev"
+                  description="Lets the Agent tell pages apart, such as a lecture and a short on the same site. Titles leave this device."
+                  checked={settings.agentSendTitles}
+                  onChange={(agentSendTitles) => window.stopscrolling.updateSettings({ agentSendTitles })}
+                  testId="settings-agent-send-titles"
                 />
               </div>
               {state.typesafeApiKeyConfigured ? (

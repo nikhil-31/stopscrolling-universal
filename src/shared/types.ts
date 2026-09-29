@@ -1,4 +1,4 @@
-export type NavigationItem = "today" | "timer" | "calendar" | "timesheet" | "insights" | "blocking" | "leaderboard" | "account";
+export type NavigationItem = "today" | "timer" | "calendar" | "timesheet" | "insights" | "blocking" | "leaderboard" | "account" | "agent";
 
 export type InsightsPeriod = "day" | "week" | "month" | "year";
 export type InsightsTab = "overview" | "sessions";
@@ -321,6 +321,7 @@ export type ClockFormat = "12" | "24";
 
 export interface AppSettings {
   startScreenTimeOnLaunch: boolean;
+  launchAtLogin: boolean;
   appearance: ThemePreference;
   clockFormat: ClockFormat;
   apiBaseUrl: string;
@@ -330,6 +331,8 @@ export interface AppSettings {
   dailyWorkTargetSeconds: number;
   timerBonusSeconds: number;
   timerBonusDay: string;
+  /** When true, the productivity agent sends window titles to JEV for per-page verdicts. */
+  agentSendTitles: boolean;
 }
 
 export interface ScreenTimeApiPayload {

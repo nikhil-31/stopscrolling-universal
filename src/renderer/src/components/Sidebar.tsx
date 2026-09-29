@@ -3,6 +3,7 @@ import type { AppSnapshot } from "@shared/snapshot";
 import {
   Activity,
   BarChart3,
+  Bot,
   CalendarDays,
   CircleUserRound,
   Sheet,
@@ -19,6 +20,7 @@ const icons: Record<string, LucideIcon> = {
   timesheet: Sheet,
   insights: BarChart3,
   blocking: Shield,
+  agent: Bot,
   account: CircleUserRound,
 };
 

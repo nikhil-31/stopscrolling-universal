@@ -50,7 +50,7 @@ export function rendererFile(name: "index" | "settings") {
   return join(__dirname, `../renderer/${name}.html`);
 }
 
-export function createMainWindow(controller: AppController) {
+export function createMainWindow(controller: AppController, showOnReady = true) {
   const win = new BrowserWindow({
     ...integratedWindowChrome(),
     width: 1280,
@@ -68,7 +68,9 @@ export function createMainWindow(controller: AppController) {
   });
   watchRendererProcess(win);
   bindFullscreenChrome(win);
-  win.on("ready-to-show", () => win.show());
+  win.on("ready-to-show", () => {
+    if (showOnReady) win.show();
+  });
   win.on("close", (event) => {
     if (!shouldHideWindowOnClose()) return;
     event.preventDefault();

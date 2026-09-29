@@ -60,12 +60,15 @@ export function jevCategoryRequest(state: JevClassificationState) {
   };
 }
 
-export function parseJevChoice(payload: unknown): { choice: string; confidence: number; model: string } | null {
+export function parseJevChoice(
+  payload: unknown,
+  question = "category",
+): { choice: string; confidence: number; model: string } | null {
   if (!payload || typeof payload !== "object") return null;
   const body = payload as Record<string, unknown>;
   const answers = body.answers;
   if (!answers || typeof answers !== "object") return null;
-  const category = (answers as Record<string, unknown>).category;
+  const category = (answers as Record<string, unknown>)[question];
   if (!category || typeof category !== "object") return null;
   const answer = category as Record<string, unknown>;
   if (typeof answer.choice !== "string" || typeof answer.confidence !== "number") return null;

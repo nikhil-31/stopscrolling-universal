@@ -38,6 +38,12 @@
   --category-web: #155e75;
   --category-application: #3f6212;
   --category-utilities: #44403c;
+  --verdict-productive: var(--success);
+  --verdict-productive-soft: var(--success-soft);
+  --verdict-neutral: var(--text-secondary);
+  --verdict-neutral-soft: var(--surface-subtle);
+  --verdict-distracting: var(--danger);
+  --verdict-distracting-soft: var(--danger-soft);
   --category-email: #1e3a8a;
   --device-0: #2f5be0;
   --device-1: #e14f00;
@@ -734,6 +740,7 @@ a { color: var(--brand); }
 
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
 .device-picker { flex-wrap: wrap; justify-content: flex-end; max-width: 420px; }
+.device-picker-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
 .page-eyebrow { margin-bottom: 3px; color: var(--brand); font-size: 10px; font-weight: 750; letter-spacing: 0.1em; text-transform: uppercase; }
 .page-header h2 { margin: 0; font-size: 24px; font-weight: 750; letter-spacing: -0.04em; }
 .page-header p { max-width: 590px; margin: 5px 0 0; color: var(--text-secondary); font-size: 11px; }
@@ -2806,3 +2813,35 @@ html[data-platform="macos"] .settings-nav {
 @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.84); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes shimmer { to { background-position: -200% 0; } }
+
+.agent-screen { display: flex; flex-direction: column; gap: 16px; }
+.agent-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.agent-header-copy { display: flex; flex-direction: column; gap: 2px; }
+.agent-header-copy h1 { margin: 0; font-size: 20px; }
+.agent-header-copy p { margin: 0; color: var(--text-secondary); font-size: 13px; }
+.agent-header-actions { display: flex; align-items: center; gap: 10px; }
+.agent-progress { color: var(--text-secondary); font-size: 12px; }
+.agent-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--surface-subtle); }
+.agent-bar-segment { height: 100%; }
+.agent-bar-productive { background: var(--verdict-productive); }
+.agent-bar-neutral { background: var(--verdict-neutral); }
+.agent-bar-distracting { background: var(--verdict-distracting); }
+.agent-list { display: flex; flex-direction: column; gap: 8px; }
+.agent-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.agent-row-main { display: flex; align-items: center; gap: 12px; }
+.agent-row-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.agent-row-label { font-weight: 600; }
+.agent-row-subtitle { color: var(--text-secondary); font-size: 12px; }
+.agent-row-time { color: var(--text-secondary); font-variant-numeric: tabular-nums; font-size: 13px; }
+.agent-verdict { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.agent-verdict-productive { color: var(--verdict-productive); background: var(--verdict-productive-soft); }
+.agent-verdict-neutral { color: var(--verdict-neutral); background: var(--verdict-neutral-soft); }
+.agent-verdict-distracting { color: var(--verdict-distracting); background: var(--verdict-distracting-soft); }
+.agent-verdict-unrated { color: var(--text-tertiary); background: var(--surface-subtle); }
+.agent-source { color: var(--text-tertiary); font-size: 11px; }
+.agent-override { display: flex; gap: 4px; }
+.agent-override button { border: 1px solid var(--line); background: transparent; color: var(--text-secondary); border-radius: 999px; padding: 3px 8px; font-size: 12px; cursor: pointer; }
+.agent-override button.active { color: var(--text); border-color: var(--text); font-weight: 600; }
+.agent-titles { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; border-top: 1px solid var(--line); }
+.agent-title { display: flex; align-items: center; gap: 10px; }
+.agent-title-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }

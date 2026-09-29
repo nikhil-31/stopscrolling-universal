@@ -1,4 +1,5 @@
 import type { CalendarDayStats, CalendarView, CalendarWorkspace } from "./calendar-workspace";
+import type { AgentState } from "./jev-productivity";
 import type { TimesheetSummaries } from "./timesheet";
 import type {
   AppSettings,
@@ -139,6 +140,7 @@ export interface AppSnapshot {
   };
   leaderboard: LeaderboardUiState;
   blocking: BlockingUiState;
+  agent: AgentState;
   commandPaletteOpen: boolean;
   /** Bumps whenever any of `HEAVY_SNAPSHOT_KEYS` is rebuilt in the main process. */
   dataVersion?: number;

@@ -20,6 +20,7 @@ const subtitles: Record<AppSnapshot["navigation"], string> = {
   blocking: "Sessions, schedules, and lists",
   leaderboard: "A little friendly accountability",
   account: "Profile, sync, and connected devices",
+  agent: "Productive, neutral, or distracting",
 };
 
 export function Toolbar({ state }: { state: AppSnapshot }) {

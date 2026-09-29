@@ -126,6 +126,14 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.updateSettings, (_event, patch: Partial<AppSettings>) => {
     controller.updateSettings(patch);
   });
+  ipcMain.on(IPC.agentReviewAll, () => {
+    controller.reviewAgent();
+  });
+  ipcMain.on(IPC.agentOverride, (_event, payload: { key?: unknown; verdict?: unknown }) => {
+    if (typeof payload?.key === "string" && typeof payload.verdict === "string") {
+      controller.overrideAgentVerdict(payload.key, payload.verdict);
+    }
+  });
   ipcMain.on(IPC.setTypesafeApiKey, (_event, key: string) => {
     controller.setTypesafeApiKey(typeof key === "string" ? key : "");
   });
@@ -307,6 +315,20 @@ export function installApplicationMenu(controller: AppController) {
             },
           }],
         }]),
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "pasteAndMatchStyle" },
+        { role: "delete" },
+        { role: "selectAll" },
+      ],
+    },
     {
       label: "View",
       submenu: [

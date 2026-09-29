@@ -1,20 +1,9 @@
-import {
-  formatHourMinute,
-  PRODUCTIVITY_BUCKETS,
-  PRODUCTIVITY_COLORS,
-  type ProductivityBucket,
-} from "@shared/calendar-workspace";
+import { formatHourMinute } from "@shared/calendar-workspace";
+import { deviceColor, displayNameForDevice } from "@shared/device";
 import { effectiveTimeZone, toDateInput } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
-import { CircleHelp, Settings2 } from "lucide-react";
+import { Settings2 } from "lucide-react";
 import { IconButton } from "../ui";
-
-const bucketLabels: Record<ProductivityBucket, string> = {
-  focus: "Focus",
-  meetings: "Meetings",
-  breaks: "Breaks",
-  other: "Other",
-};
 
 export function SummarySidebar({
   state,
@@ -26,7 +15,8 @@ export function SummarySidebar({
   const stats = state.calendarDayStats;
   const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
   const isToday = toDateInput(new Date(state.calendarAnchor), timeZone) === toDateInput(new Date(), timeZone);
-  const totalProductivity = PRODUCTIVITY_BUCKETS.reduce((sum, bucket) => sum + stats.productivity[bucket], 0);
+  const devices = stats.deviceTotals;
+  const totalDeviceSeconds = devices.reduce((sum, device) => sum + device.seconds, 0);
 
   return (
     <aside className="calendar-summary" aria-label="Day summary">
@@ -55,31 +45,32 @@ export function SummarySidebar({
       </section>
 
       <section className="calendar-summary-card">
-        <div className="calendar-productivity-track" aria-hidden="true">
-          {PRODUCTIVITY_BUCKETS.map((bucket) => {
-            const seconds = stats.productivity[bucket];
-            if (!seconds || !totalProductivity) return null;
-            return (
-              <span
-                key={bucket}
-                style={{
-                  width: `${(seconds / totalProductivity) * 100}%`,
-                  background: PRODUCTIVITY_COLORS[bucket],
-                }}
-              />
-            );
-          })}
-        </div>
-        <div className="calendar-productivity-legend">
-          {PRODUCTIVITY_BUCKETS.map((bucket) => (
-            <div key={bucket} className="calendar-legend-row">
-              <span className="calendar-legend-dot" style={{ background: PRODUCTIVITY_COLORS[bucket] }} />
-              <span>{bucketLabels[bucket]}</span>
-              {bucket === "other" ? <CircleHelp size={11} aria-hidden="true" /> : null}
-              <strong>{formatHourMinute(stats.productivity[bucket])}</strong>
+        {totalDeviceSeconds > 0 ? (
+          <>
+            <div className="calendar-productivity-track" aria-hidden="true">
+              {devices.map((device) => (
+                <span
+                  key={device.key}
+                  style={{
+                    width: `${(device.seconds / totalDeviceSeconds) * 100}%`,
+                    background: deviceColor(device.key, state.devices),
+                  }}
+                />
+              ))}
             </div>
-          ))}
-        </div>
+            <div className="calendar-productivity-legend">
+              {devices.map((device) => (
+                <div key={device.key} className="calendar-legend-row">
+                  <span className="calendar-legend-dot" style={{ background: deviceColor(device.key, state.devices) }} />
+                  <span>{displayNameForDevice(device.devicePlatform, device.deviceName, state.devices)}</span>
+                  <strong>{formatHourMinute(device.seconds)}</strong>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="calendar-empty-copy">No device time</p>
+        )}
       </section>
     </aside>
   );

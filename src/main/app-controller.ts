@@ -27,6 +27,7 @@ import {
   upsertTask,
 } from "@shared/calendar-workspace";
 import { deviceKey, resolvedDeviceName, withComputedOnline } from "@shared/device";
+import { buildAgentView, JEV_PRODUCTIVITY_CRITERIA, normalizeTitle, productivityKey, type ProductivityVerdict } from "@shared/jev-productivity";
 import { IPC } from "@shared/ipc";
 import { currentDevicePlatform, effectiveTimeZone as resolveTimeZone, toDateInput } from "@shared/platform";
 import { TIMER_BONUS_STEP_SECONDS, usesTodayWindow } from "@shared/timer";
@@ -40,6 +41,7 @@ import type { AppSnapshot, AppStatePatch, AuthUiState, BlockingUiState, Inspecto
 import { emptyInspector, inspectorFromSelection, toStatePatch } from "@shared/snapshot";
 import {
   ALL_DEVICES,
+  appBreakdownKey,
   ALL_INSIGHTS_DEVICES,
   endOfMonth,
   entriesToTimelines,
@@ -78,6 +80,7 @@ import { isMfa, StopScrollingAPI } from "./api-client";
 import { BlockingHelperBridge } from "./blocking/bridge";
 import { loadCalendarWorkspace, saveCalendarWorkspace } from "./calendar-workspace-store";
 import { GoogleCalendarService } from "./google-calendar";
+import { syncLaunchAtLogin } from "./lifecycle";
 import { logObservability } from "./logger";
 import { deviceName as localDeviceName, hiddenDevicesPath, networkLogPath, observabilityLogPath } from "./paths";
 import { loadSettings, saveSettings } from "./settings-store";
@@ -160,6 +163,7 @@ const EMPTY_CALENDAR_STATS: CalendarDayStats = {
   targetSeconds: 1,
   percentOfTarget: 0,
   labelTotals: [],
+  deviceTotals: [],
   productivity: { focus: 0, meetings: 0, breaks: 0, other: 0 },
   unlabeledBlocks: [],
   reviewCount: 0,
@@ -214,6 +218,9 @@ export class AppController {
     this.api,
     () => this.broadcast(),
     () => Boolean(this.settings.syncEnabled && this.api.getTokens()),
+    undefined,
+    undefined,
+    () => this.settings.agentSendTitles,
   );
 
   private windows = new Set<BrowserWindow>();
@@ -231,6 +238,11 @@ export class AppController {
   private helperTimer: NodeJS.Timeout | null = null;
   private helperBoundaryTimer: NodeJS.Timeout | null = null;
   private lastPolicySignature: string | null = null;
+  private blockingRefreshGeneration = 0;
+  private blockingListsTask: Promise<{
+    blocklists: BlockingUiState["blocklists"];
+    schedules: BlockingUiState["schedules"];
+  }> | null = null;
   readonly helper: BlockingHelperBridge;
   onBlockingStateChanged: (() => void) | null = null;
 
@@ -250,6 +262,7 @@ export class AppController {
       }
     }
     await this.restoreSession();
+    void this.prefetchBlockingLists();
     await this.helper.initialize();
     const setup = await this.helper.activateNativeSetup();
     logObservability(
@@ -353,9 +366,42 @@ export class AppController {
       },
       leaderboard: this.leaderboard,
       blocking: this.blocking,
+      agent: buildAgentView(view.snapshot.timelineSegments, this.tracker.productivityAgent.cache, {
+        reviewing: this.tracker.productivityAgent.reviewing,
+        progress: this.tracker.productivityAgent.progress,
+        keyConfigured: hasTypesafeApiKey(),
+      }),
       commandPaletteOpen: this.commandPaletteOpen,
       dataVersion: view.version,
     };
+  }
+
+  /** Rates every unrated title in the current view, then refreshes the agent tab. */
+  reviewAgent() {
+    const sendTitles = this.settings.agentSendTitles;
+    const inputs = new Map<string, Parameters<ScreenTimeTracker["productivityAgent"]["enqueue"]>[0]>();
+    for (const segment of this.dataView().snapshot.timelineSegments) {
+      const breakdownKey = appBreakdownKey(segment);
+      const key = sendTitles ? productivityKey(breakdownKey, segment.label) : breakdownKey;
+      if (inputs.has(key) || this.tracker.productivityAgent.lookup(key)) continue;
+      inputs.set(key, {
+        key,
+        breakdownKey,
+        appName: segment.appName,
+        bundleID: segment.bundleID,
+        url: segment.url,
+        title: sendTitles ? normalizeTitle(segment.label) : "",
+        category: segment.category,
+        sendTitle: sendTitles,
+      });
+    }
+    void this.tracker.productivityAgent.reviewAll([...inputs.values()]).finally(() => this.broadcast());
+    this.broadcast();
+  }
+
+  overrideAgentVerdict(key: string, verdict: string) {
+    if (!key || !(verdict in JEV_PRODUCTIVITY_CRITERIA)) return;
+    this.tracker.productivityAgent.override(key, verdict as ProductivityVerdict);
   }
 
   /**
@@ -534,7 +580,7 @@ export class AppController {
     this.commandPaletteOpen = false;
     this.insightsOpenedAt = item === "insights" ? performance.now() : null;
     if (item === "blocking") void this.refreshBlocking();
-    void this.refreshVisibleRange();
+    else void this.refreshVisibleRange();
     this.broadcast();
     this.scheduleTimesheetSummaries();
   }
@@ -770,6 +816,7 @@ export class AppController {
     this.settings = { ...this.settings, ...patch };
     saveSettings(this.settings);
     this.api.setBaseUrl(this.settings.apiBaseUrl);
+    if (patch.launchAtLogin !== undefined) syncLaunchAtLogin(this.settings.launchAtLogin);
     this.broadcast();
   }
 
@@ -1073,34 +1120,86 @@ export class AppController {
       this.broadcast();
       return;
     }
-    this.blocking.loading = true;
-    this.broadcast();
+    const generation = ++this.blockingRefreshGeneration;
+    const started = performance.now();
+    if (!this.blocking.schedules.length) {
+      this.blocking.loading = true;
+      this.broadcast();
+    }
     try {
-      const [blocklists, schedules] = await Promise.all([
-        this.api.blocklists(),
-        this.api.blockingSchedules(),
-      ]);
-      this.blocking.blocklists = blocklists;
-      this.blocking.schedules = schedules;
-      this.blocking.statusMessage = `${schedules.length} sessions · ${blocklists.length} blocklists`;
-      if (this.inspector.kind === "schedule" && this.inspector.schedule) {
-        const next = schedules.find((item) => item.schedule_id === this.inspector.schedule?.schedule_id);
-        this.inspector = next
-          ? inspectorFromSelection({ kind: "schedule", schedule: next })
-          : emptyInspector();
-      }
-      try {
-        this.tracker.registeredDevices = await this.api.devices();
-        this.tracker.deviceStatus = await this.api.deviceStatus();
-      } catch (error) {
-        logObservability(`Blocking device refresh failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-      await this.refreshBlockingHelper(true);
-    } catch (error) {
-      this.blocking.statusMessage = error instanceof Error ? error.message : "Blocking data unavailable.";
-    } finally {
+      const { blocklists, schedules } = await this.fetchBlockingLists();
+      if (generation !== this.blockingRefreshGeneration) return;
+      this.publishBlockingLists(blocklists, schedules);
       this.blocking.loading = false;
       this.broadcast();
+      logObservability(
+        `Blocking sessions ready in ${(performance.now() - started).toFixed(0)}ms (${schedules.length} sessions)`,
+      );
+      await this.refreshBlockingDevices();
+      if (generation !== this.blockingRefreshGeneration) return;
+      await this.refreshBlockingHelper(true);
+    } catch (error) {
+      if (generation !== this.blockingRefreshGeneration) return;
+      this.blocking.statusMessage = error instanceof Error ? error.message : "Blocking data unavailable.";
+      this.blocking.loading = false;
+      this.broadcast();
+    }
+  }
+
+  /** Warms session and blocklist lists during startup so the Blocking screen can paint immediately. */
+  private async prefetchBlockingLists() {
+    if (!this.auth.user) return;
+    const generation = ++this.blockingRefreshGeneration;
+    try {
+      const { blocklists, schedules } = await this.fetchBlockingLists();
+      if (generation !== this.blockingRefreshGeneration) return;
+      this.publishBlockingLists(blocklists, schedules);
+      this.blocking.loading = false;
+      this.broadcast();
+    } catch (error) {
+      if (generation !== this.blockingRefreshGeneration) return;
+      logObservability(`Blocking sessions prefetch failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private fetchBlockingLists() {
+    if (this.blockingListsTask) return this.blockingListsTask;
+    const task = Promise.all([
+      this.api.blocklists(),
+      this.api.blockingSchedules(),
+    ]).then(([blocklists, schedules]) => ({ blocklists, schedules })).finally(() => {
+      if (this.blockingListsTask === task) this.blockingListsTask = null;
+    });
+    this.blockingListsTask = task;
+    return task;
+  }
+
+  private publishBlockingLists(
+    blocklists: BlockingUiState["blocklists"],
+    schedules: BlockingUiState["schedules"],
+  ) {
+    this.blocking.blocklists = blocklists;
+    this.blocking.schedules = schedules;
+    this.blocking.statusMessage = `${schedules.length} sessions · ${blocklists.length} blocklists`;
+    if (this.inspector.kind === "schedule" && this.inspector.schedule) {
+      const next = schedules.find((item) => item.schedule_id === this.inspector.schedule?.schedule_id);
+      this.inspector = next
+        ? inspectorFromSelection({ kind: "schedule", schedule: next })
+        : emptyInspector();
+    }
+  }
+
+  private async refreshBlockingDevices() {
+    try {
+      const [devices, status] = await Promise.all([
+        this.api.devices(),
+        this.api.deviceStatus(),
+      ]);
+      this.tracker.registeredDevices = devices;
+      this.tracker.deviceStatus = status;
+      this.broadcast();
+    } catch (error) {
+      logObservability(`Blocking device refresh failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

@@ -30,6 +30,8 @@ interface StopScrollingDesktop {
   updateSettings: (patch: Partial<import("@shared/types").AppSettings>) => void;
   setTimeZone: (timeZone: string) => void;
   setTypesafeApiKey: (key: string) => void;
+  agentReviewAll: () => void;
+  agentOverride: (key: string, verdict: string) => void;
   setDeviceVisible: (key: string, visible: boolean) => void;
   setDeviceNickname: (deviceID: string, nickname: string) => void;
   deleteDevice: (deviceID: string) => void;

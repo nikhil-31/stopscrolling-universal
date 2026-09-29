@@ -26,6 +26,7 @@ function snapshot(signedIn: boolean): AppSnapshot {
     auth: { user: signedIn ? user : null },
     settings: {
       startScreenTimeOnLaunch: true,
+      launchAtLogin: true,
       appearance: "system",
       clockFormat: "24",
       apiBaseUrl: "https://example.test",
@@ -35,6 +36,7 @@ function snapshot(signedIn: boolean): AppSnapshot {
       dailyWorkTargetSeconds: 8 * 60 * 60,
       timerBonusSeconds: 0,
       timerBonusDay: "",
+      agentSendTitles: true,
     },
     capabilities: { platform: "macos", urlCaptureNote: "Accessibility is required." },
     calendarWorkspace: { labels: [] },
@@ -78,6 +80,13 @@ describe("Settings time zone", () => {
     render(<SettingsScreen state={snapshot(true)} />);
     await userEvents.selectOptions(screen.getByTestId("settings-clock-format"), "12");
     expect(window.stopscrolling.updateSettings).toHaveBeenCalledWith({ clockFormat: "12" });
+  });
+
+  it("toggles whether window titles are sent to Jev", async () => {
+    const userEvents = userEvent.setup();
+    render(<SettingsScreen state={snapshot(true)} />);
+    await userEvents.click(screen.getByTestId("settings-agent-send-titles"));
+    expect(window.stopscrolling.updateSettings).toHaveBeenCalledWith({ agentSendTitles: false });
   });
 
   it("keeps the picker disabled until the account is signed in", () => {

@@ -1,3 +1,4 @@
+import { deviceKey, resolvedDeviceName } from "./device";
 import { addCalendarDays, endOfDay, endOfMonth, localTimeZone, startOfDay, startOfMonth, weekdayIndex, zonedParts } from "./platform";
 import type { ScreenTimeSessionBlock, ScreenTimeTimelineSegment } from "./types";
 
@@ -53,6 +54,13 @@ export interface CalendarLabelTotal {
   seconds: number;
 }
 
+export interface CalendarDeviceTotal {
+  key: string;
+  devicePlatform: string;
+  deviceName: string;
+  seconds: number;
+}
+
 export interface CalendarDayStats {
   workSeconds: number;
   pendingSeconds: number;
@@ -60,6 +68,7 @@ export interface CalendarDayStats {
   targetSeconds: number;
   percentOfTarget: number;
   labelTotals: CalendarLabelTotal[];
+  deviceTotals: CalendarDeviceTotal[];
   productivity: Record<ProductivityBucket, number>;
   unlabeledBlocks: ScreenTimeSessionBlock[];
   reviewCount: number;
@@ -276,6 +285,39 @@ function trackedSessionIntervals(
   return intervals;
 }
 
+/** Tracked activity seconds per device. Overlapping devices stay separate. */
+function deviceTotalsForBlocks(
+  blocks: ScreenTimeSessionBlock[],
+  rangeStart: Date,
+  rangeEnd: Date,
+): CalendarDeviceTotal[] {
+  const byKey = new Map<string, CalendarDeviceTotal>();
+  for (const block of blocks) {
+    let seconds = 0;
+    for (const item of block.items) {
+      const clipped = clipInterval(item.start, item.end, rangeStart, rangeEnd);
+      if (clipped) seconds += (clipped[1] - clipped[0]) / 1000;
+    }
+    if (seconds <= 0) continue;
+    const key = deviceKey(block.devicePlatform, block.deviceName);
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.seconds += seconds;
+      continue;
+    }
+    byKey.set(key, {
+      key,
+      devicePlatform: block.devicePlatform,
+      deviceName: block.deviceName,
+      seconds,
+    });
+  }
+  return [...byKey.values()].sort((a, b) => (
+    b.seconds - a.seconds
+    || resolvedDeviceName(a.devicePlatform, a.deviceName).localeCompare(resolvedDeviceName(b.devicePlatform, b.deviceName))
+  ));
+}
+
 /** Seconds of `sessions` that overlap any label, counting each device's time separately. */
 function secondsCoveredByLabels(sessions: Array<[number, number]>, labels: Array<[number, number]>) {
   const merged = mergeIntervals(labels);
@@ -346,6 +388,7 @@ export function buildCalendarRangeStats(
     targetSeconds: target,
     percentOfTarget: Math.round((workSeconds / target) * 100),
     labelTotals,
+    deviceTotals: deviceTotalsForBlocks(blocks, rangeStart, rangeEnd),
     productivity,
     unlabeledBlocks: review,
     reviewCount: review.length,

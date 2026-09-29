@@ -2,7 +2,7 @@ import { app, BrowserWindow, crashReporter } from "electron";
 import { AppController } from "./app-controller";
 import { installMainCrashHandlers, localCrashReporterOptions, logElectronChildProcessGone } from "./crash-reporting";
 import { installApplicationMenu, installIpc } from "./ipc";
-import { isQuitting, markQuitting } from "./lifecycle";
+import { isQuitting, markQuitting, shouldShowWindowOnLaunch, syncLaunchAtLogin } from "./lifecycle";
 import { installTray, refreshTray } from "./tray";
 import { createMainWindow, showMainWindow } from "./windows";
 
@@ -20,7 +20,9 @@ app.whenReady().then(async () => {
   installIpc(controller);
   installApplicationMenu(controller);
   await controller.boot();
-  createMainWindow(controller);
+  syncLaunchAtLogin(controller.settings.launchAtLogin);
+  const openedHidden = app.isPackaged && app.getLoginItemSettings().wasOpenedAsHidden;
+  createMainWindow(controller, shouldShowWindowOnLaunch(openedHidden));
   installTray(controller);
   refreshTray(controller);
   controller.onBlockingStateChanged = () => {

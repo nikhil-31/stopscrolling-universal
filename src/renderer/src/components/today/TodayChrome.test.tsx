@@ -60,13 +60,15 @@ describe("TodayChrome device picker", () => {
     const user = userEvent.setup();
     render(<TodayChrome state={snapshot({
       devices: [
-        device({ visibilityKey: "macos|Studio Mac", deviceName: "Studio Mac", devicePlatform: "macos", nickname: "Work Mac" }),
-        device({ visibilityKey: "ios|iPhone", deviceName: "iPhone", devicePlatform: "ios" }),
+        device({ visibilityKey: "macos|Studio Mac", deviceName: "Studio Mac", devicePlatform: "macos", nickname: "Work Mac", colorIndex: 0 }),
+        device({ visibilityKey: "ios|iPhone", deviceName: "iPhone", devicePlatform: "ios", colorIndex: 1 }),
       ],
     })} onOpenMore={() => undefined} />);
     expect(screen.getByRole("tab", { name: "All devices" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Work Mac" })).toBeVisible();
-    expect(screen.getByRole("tab", { name: "iPhone" })).toBeVisible();
+    expect(screen.getByRole("tab", { name: "Work Mac" }).querySelector(".device-picker-dot")).toHaveStyle({ background: "var(--device-0)" });
+    expect(screen.getByRole("tab", { name: "iPhone" }).querySelector(".device-picker-dot")).toHaveStyle({ background: "var(--device-1)" });
+    expect(screen.getByRole("tab", { name: "All devices" }).querySelector(".device-picker-dot")).toBeNull();
     await user.click(screen.getByRole("tab", { name: "Work Mac" }));
     expect(desktop.setTodayDevice).toHaveBeenCalledWith("macos|Studio Mac");
   });

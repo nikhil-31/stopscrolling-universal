@@ -5,6 +5,7 @@ import { settingsPath } from "./paths";
 
 export const defaultSettings = (): AppSettings => ({
   startScreenTimeOnLaunch: true,
+  launchAtLogin: true,
   appearance: "system",
   clockFormat: "24",
   apiBaseUrl: "http://localhost",
@@ -14,6 +15,7 @@ export const defaultSettings = (): AppSettings => ({
   dailyWorkTargetSeconds: 8 * 60 * 60,
   timerBonusSeconds: 0,
   timerBonusDay: "",
+  agentSendTitles: true,
 });
 
 export function loadSettings(): AppSettings {

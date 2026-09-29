@@ -28,6 +28,8 @@ export const IPC = {
   updateSettings: "app:update-settings",
   setTimeZone: "app:set-time-zone",
   setTypesafeApiKey: "app:set-typesafe-api-key",
+  agentReviewAll: "app:agent-review-all",
+  agentOverride: "app:agent-override",
   setDeviceVisible: "app:set-device-visible",
   setDeviceNickname: "app:set-device-nickname",
   deleteDevice: "app:delete-device",
