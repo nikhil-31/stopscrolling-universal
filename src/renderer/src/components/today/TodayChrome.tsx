@@ -1,4 +1,4 @@
-import { effectiveTimeZone } from "@shared/platform";
+import { effectiveTimeZone, toDateInput } from "@shared/platform";
 import { ALL_DEVICES, formatTodayPeriod, shiftTodayAnchor } from "@shared/timeline";
 import type { AppSnapshot } from "@shared/snapshot";
 import { CalendarClock, ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
@@ -16,6 +16,7 @@ export function TodayChrome({
   const [menuOpen, setMenuOpen] = useState(false);
   const anchor = new Date(state.todayDay);
   const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
+  const awayFromToday = toDateInput(anchor, timeZone) !== toDateInput(new Date(), timeZone);
 
   return (
     <header className="today-chrome">
@@ -35,6 +36,7 @@ export function TodayChrome({
             <IconButton
               label="Jump to today"
               icon={CalendarClock}
+              dot={awayFromToday}
               onClick={() => window.stopscrolling.setTodayDay(new Date().toISOString())}
             />
           </Tooltip>

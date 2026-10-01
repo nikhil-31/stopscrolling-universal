@@ -41,10 +41,12 @@ export function IconButton({
   label,
   icon: Icon,
   className,
+  dot = false,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   label: string;
   icon: LucideIcon;
+  dot?: boolean;
 }) {
   return (
     <button
@@ -55,6 +57,7 @@ export function IconButton({
       {...props}
     >
       <Icon size={17} aria-hidden="true" />
+      {dot ? <span className="icon-button-dot" aria-hidden="true" /> : null}
     </button>
   );
 }

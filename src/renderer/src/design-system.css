@@ -470,6 +470,7 @@ a { color: var(--brand); }
 .button-danger { color: var(--on-danger); background: var(--danger); border-color: var(--danger); }
 .button-danger:hover { filter: brightness(1.08); }
 .icon-button {
+  position: relative;
   width: 34px;
   height: 34px;
   padding: 0;
@@ -478,6 +479,18 @@ a { color: var(--brand); }
   border-color: var(--line);
 }
 .icon-button:hover { color: var(--text); background: var(--surface-hover); }
+.icon-button-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--device-0);
+  box-shadow: 0 0 0 1.5px var(--surface-solid);
+  pointer-events: none;
+}
+.icon-button:hover .icon-button-dot { box-shadow: 0 0 0 1.5px var(--surface-hover); }
 
 .card, .grouped-section {
   background: var(--surface);

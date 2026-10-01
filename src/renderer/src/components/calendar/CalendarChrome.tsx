@@ -1,6 +1,6 @@
 import type { CalendarView } from "@shared/calendar-workspace";
 import { formatFullDate, formatWeekRange, mondayWeekDays } from "@shared/calendar-workspace";
-import { effectiveTimeZone, zonedDateTime, zonedParts } from "@shared/platform";
+import { effectiveTimeZone, toDateInput, zonedDateTime, zonedParts } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
 import { formatMonthLabel } from "@shared/timeline";
 import { CalendarClock, ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
@@ -29,6 +29,7 @@ export function CalendarChrome({
       : formatFullDate(anchor);
   const stepLabel = week ? "week" : month ? "month" : "day";
   const allDay = state.calendarEvents.filter((event) => event.isAllDay);
+  const awayFromToday = !viewIncludesToday(state.calendarView, anchor, new Date(state.calendarMonth), timeZone);
 
   return (
     <header className="calendar-chrome">
@@ -52,6 +53,7 @@ export function CalendarChrome({
             <IconButton
               label="Jump to today"
               icon={CalendarClock}
+              dot={awayFromToday}
               onClick={() => {
                 const now = new Date().toISOString();
                 window.stopscrolling.setCalendarAnchor(now);
@@ -113,6 +115,17 @@ export function CalendarChrome({
       </div>
     </header>
   );
+}
+
+function viewIncludesToday(view: CalendarView, anchor: Date, month: Date, timeZone: string) {
+  const todayKey = toDateInput(new Date(), timeZone);
+  if (view === "week") return mondayWeekDays(anchor, timeZone).some((day) => toDateInput(day, timeZone) === todayKey);
+  if (view === "month") {
+    const viewed = zonedParts(month, timeZone);
+    const today = zonedParts(new Date(), timeZone);
+    return viewed.year === today.year && viewed.month === today.month;
+  }
+  return toDateInput(anchor, timeZone) === todayKey;
 }
 
 function shiftAnchor(anchor: Date, days: number) {

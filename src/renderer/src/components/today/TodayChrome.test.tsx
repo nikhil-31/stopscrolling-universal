@@ -47,6 +47,18 @@ beforeEach(() => {
   window.stopscrolling = desktop as unknown as Window["stopscrolling"];
 });
 
+describe("TodayChrome jump to today", () => {
+  it("shows a dot when the selected day is not today", () => {
+    render(<TodayChrome state={snapshot({ todayDay: "2020-01-15T12:00:00.000Z" })} onOpenMore={() => undefined} />);
+    expect(screen.getByRole("button", { name: "Jump to today" }).querySelector(".icon-button-dot")).not.toBeNull();
+  });
+
+  it("hides the dot when the selected day is today", () => {
+    render(<TodayChrome state={snapshot({ todayDay: new Date().toISOString() })} onOpenMore={() => undefined} />);
+    expect(screen.getByRole("button", { name: "Jump to today" }).querySelector(".icon-button-dot")).toBeNull();
+  });
+});
+
 describe("TodayChrome device picker", () => {
   it("hides the device picker when fewer than two devices are visible", () => {
     render(<TodayChrome state={snapshot({
