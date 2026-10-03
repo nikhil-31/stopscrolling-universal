@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
 import { effectiveTimeZone } from "@shared/platform";
+import { productivityBreakdown } from "@shared/jev-productivity";
 import {
   buildBreakdowns,
   buildPeriodBuckets,
   filterSegmentsForApp,
+  filterSegmentsForVerdict,
   filterTimelinesForApp,
+  filterTimelinesForVerdict,
   normalizeTodayTab,
   rankedAppsBySeconds,
 } from "@shared/timeline";
@@ -17,47 +20,67 @@ import { EventLog } from "../components/timeline";
 import { ActivityLineChart } from "../components/today/ActivityLineChart";
 import { ActivityPie } from "../components/today/ActivityPie";
 import { ActivityTimeline } from "../components/today/ActivityTimeline";
-import { AppsWebsitesList } from "../components/today/AppsWebsitesList";
+import { AppsWebsitesList, FocusList } from "../components/today/AppsWebsitesList";
 import { CategoriesList } from "../components/today/CategoriesList";
 import { TodayChrome } from "../components/today/TodayChrome";
 
 export function TodayScreen({ state }: { state: AppSnapshot }) {
   const [prompt, setPrompt] = useState<CalendarPrompt>(null);
   const [selectedAppKey, setSelectedAppKey] = useState<string | null>(null);
+  const [selectedVerdict, setSelectedVerdict] = useState<string | null>(null);
   const apps = rankedAppsBySeconds(state.snapshot.apps);
   const selectedApp = selectedAppKey
     ? apps.find((app) => app.key === selectedAppKey) ?? null
     : null;
+  const sourceSegments = state.snapshot.listSegments.length ? state.snapshot.listSegments : state.snapshot.timelineSegments;
   const filteredSegments = useMemo(
-    () => selectedAppKey
-      ? filterSegmentsForApp(
-        state.snapshot.listSegments.length ? state.snapshot.listSegments : state.snapshot.timelineSegments,
-        selectedAppKey,
-      )
-      : state.snapshot.listSegments,
-    [selectedAppKey, state.snapshot.listSegments, state.snapshot.timelineSegments],
+    () => {
+      if (selectedAppKey) return filterSegmentsForApp(sourceSegments, selectedAppKey);
+      if (selectedVerdict) return filterSegmentsForVerdict(sourceSegments, selectedVerdict);
+      return state.snapshot.listSegments;
+    },
+    [selectedAppKey, selectedVerdict, sourceSegments, state.snapshot.listSegments],
   );
   const filteredTimelines = useMemo(
-    () => selectedAppKey ? filterTimelinesForApp(state.timelines, selectedAppKey) : state.timelines,
-    [selectedAppKey, state.timelines],
+    () => {
+      if (selectedAppKey) return filterTimelinesForApp(state.timelines, selectedAppKey);
+      if (selectedVerdict) return filterTimelinesForVerdict(state.timelines, selectedVerdict);
+      return state.timelines;
+    },
+    [selectedAppKey, selectedVerdict, state.timelines],
+  );
+  const focusRows = useMemo(
+    () => productivityBreakdown(selectedAppKey ? filterSegmentsForApp(sourceSegments, selectedAppKey) : sourceSegments),
+    [selectedAppKey, sourceSegments],
   );
   const filteredCategories = useMemo(
-    () => selectedAppKey ? buildBreakdowns(filteredSegments).categories : state.snapshot.categories,
-    [selectedAppKey, filteredSegments, state.snapshot.categories],
+    () => selectedAppKey || selectedVerdict ? buildBreakdowns(filteredSegments).categories : state.snapshot.categories,
+    [selectedAppKey, selectedVerdict, filteredSegments, state.snapshot.categories],
   );
   const tab = normalizeTodayTab(state.todayTab);
   const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
   const lineBuckets = useMemo(
     () => buildPeriodBuckets(
-      selectedAppKey ? filteredSegments : state.snapshot.timelineSegments,
+      selectedAppKey || selectedVerdict ? filteredSegments : state.snapshot.timelineSegments,
       state.todayPeriod ?? "day",
       new Date(state.todayDay),
       undefined,
       timeZone,
     ),
-    [selectedAppKey, filteredSegments, state.snapshot.timelineSegments, state.todayPeriod, state.todayDay, timeZone],
+    [selectedAppKey, selectedVerdict, filteredSegments, state.snapshot.timelineSegments, state.todayPeriod, state.todayDay, timeZone],
   );
-  const clearFilter = () => setSelectedAppKey(null);
+  const clearFilter = () => {
+    setSelectedAppKey(null);
+    setSelectedVerdict(null);
+  };
+  const selectApp = (key: string | null) => {
+    setSelectedAppKey(key);
+    if (key) setSelectedVerdict(null);
+  };
+  const selectVerdict = (key: string | null) => {
+    setSelectedVerdict(key);
+    if (key) setSelectedAppKey(null);
+  };
 
   return (
     <div className="today-page" data-testid="today-page">
@@ -81,12 +104,12 @@ export function TodayScreen({ state }: { state: AppSnapshot }) {
         ) : null}
       </div>
 
-      {selectedApp ? (
+      {selectedApp || selectedVerdict ? (
         <div className="insights-filter-banner">
           <Banner
             action={<Button size="sm" variant="ghost" onClick={clearFilter}>Show all</Button>}
           >
-            Showing only {selectedApp.label}
+            Showing only {selectedApp?.label ?? selectedVerdict}
           </Banner>
         </div>
       ) : null}
@@ -108,10 +131,11 @@ export function TodayScreen({ state }: { state: AppSnapshot }) {
           <div className="activity-split">
             <ActivityPie state={state} categories={filteredCategories} />
             <CategoriesList state={state} categories={filteredCategories} />
+            <FocusList rows={focusRows} selectedKey={selectedVerdict} onSelect={selectVerdict} />
             <AppsWebsitesList
               state={state}
               selectedKey={selectedAppKey}
-              onSelect={setSelectedAppKey}
+              onSelect={selectApp}
               onLabelApp={(app: ScreenTimeAppBreakdown) => setPrompt({
                 kind: "app-label",
                 appKey: app.key,

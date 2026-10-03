@@ -1217,7 +1217,8 @@ a { color: var(--brand); }
   border-radius: var(--radius-pill);
 }
 .activity-app-bar span { display: block; height: 100%; background: var(--brand); border-radius: inherit; }
-.activity-app-name { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.activity-app-name { display: flex; align-items: center; gap: 8px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.activity-app-name span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .activity-app-time { color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
 .activity-panel .data-card {
   padding: 0;
@@ -1276,9 +1277,12 @@ button.data-row { width: 100%; color: inherit; background: transparent; border-t
 button.data-row:hover, button.data-row.is-selected { background: var(--surface-hover); }
 .row-main { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; }
 .category-swatch { flex: 0 0 auto; width: 8px; height: 28px; border-radius: var(--radius-pill); background: var(--swatch); }
+.game-asset { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 6px; object-fit: cover; background: var(--surface-subtle); }
+.game-asset-inline { width: 16px; height: 16px; border-radius: 4px; }
+.game-mark { flex: 0 0 auto; width: 20px; height: 20px; }
 .row-copy { flex: 1; min-width: 0; }
 .row-title { display: block; overflow: hidden; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.row-subtitle { display: block; overflow: hidden; color: var(--text-tertiary); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.row-subtitle { display: flex; align-items: center; gap: 6px; overflow: hidden; color: var(--text-tertiary); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .row-value { flex: 0 0 auto; color: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .progress-track { height: 4px; margin-top: 5px; overflow: hidden; background: var(--line); border-radius: var(--radius-pill); }
 .progress-fill { height: 100%; width: var(--progress); background: var(--swatch, var(--brand)); border-radius: inherit; }

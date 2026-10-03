@@ -26,8 +26,10 @@ import {
   upsertLabel,
   upsertTask,
 } from "@shared/calendar-workspace";
+import { publishGameAssets } from "@shared/game-assets";
+import { withMatchLines, withMatchSnapshot } from "@shared/game-match";
 import { deviceKey, resolvedDeviceName, withComputedOnline } from "@shared/device";
-import { buildAgentView, ensureLiveEntryVisible, JEV_PRODUCTIVITY_CRITERIA, normalizeTitle, productivityKey, type ProductivityVerdict } from "@shared/jev-productivity";
+import { buildAgentView, classifiesFocus, ensureLiveEntryVisible, JEV_PRODUCTIVITY_CRITERIA, productivityInputsFromSegments, type ProductivityVerdict } from "@shared/jev-productivity";
 import { IPC } from "@shared/ipc";
 import { currentDevicePlatform, effectiveTimeZone as resolveTimeZone, toDateInput } from "@shared/platform";
 import { TIMER_BONUS_STEP_SECONDS, usesTodayWindow } from "@shared/timer";
@@ -41,7 +43,6 @@ import type { AppSnapshot, AppStatePatch, AuthUiState, BlockingUiState, Inspecto
 import { emptyInspector, inspectorFromSelection, toStatePatch } from "@shared/snapshot";
 import {
   ALL_DEVICES,
-  appBreakdownKey,
   ALL_INSIGHTS_DEVICES,
   endOfMonth,
   entriesToTimelines,
@@ -82,8 +83,10 @@ import { BlockingHelperBridge } from "./blocking/bridge";
 import { loadCalendarWorkspace, saveCalendarWorkspace } from "./calendar-workspace-store";
 import { GoogleCalendarService } from "./google-calendar";
 import { syncLaunchAtLogin } from "./lifecycle";
+import { GameAssetCache } from "./game-asset-cache";
+import { GameMatchSync } from "./game-match-sync";
 import { logObservability } from "./logger";
-import { deviceName as localDeviceName, hiddenDevicesPath, networkLogPath, observabilityLogPath } from "./paths";
+import { deviceName as localDeviceName, gameAssetPath, gameMatchPath, hiddenDevicesPath, networkLogPath, observabilityLogPath } from "./paths";
 import { loadSettings, saveSettings } from "./settings-store";
 import { loadTimesheetSummaries, saveTimesheetSummaries } from "./timesheet-summary-store";
 import { clearTokens, loadSessionUser, loadTokens, saveSessionUser, saveTokens } from "./token-store";
@@ -215,6 +218,19 @@ export class AppController {
     if (tokens) saveTokens(tokens);
     else clearTokens();
   });
+  gameAssets = new GameAssetCache(gameAssetPath(), () => this.broadcast());
+  gameSync = (() => {
+    const sync = new GameMatchSync(
+      this.api,
+      gameMatchPath(),
+      () => this.broadcast(),
+      () => Boolean(this.settings.syncEnabled && this.api.getTokens()),
+    );
+    sync.prefetchAsset = (assetId) => {
+      void this.gameAssets.ensure(assetId);
+    };
+    return sync;
+  })();
   tracker = new ScreenTimeTracker(
     this.api,
     () => this.broadcast(),
@@ -223,6 +239,11 @@ export class AppController {
     undefined,
     () => this.settings.agentSendTitles,
     () => this.navigation === "agent",
+    () => Date.now(),
+    (entry) => this.gameSync.noteSession(entry),
+    () => {
+      void this.gameSync.flush();
+    },
   );
 
   private windows = new Set<BrowserWindow>();
@@ -276,6 +297,7 @@ export class AppController {
       await this.tracker.startTracking();
     }
     this.startTimelineRefresh();
+    this.gameSync.start();
     await this.refreshVisibleRange();
     this.schedulePrefetch();
     logObservability("Bootstrap complete");
@@ -362,6 +384,8 @@ export class AppController {
       googleCalendarStatus: this.google.connected()
         ? "Showing Google Calendar events"
         : "Google Calendar not connected",
+      gameAccounts: this.gameSync.accountView(),
+      gameAccountsStatus: this.gameSync.status,
       logs: {
         network: networkLogPath(),
         observability: observabilityLogPath(),
@@ -395,25 +419,16 @@ export class AppController {
 
   /** Rates every unrated title in the current view, then refreshes the agent tab. */
   reviewAgent() {
-    const sendTitles = this.settings.agentSendTitles;
-    const inputs = new Map<string, Parameters<ScreenTimeTracker["productivityAgent"]["enqueue"]>[0]>();
-    for (const segment of this.dataView().snapshot.timelineSegments) {
-      const breakdownKey = appBreakdownKey(segment);
-      const key = sendTitles ? productivityKey(breakdownKey, segment.label) : breakdownKey;
-      if (inputs.has(key) || this.tracker.productivityAgent.lookup(key)) continue;
-      inputs.set(key, {
-        key,
-        breakdownKey,
-        appName: segment.appName,
-        bundleID: segment.bundleID,
-        url: segment.url,
-        title: sendTitles ? normalizeTitle(segment.label) : "",
-        category: segment.category,
-        sendTitle: sendTitles,
-      });
-    }
-    void this.tracker.productivityAgent.reviewAll([...inputs.values()]).finally(() => this.broadcast());
+    const inputs = this.focusInputs();
+    void this.tracker.productivityAgent.reviewAll(inputs).finally(() => this.broadcast());
     this.broadcast();
+  }
+
+  private focusInputs() {
+    return productivityInputsFromSegments(this.dataView().snapshot.timelineSegments, {
+      sendTitles: this.settings.agentSendTitles,
+      cache: this.tracker.productivityAgent.cache,
+    });
   }
 
   overrideAgentVerdict(key: string, verdict: string) {
@@ -448,6 +463,9 @@ export class AppController {
       this.serverSummary,
       this.serverSummaryRange,
       this.tracker.categoryCache(),
+      this.tracker.productivityAgent.cache,
+      this.gameSync.matchRevision,
+      this.gameAssets.revision,
       this.calendarWorkspace,
       this.settings.dailyWorkTargetSeconds,
     ];
@@ -463,6 +481,9 @@ export class AppController {
       logObservability(`Snapshot data for ${scope} rebuilt in ${elapsed.toFixed(0)}ms (${view.snapshot.timelineSegments.length} segments)`);
     }
     this.dataCache = { deps, view };
+    if (classifiesFocus(this.navigation)) {
+      this.tracker.productivityAgent.enqueueBackground(this.focusInputs());
+    }
     return view;
   }
 
@@ -508,9 +529,14 @@ export class AppController {
       : periodBounds(period, anchor, zone);
     const serverSummary = deviceScoped ? undefined : this.mappedServerSummary(snapshotBounds);
     const categoryCache = this.tracker.categoryCache();
-    const snapshot = todayWindow
-      ? snapshotFromRange(entries, todayBounds, serverSummary, undefined, categoryCache, zone)
-      : snapshotFromEntries(entries, period, anchor, serverSummary, categoryCache, zone);
+    const productivityCache = this.tracker.productivityAgent.cache;
+    const matches = this.gameSync.matches();
+    const snapshot = withMatchSnapshot(
+      todayWindow
+        ? snapshotFromRange(entries, todayBounds, serverSummary, undefined, categoryCache, zone, productivityCache)
+        : snapshotFromEntries(entries, period, anchor, serverSummary, categoryCache, zone, productivityCache),
+      matches,
+    );
     const extraDevices = this.tracker.registeredDevices.map((device) => ({
       platform: device.device_platform,
       name: device.device_name,
@@ -523,17 +549,31 @@ export class AppController {
         : snapshotBounds;
     const timelines = this.navigation === "insights" && period !== "day"
       ? []
-      : filterTimelinesForInsights(
-          filterVisibleTimelines(
-            entriesToTimelines(entries, anchor, extraDevices, timelineBounds),
-            this.hiddenDeviceKeys,
+      : withMatchLines(
+          filterTimelinesForInsights(
+            filterVisibleTimelines(
+              entriesToTimelines(entries, anchor, extraDevices, timelineBounds, productivityCache),
+              this.hiddenDeviceKeys,
+            ),
+            deviceKeyForNav,
           ),
-          deviceKeyForNav,
+          matches,
         );
+    const datedSnapshot = calendarRange
+      ? { ...snapshot, trackedSecondsByDay: trackedSecondsByDay(entries, this.calendarMonth, zone) }
+      : snapshot;
+    const published = publishGameAssets(
+      datedSnapshot,
+      timelines,
+      (assetId) => this.gameAssets.has(assetId),
+      (assetId) => {
+        void this.gameAssets.ensure(assetId);
+      },
+    );
     const calendarDayStats = calendarRange
       ? buildCalendarDayStats(
           this.calendarWorkspace,
-          collectDayBlocks(timelines),
+          collectDayBlocks(published.timelines),
           this.calendarAnchor,
           this.settings.dailyWorkTargetSeconds || 8 * 60 * 60,
           zone,
@@ -543,10 +583,8 @@ export class AppController {
       devices,
       todayDeviceKey,
       insightsDeviceKey,
-      snapshot: calendarRange
-        ? { ...snapshot, trackedSecondsByDay: trackedSecondsByDay(entries, this.calendarMonth, zone) }
-        : snapshot,
-      timelines,
+      snapshot: published.snapshot,
+      timelines: published.timelines,
       calendarDayStats,
     };
   }
@@ -797,7 +835,7 @@ export class AppController {
       this.auth.user = await this.api.me();
       saveSessionUser(this.auth.user);
       this.auth.statusMessage = `Signed in as ${this.auth.user.email}`;
-      await this.tracker.flushOutbox();
+      await this.syncPending();
       await this.refreshVisibleRange();
       await this.refreshBlockingHelper(true);
     } catch (error) {
@@ -1089,11 +1127,16 @@ export class AppController {
     return end > Date.now();
   }
 
+  syncPending() {
+    return Promise.all([this.tracker.flushOutbox(), this.gameSync.flush()]);
+  }
+
   async shutdown() {
     if (this.helperTimer) clearInterval(this.helperTimer);
     if (this.helperBoundaryTimer) clearTimeout(this.helperBoundaryTimer);
     if (this.broadcastTimer) clearTimeout(this.broadcastTimer);
     if (this.prefetchTimer) clearTimeout(this.prefetchTimer);
+    this.gameSync.stop();
     await Promise.all([this.tracker.shutdown(), this.helper.close()]);
   }
 
@@ -1340,7 +1383,7 @@ export class AppController {
     saveSessionUser(this.auth.user);
     this.auth.mfaChallenge = null;
     this.auth.statusMessage = `${success} as ${this.auth.user.email}`;
-    await this.tracker.flushOutbox();
+    await this.syncPending();
     await this.refreshVisibleRange();
     await this.refreshBlockingHelper(true);
   }

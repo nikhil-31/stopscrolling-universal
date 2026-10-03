@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { effectiveTimeZone, localTimeZoneLabel } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
 import {
@@ -19,12 +20,17 @@ import {
   TextField,
   Toggle,
 } from "../components/ui";
+import { GameMark } from "../components/GameMark";
 
 export function SettingsScreen({ state }: { state: AppSnapshot }) {
   const settings = state.settings;
   const signedIn = Boolean(state.auth?.user);
   const timeZones = Intl.supportedValuesOf("timeZone");
   const selectedZone = state.auth?.user?.time_zone ?? "";
+  const [riotId, setRiotId] = useState("");
+  const riot = state.gameAccounts?.riot ?? null;
+  const steam = state.gameAccounts?.steam ?? null;
+  const gameStatus = state.gameAccountsStatus ?? "Link a Riot ID or Steam account to upload matches.";
   return (
     <div className="settings-page">
       <header className="settings-header">
@@ -38,6 +44,7 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
           <a href="#work-hours">Work hours</a>
           <a href="#labels">Labels</a>
           <a href="#calendars">Calendars</a>
+          <a href="#games">Games</a>
           <a href="#backend">Sync</a>
           <a href="#diagnostics">Diagnostics</a>
         </nav>
@@ -209,6 +216,60 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
                 )}
               </div>
               <p className="small muted">Apple Calendar / EventKit is not available in the cross-platform Electron client.</p>
+            </Grouped>
+          </section>
+
+          <section id="games" className="settings-section">
+            <Grouped
+              title="Games"
+              description="Upload League matches and Steam play sessions with your screen time"
+              action={<Badge tone={riot || steam ? "success" : "neutral"} dot>{riot || steam ? "Linked" : "Not linked"}</Badge>}
+            >
+              <div className="connection-row">
+                <GameMark platform="riot" />
+                <div className="connection-copy">
+                  <strong>Riot</strong>
+                  <span>{riot ? `${riot.gameName}#${riot.tagLine}` : "League of Legends matches"}</span>
+                </div>
+                {riot ? (
+                  <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.disconnectRiot()}>Disconnect</Button>
+                ) : null}
+              </div>
+              {riot ? null : (
+                <form
+                  className="setting-row"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    window.stopscrolling.linkRiot(riotId);
+                  }}
+                >
+                  <TextField
+                    label="Riot ID"
+                    placeholder="Name#TAG"
+                    value={riotId}
+                    onChange={(event) => setRiotId(event.target.value)}
+                    data-testid="settings-riot-id"
+                  />
+                  <Button type="submit" size="sm" variant="primary" disabled={!riotId.trim()} data-testid="settings-riot-link">
+                    Link
+                  </Button>
+                </form>
+              )}
+              <div className="connection-row">
+                <GameMark platform="steam" />
+                <div className="connection-copy">
+                  <strong>Steam</strong>
+                  <span>{steam ? (steam.personaName || steam.steamId64) : "Play sessions for linked games"}</span>
+                </div>
+                {steam ? (
+                  <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.disconnectSteam()}>Disconnect</Button>
+                ) : (
+                  <Button size="sm" variant="primary" onClick={() => window.stopscrolling.connectSteam()} data-testid="settings-steam-connect">
+                    Connect
+                  </Button>
+                )}
+              </div>
+              <p className="small muted">{gameStatus}</p>
             </Grouped>
           </section>
 

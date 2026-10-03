@@ -3,12 +3,18 @@ import { JEV_MODEL } from "./jev";
 import {
   buildAgentView,
   ensureLiveEntryVisible,
+  focusVerdictForSegment,
   jevProductivityRequest,
   normalizeTitle,
   parseJevProductivity,
+  classifiesFocus,
+  productivityBreakdown,
+  productivityInputsFromSegments,
   productivityKey,
+  stampSegmentVerdicts,
   type ProductivityCache,
 } from "./jev-productivity";
+import { snapshotFromEntries } from "./timeline";
 import type { ScreenTimeEntry } from "./types";
 import type { ScreenTimeTimelineSegment } from "./types";
 
@@ -102,6 +108,80 @@ describe("live entries", () => {
     expect(Date.parse(visibleLive.endTimeUTC) - Date.parse(visibleLive.startTimeUTC)).toBe(1000);
     expect(visibleDone).toBe(done);
     expect(visibleGrown).toBe(grown);
+  });
+});
+
+describe("productivity inputs", () => {
+  const cache: ProductivityCache = {
+    "app|Notes#Scratch": { verdict: "Productive", confidence: 1, model: "user", at: "2026-09-20T09:00:00.000Z", source: "user" },
+  };
+
+  it("skips cached titles and orders the rest newest first", () => {
+    const inputs = productivityInputsFromSegments(
+      [
+        segment({ id: "old", appName: "Cursor", label: "main.ts", url: "", start: "2026-09-20T08:00:00.000Z", end: "2026-09-20T09:00:00.000Z" }),
+        segment({ id: "notes", appName: "Notes", label: "Scratch", url: "", start: "2026-09-20T09:00:00.000Z", end: "2026-09-20T10:00:00.000Z" }),
+        segment({ id: "new", appName: "Cursor", label: "app.ts", url: "", start: "2026-09-20T10:00:00.000Z", end: "2026-09-20T11:00:00.000Z" }),
+      ],
+      { sendTitles: true, cache },
+    );
+    expect(inputs.map((input) => input.title)).toEqual(["app.ts", "main.ts"]);
+    expect(inputs[0]?.key).toBe("app|Cursor#app.ts");
+    expect(inputs.every((input) => input.sendTitle)).toBe(true);
+  });
+
+  it("rates the app once when titles are off", () => {
+    const inputs = productivityInputsFromSegments(
+      [
+        segment({ id: "one", appName: "Cursor", label: "main.ts", url: "", end: "2026-09-20T09:00:00.000Z" }),
+        segment({ id: "two", appName: "Cursor", label: "app.ts", url: "", start: "2026-09-20T09:00:00.000Z", end: "2026-09-20T10:00:00.000Z" }),
+      ],
+      { sendTitles: false },
+    );
+    expect(inputs).toEqual([
+      expect.objectContaining({ key: "app|Cursor", title: "", sendTitle: false }),
+    ]);
+  });
+
+  it("classifies the period shown on Today and Insights", () => {
+    expect(classifiesFocus("today")).toBe(true);
+    expect(classifiesFocus("insights")).toBe(true);
+    expect(classifiesFocus("agent")).toBe(false);
+    expect(classifiesFocus("calendar")).toBe(false);
+  });
+});
+
+describe("productivity breakdown", () => {
+  const cache: ProductivityCache = {
+    "web|youtube.com#Intro to Rust": { verdict: "Productive", confidence: 0.9, model: "jev", at: "2026-09-20T09:00:00.000Z", source: "jev" },
+    "web|youtube.com#Funny Shorts": { verdict: "Distracting", confidence: 0.95, model: "jev", at: "2026-09-20T11:00:00.000Z", source: "jev" },
+    "web|youtube.com#Cat Videos": { verdict: "Distracting", confidence: 0.93, model: "jev", at: "2026-09-20T10:00:00.000Z", source: "jev" },
+  };
+
+  it("sums verdicts, keeps unrated time in the share, and falls back to the site majority", () => {
+    const stamped = stampSegmentVerdicts(
+      [
+        segment({ id: "lecture", url: "https://youtube.com/watch?v=1", label: "Intro to Rust - YouTube", end: "2026-09-20T10:00:00.000Z" }),
+        segment({ id: "shorts", url: "https://youtube.com/shorts/2", label: "Funny Shorts - YouTube", start: "2026-09-20T10:00:00.000Z", end: "2026-09-20T12:00:00.000Z" }),
+        segment({ id: "other", url: "https://youtube.com/watch?v=9", label: "Another Lecture - YouTube", start: "2026-09-20T12:00:00.000Z", end: "2026-09-20T13:00:00.000Z" }),
+        segment({ id: "editor", url: "", label: "main.ts", appName: "Cursor", start: "2026-09-20T13:00:00.000Z", end: "2026-09-20T13:30:00.000Z" }),
+      ],
+      cache,
+    );
+    expect(stamped.find((item) => item.id === "other")?.verdict).toBe("Distracting");
+    expect(focusVerdictForSegment(segment({ url: "", label: "main.ts", appName: "Cursor" }), cache)).toBe("Unrated");
+    const rows = productivityBreakdown(stamped);
+    expect(rows.map((row) => row.label)).toEqual(["Distracting", "Productive", "Unrated"]);
+    expect(rows.find((row) => row.label === "Distracting")?.seconds).toBe(3 * 3600);
+    expect(rows.find((row) => row.label === "Productive")?.seconds).toBe(3600);
+    expect(rows.find((row) => row.label === "Unrated")?.seconds).toBe(30 * 60);
+    const share = rows.reduce((sum, row) => sum + row.percentage, 0);
+    expect(share).toBeCloseTo(1);
+  });
+
+  it("leaves snapshot segments unstamped when no productivity cache is passed", () => {
+    const snapshot = snapshotFromEntries([], "day", new Date("2026-09-20T12:00:00.000Z"));
+    expect(snapshot.timelineSegments.every((item) => item.verdict === undefined)).toBe(true);
   });
 });
 

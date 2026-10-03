@@ -8,6 +8,7 @@ import type {
   CalendarOverlayEvent,
   DeviceListEntry,
   ForegroundContext,
+  GameAccountView,
   FriendRequest,
   FriendUser,
   InsightsPeriod,
@@ -134,6 +135,8 @@ export interface AppSnapshot {
   calendarEvents: CalendarOverlayEvent[];
   googleCalendarConnected: boolean;
   googleCalendarStatus: string;
+  gameAccounts: GameAccountView;
+  gameAccountsStatus: string;
   logs: {
     network: string;
     observability: string;

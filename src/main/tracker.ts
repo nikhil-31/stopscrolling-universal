@@ -85,6 +85,8 @@ export class ScreenTimeTracker {
     private readonly sendTitles: () => boolean = () => true,
     private readonly publishLive: () => boolean = () => false,
     private readonly now: () => number = () => Date.now(),
+    private readonly onSessionClosed: (entry: ScreenTimeEntry) => void = () => {},
+    private readonly onFlushed: () => void = () => {},
   ) {
     this.classifier = classifier ?? new JevClassifier({
       getApiKey: resolveTypesafeApiKey,
@@ -121,7 +123,7 @@ export class ScreenTimeTracker {
       return;
     }
     if (now - this.dwellSince < dwellMs) return;
-    this.productivityAgent.enqueue(this.productivityInput(snapshot, key, titleKey, category));
+    this.productivityAgent.enqueueLive(this.productivityInput(snapshot, key, titleKey, category));
   }
 
   productivityInput(snapshot: ActivitySnapshot, key: string, titleKey: string, category: string): ProductivityInput {
@@ -281,11 +283,13 @@ export class ScreenTimeTracker {
     if (!this.syncReady()) {
       this.pendingUploadCount = this.outbox.count();
       this.onChange();
+      this.onFlushed();
       return;
     }
     const items = this.outbox.load();
     if (!items.length) {
       this.pendingUploadCount = 0;
+      this.onFlushed();
       return;
     }
     const batches: ScreenTimeEntry[][] = [];
@@ -302,6 +306,7 @@ export class ScreenTimeTracker {
     }
     this.pendingUploadCount = this.outbox.count();
     this.onChange();
+    this.onFlushed();
   }
 
   /**
@@ -466,6 +471,7 @@ export class ScreenTimeTracker {
       entry.source = "local";
       this.outbox.append(entry);
       this.pendingUploadCount = this.outbox.count();
+      this.onSessionClosed(entry);
       if (this.pendingUploadCount >= FLUSH_THRESHOLD) void this.flushOutbox();
     }
     this.openStart = null;
@@ -498,6 +504,7 @@ export class ScreenTimeTracker {
       const entry = this.liveEntry(start, checkpoint.context, end);
       entry.source = "local";
       this.outbox.append(entry);
+      this.onSessionClosed(entry);
     }
     saveCheckpoint(null);
     this.pendingUploadCount = this.outbox.count();

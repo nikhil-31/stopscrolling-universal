@@ -57,7 +57,7 @@ export function refreshTray(controller: AppController) {
           {
             label: pending > 0 ? `Sync All Unsynced (${pending} pending)` : "Sync All Unsynced",
             click: () => {
-              void controller.tracker.flushOutbox();
+              void controller.syncPending();
             },
           },
         ]

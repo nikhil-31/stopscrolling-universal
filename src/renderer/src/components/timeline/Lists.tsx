@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { displayNameForDevice } from "@shared/device";
+import { gameAssetUrl } from "@shared/game-assets";
 import {
   colorForCategory,
   formatClock,
@@ -14,6 +15,7 @@ import type {
   ScreenTimeTimelineSegment,
 } from "@shared/types";
 import { Boxes, List, Shapes } from "lucide-react";
+import { CategoryMark } from "../GameMark";
 import { useClockFormat } from "../../clock-format";
 import { useSessionTitle } from "../../session-title";
 import { Card, EmptyState, Grouped } from "../ui";
@@ -90,10 +92,7 @@ export const EventLog = memo(function EventLog({
             onClick={() => window.stopscrolling.selectInspector({ kind: "segment", segment })}
           >
             <span className="row-main">
-              <span
-                className="category-swatch"
-                style={{ ["--swatch" as string]: colorForCategory(segment.category) }}
-              />
+              <CategoryMark assetId={segment.assetId} color={colorForCategory(segment.category)} />
               <span className="row-copy">
                 <span className="row-title">{segment.label}</span>
                 <span className="row-subtitle">{segment.subtitle || segment.category}</span>
@@ -130,13 +129,13 @@ export function BlockList({ timelines, devices = [] }: { timelines: ScreenTimeDe
             onClick={() => window.stopscrolling.selectInspector({ kind: "block", block })}
           >
             <span className="row-main">
-              <span
-                className="category-swatch"
-                style={{ ["--swatch" as string]: colorForCategory(block.category) }}
-              />
+              <CategoryMark assetId={block.assetId} color={colorForCategory(block.category)} />
               <span className="row-copy">
                 <span className="row-title">{titleFor(block)}</span>
-                <span className="row-subtitle">{block.subtitle} · {displayNameForDevice(block.devicePlatform, block.deviceName, devices)}</span>
+                <span className="row-subtitle">
+                  {block.assetId?.startsWith("riot/") ? <img className="game-asset game-asset-inline" alt="" src={gameAssetUrl(block.assetId)} /> : null}
+                  {block.subtitle} · {displayNameForDevice(block.devicePlatform, block.deviceName, devices)}
+                </span>
               </span>
             </span>
             <span className="row-value">{formatDuration(block.durationSeconds)}</span>
@@ -150,13 +149,19 @@ export function BlockList({ timelines, devices = [] }: { timelines: ScreenTimeDe
 export const BreakdownList = memo(function BreakdownList({
   categories,
   apps,
+  focus = [],
   selectedAppKey = null,
+  selectedVerdict = null,
   onSelectApp,
+  onSelectVerdict,
 }: {
   categories: ScreenTimeCategoryBreakdown[];
   apps: ScreenTimeAppBreakdown[];
+  focus?: ScreenTimeAppBreakdown[];
   selectedAppKey?: string | null;
+  selectedVerdict?: string | null;
   onSelectApp?: (key: string | null) => void;
+  onSelectVerdict?: (key: string | null) => void;
 }) {
   return (
     <div className="breakdown-layout">
@@ -193,6 +198,24 @@ export const BreakdownList = memo(function BreakdownList({
             <span className="row-value">{formatDuration(item.seconds)} · {Math.round(item.percentage * 100)}%</span>
           </div>
         )) : <EmptyState title="No categories" body="Category totals will appear here." icon={Shapes} />}
+      </Grouped>
+      <Grouped title="Focus" description="Productive, neutral, and distracting time">
+        {focus.length ? (
+          <div className="activity-app-list">
+            {focus.map((item) => {
+              const selected = selectedVerdict === item.key;
+              return (
+                <div key={item.key} className={`activity-app-row ${selected ? "is-selected" : ""}`}>
+                  <AppsWebsitesShareRow
+                    app={item}
+                    selected={selected}
+                    onSelect={() => onSelectVerdict?.(selected ? null : item.key)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : <EmptyState title="No focus data" body="Productive and distracting totals will appear here." />}
       </Grouped>
       <Grouped title="Apps & websites" description="Your most-used destinations">
         {apps.length ? (

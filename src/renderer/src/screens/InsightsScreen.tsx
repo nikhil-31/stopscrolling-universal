@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
 import { displayNameForDevice } from "@shared/device";
 import { effectiveTimeZone } from "@shared/platform";
+import { productivityBreakdown } from "@shared/jev-productivity";
 import {
   buildBreakdowns,
   buildPeriodBuckets,
   filterSegmentsForApp,
+  filterSegmentsForVerdict,
   filterTimelinesForApp,
+  filterTimelinesForVerdict,
   formatDuration,
   formatPeriod,
   formatTodayPeriod,
@@ -44,33 +47,42 @@ function InsightsSkeleton() {
 
 export function InsightsScreen({ state }: { state: AppSnapshot }) {
   const [selectedAppKey, setSelectedAppKey] = useState<string | null>(null);
+  const [selectedVerdict, setSelectedVerdict] = useState<string | null>(null);
   const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
   const apps = useMemo(() => rankedAppsBySeconds(state.snapshot.apps), [state.snapshot.apps]);
   const selectedApp = selectedAppKey
     ? apps.find((app) => app.key === selectedAppKey) ?? null
     : null;
+  const sourceSegments = state.snapshot.listSegments.length ? state.snapshot.listSegments : state.snapshot.timelineSegments;
   const filteredSegments = useMemo(
-    () => selectedAppKey
-      ? filterSegmentsForApp(
-        state.snapshot.listSegments.length ? state.snapshot.listSegments : state.snapshot.timelineSegments,
-        selectedAppKey,
-      )
-      : state.snapshot.listSegments,
-    [selectedAppKey, state.snapshot.listSegments, state.snapshot.timelineSegments],
+    () => {
+      if (selectedAppKey) return filterSegmentsForApp(sourceSegments, selectedAppKey);
+      if (selectedVerdict) return filterSegmentsForVerdict(sourceSegments, selectedVerdict);
+      return state.snapshot.listSegments;
+    },
+    [selectedAppKey, selectedVerdict, sourceSegments, state.snapshot.listSegments],
   );
   const filteredTimelines = useMemo(
-    () => selectedAppKey ? filterTimelinesForApp(state.timelines, selectedAppKey) : state.timelines,
-    [selectedAppKey, state.timelines],
+    () => {
+      if (selectedAppKey) return filterTimelinesForApp(state.timelines, selectedAppKey);
+      if (selectedVerdict) return filterTimelinesForVerdict(state.timelines, selectedVerdict);
+      return state.timelines;
+    },
+    [selectedAppKey, selectedVerdict, state.timelines],
   );
   const filteredBuckets = useMemo(
-    () => selectedAppKey
+    () => selectedAppKey || selectedVerdict
       ? buildPeriodBuckets(filteredSegments, state.insightsPeriod, new Date(state.insightsAnchor), undefined, timeZone)
       : state.snapshot.buckets,
-    [selectedAppKey, filteredSegments, state.insightsPeriod, state.insightsAnchor, state.snapshot.buckets, timeZone],
+    [selectedAppKey, selectedVerdict, filteredSegments, state.insightsPeriod, state.insightsAnchor, state.snapshot.buckets, timeZone],
+  );
+  const focusRows = useMemo(
+    () => productivityBreakdown(selectedAppKey ? filterSegmentsForApp(sourceSegments, selectedAppKey) : sourceSegments),
+    [selectedAppKey, sourceSegments],
   );
   const filteredCategories = useMemo(
-    () => selectedAppKey ? buildBreakdowns(filteredSegments).categories : state.snapshot.categories,
-    [selectedAppKey, filteredSegments, state.snapshot.categories],
+    () => selectedAppKey || selectedVerdict ? buildBreakdowns(filteredSegments).categories : state.snapshot.categories,
+    [selectedAppKey, selectedVerdict, filteredSegments, state.snapshot.categories],
   );
   const tab = normalizeInsightsTab(state.insightsTab);
   const visibleDevices = visibleDevicesForPicker(state.devices, state.hiddenDeviceKeys);
@@ -85,7 +97,18 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
   const topApp = apps[0];
   const trackedSeconds = selectedApp ? selectedApp.seconds : state.snapshot.totalSeconds;
   const trackedDetail = selectedApp ? `${scopeDetail} · ${selectedApp.label}` : scopeDetail;
-  const clearFilter = () => setSelectedAppKey(null);
+  const clearFilter = () => {
+    setSelectedAppKey(null);
+    setSelectedVerdict(null);
+  };
+  const selectApp = (key: string | null) => {
+    setSelectedAppKey(key);
+    if (key) setSelectedVerdict(null);
+  };
+  const selectVerdict = (key: string | null) => {
+    setSelectedVerdict(key);
+    if (key) setSelectedAppKey(null);
+  };
   return (
     <div>
       <header className="today-chrome">
@@ -125,12 +148,12 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
               tone="orange"
             />
           </section>
-          {selectedApp ? (
+          {selectedApp || selectedVerdict ? (
             <div className="insights-filter-banner">
               <Banner
                 action={<Button size="sm" variant="ghost" onClick={clearFilter}>Show all</Button>}
               >
-                Showing only {selectedApp.label}
+                Showing only {selectedApp?.label ?? selectedVerdict}
               </Banner>
             </div>
           ) : null}
@@ -158,8 +181,11 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
               <BreakdownList
                 categories={filteredCategories}
                 apps={apps}
+                focus={focusRows}
                 selectedAppKey={selectedAppKey}
-                onSelectApp={setSelectedAppKey}
+                selectedVerdict={selectedVerdict}
+                onSelectApp={selectApp}
+                onSelectVerdict={selectVerdict}
               />
             </div>
           ) : null}

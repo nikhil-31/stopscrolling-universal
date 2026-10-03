@@ -203,6 +203,10 @@ export interface ScreenTimeTimelineSegment {
   deviceName: string;
   timeZoneIdentifier: string;
   isLive: boolean;
+  /** Productive, Neutral, Distracting, or Unrated. Absent when no productivity cache was applied. */
+  verdict?: "Productive" | "Neutral" | "Distracting" | "Unrated";
+  /** Cached game image id, such as `steam/730` or `riot/Ahri`. Present only after the file is on disk. */
+  assetId?: string;
 }
 
 export interface ScreenTimeSessionBlockItem {
@@ -215,6 +219,7 @@ export interface ScreenTimeSessionBlockItem {
   start: string;
   end: string;
   durationSeconds: number;
+  assetId?: string;
 }
 
 export interface ScreenTimeSessionBlock {
@@ -227,6 +232,7 @@ export interface ScreenTimeSessionBlock {
   devicePlatform: string;
   deviceName: string;
   durationSeconds: number;
+  assetId?: string;
   items: ScreenTimeSessionBlockItem[];
 }
 
@@ -255,6 +261,7 @@ export interface ScreenTimeAppBreakdown {
   seconds: number;
   percentage: number;
   colorIndex?: number;
+  assetId?: string;
 }
 
 export interface ScreenTimeBucketApp {
@@ -349,6 +356,48 @@ export interface ScreenTimeApiPayload {
   session_url: string;
   process_name: string;
   time_zone: string;
+}
+
+export type GamePlatform = "riot" | "steam";
+
+export type GameMatchResult = "win" | "loss" | "draw" | "unknown";
+
+/** Local player's line only. Other players are not stored. */
+export interface GameMatchPlayer {
+  id: string;
+  champion?: string;
+  kda?: string;
+}
+
+export interface GameMatch {
+  platform: GamePlatform;
+  matchId: string;
+  game: string;
+  startedAt: string;
+  endedAt: string;
+  durationSeconds: number;
+  result?: GameMatchResult;
+  queue?: string;
+  map?: string;
+  player?: GameMatchPlayer;
+}
+
+export interface GameMatchPayload {
+  platform: GamePlatform;
+  match_id: string;
+  game: string;
+  started_at: string;
+  ended_at: string;
+  duration_seconds: number;
+  result?: GameMatchResult;
+  queue?: string;
+  map?: string;
+  player?: { id: string; champion_or_agent?: string; kda?: string };
+}
+
+export interface GameAccountView {
+  riot: { gameName: string; tagLine: string } | null;
+  steam: { steamId64: string; personaName: string } | null;
 }
 
 export interface BlocklistEntry {

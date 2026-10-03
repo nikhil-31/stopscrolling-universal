@@ -66,16 +66,50 @@ export class JevProductivityAgent {
   }
 
   enqueue(input: ProductivityInput): void {
-    if (!input.key) return;
-    if (this.cache[input.key]) return;
-    if (this.inflight.has(input.key)) return;
-    if (this.queue.some((queued) => queued.key === input.key)) return;
-    if (!this.options.getApiKey()) return;
+    this.insert(input, "back");
+  }
+
+  /** The app in front jumps ahead of period ratings that are already waiting. */
+  enqueueLive(input: ProductivityInput): void {
+    this.insert(input, "front");
+  }
+
+  /**
+   * Rates titles from the open Today or Insights period.
+   * Stops before today's cap, and does not set the Agent tab's reviewing flag.
+   */
+  enqueueBackground(inputs: ProductivityInput[]): void {
+    for (const input of inputs) {
+      if (!this.hasBackgroundRoom()) return;
+      this.insert(input, "back", false);
+    }
+    this.drain();
+  }
+
+  private accept(input: ProductivityInput): boolean {
+    if (!input.key) return false;
+    if (this.cache[input.key]) return false;
+    if (this.inflight.has(input.key)) return false;
+    if (this.queue.some((queued) => queued.key === input.key)) return false;
+    if (!this.options.getApiKey()) return false;
     const now = this.timestamp();
     const previous = this.lastAttempt.get(input.key) ?? 0;
-    if (now - previous < (this.options.cooldownMs ?? DEFAULT_COOLDOWN_MS)) return;
-    this.queue.push(input);
-    this.drain();
+    if (now - previous < (this.options.cooldownMs ?? DEFAULT_COOLDOWN_MS)) return false;
+    return true;
+  }
+
+  private insert(input: ProductivityInput, position: "front" | "back", drain = true): void {
+    if (!this.accept(input)) return;
+    if (position === "front") this.queue.unshift(input);
+    else this.queue.push(input);
+    if (drain) this.drain();
+  }
+
+  private hasBackgroundRoom(): boolean {
+    const now = this.timestamp();
+    const used = this.requestDays.get(this.dayKey(now)) ?? 0;
+    const cap = this.options.dailyCap ?? DEFAULT_DAILY_CAP;
+    return used + this.queue.length < cap;
   }
 
   async reviewAll(inputs: ProductivityInput[]): Promise<void> {
@@ -118,11 +152,7 @@ export class JevProductivityAgent {
     const limit = this.options.concurrency ?? DEFAULT_CONCURRENCY;
     while (this.running < limit && this.queue.length > 0) {
       const now = this.timestamp();
-      if (!this.underDailyCap(now)) {
-        this.queue.length = 0;
-        this.progress = { ...this.progress, done: this.progress.total };
-        return;
-      }
+      if (!this.underDailyCap(now)) return;
       const input = this.queue.shift();
       if (!input) return;
       if (this.cache[input.key] || this.inflight.has(input.key)) {
@@ -143,7 +173,8 @@ export class JevProductivityAgent {
   private idle(): Promise<void> {
     return new Promise((resolve) => {
       const check = () => {
-        if (this.running === 0 && this.queue.length === 0) resolve();
+        const capFull = !this.underDailyCap(this.timestamp()) && this.running === 0;
+        if (capFull || (this.running === 0 && this.queue.length === 0)) resolve();
         else setTimeout(check, 10);
       };
       check();

@@ -1,5 +1,5 @@
 import { JEV_CONFIDENCE_THRESHOLD, JEV_MODEL, parseJevChoice } from "./jev";
-import type { ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
+import type { NavigationItem, ScreenTimeAppBreakdown, ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 import { appBreakdownKey, segmentSeconds } from "./timeline";
 
 export const JEV_PRODUCTIVITY_CRITERIA = {
@@ -44,6 +44,50 @@ export function normalizeTitle(title: string): string {
 export function productivityKey(breakdownKey: string, title: string): string {
   const normalized = normalizeTitle(title);
   return normalized ? `${breakdownKey}#${normalized}` : breakdownKey;
+}
+
+export interface ProductivityRatingInput {
+  key: string;
+  breakdownKey: string;
+  appName: string;
+  bundleID: string;
+  url: string;
+  title: string;
+  category: string;
+  sendTitle: boolean;
+}
+
+/** Today and Insights are the screens whose Focus rows should be filled in. */
+export function classifiesFocus(navigation: NavigationItem): boolean {
+  return navigation === "today" || navigation === "insights";
+}
+
+/** Unrated titles in a period, newest first. Cached keys, including your own overrides, are left out. */
+export function productivityInputsFromSegments(
+  segments: Array<Pick<ScreenTimeTimelineSegment, "start" | "end" | "url" | "appName" | "label" | "bundleID" | "category">>,
+  options: { sendTitles: boolean; cache?: ProductivityCache | null },
+): ProductivityRatingInput[] {
+  const cache = options.cache ?? {};
+  const ordered = [...segments].sort((a, b) => Date.parse(b.end) - Date.parse(a.end) || Date.parse(b.start) - Date.parse(a.start));
+  const inputs: ProductivityRatingInput[] = [];
+  const seen = new Set<string>();
+  for (const segment of ordered) {
+    const breakdownKey = appBreakdownKey(segment);
+    const key = options.sendTitles ? productivityKey(breakdownKey, segment.label) : breakdownKey;
+    if (seen.has(key) || cache[key]) continue;
+    seen.add(key);
+    inputs.push({
+      key,
+      breakdownKey,
+      appName: segment.appName,
+      bundleID: segment.bundleID,
+      url: segment.url,
+      title: options.sendTitles ? normalizeTitle(segment.label) : "",
+      category: segment.category,
+      sendTitle: options.sendTitles,
+    });
+  }
+  return inputs;
 }
 
 export function jevProductivityRequest(state: ProductivityState) {
@@ -129,6 +173,60 @@ export function verdictForTitle(
     if (!best || value.count > best.count) best = value;
   }
   return best?.entry;
+}
+
+export type FocusVerdict = ProductivityVerdict | "Unrated";
+
+const FOCUS_VERDICTS: ProductivityVerdict[] = ["Productive", "Neutral", "Distracting"];
+
+export function focusVerdictForSegment(
+  segment: Pick<ScreenTimeTimelineSegment, "url" | "appName" | "label">,
+  cache?: ProductivityCache | null,
+): FocusVerdict {
+  if (!cache) return "Unrated";
+  const key = appBreakdownKey(segment);
+  const entry = verdictForTitle(cache, key, productivityKey(key, segment.label));
+  if (entry && (FOCUS_VERDICTS as string[]).includes(entry.verdict)) return entry.verdict as ProductivityVerdict;
+  return "Unrated";
+}
+
+export function stampSegmentVerdicts<T extends Pick<ScreenTimeTimelineSegment, "url" | "appName" | "label">>(
+  segments: T[],
+  cache?: ProductivityCache | null,
+): Array<T & { verdict: FocusVerdict }> {
+  if (!cache) return segments.map((segment) => ({ ...segment, verdict: "Unrated" as const }));
+  return segments.map((segment) => ({ ...segment, verdict: focusVerdictForSegment(segment, cache) }));
+}
+
+/** Share rows for Productive, Neutral, Distracting, and any time still unrated. */
+export function productivityBreakdown(
+  segments: Array<Pick<ScreenTimeTimelineSegment, "start" | "end" | "verdict">>,
+): ScreenTimeAppBreakdown[] {
+  const totals: Record<FocusVerdict, number> = { Productive: 0, Neutral: 0, Distracting: 0, Unrated: 0 };
+  let total = 0;
+  for (const segment of segments) {
+    const seconds = Math.max(0, (Date.parse(segment.end) - Date.parse(segment.start)) / 1000);
+    const verdict = segment.verdict ?? "Unrated";
+    totals[verdict in totals ? verdict : "Unrated"] += seconds;
+    total += seconds;
+  }
+  const ranked = FOCUS_VERDICTS
+    .filter((verdict) => totals[verdict] > 0)
+    .sort((a, b) => totals[b] - totals[a])
+    .map((verdict) => focusRow(verdict, totals[verdict], total));
+  if (totals.Unrated > 0) ranked.push(focusRow("Unrated", totals.Unrated, total));
+  return ranked;
+}
+
+function focusRow(verdict: FocusVerdict, seconds: number, total: number): ScreenTimeAppBreakdown {
+  return {
+    key: verdict,
+    label: verdict,
+    subtitle: "",
+    category: verdict,
+    seconds,
+    percentage: total ? seconds / total : 0,
+  };
 }
 
 /** A session that just started has no duration yet. Give it one second so the current app shows up immediately. */

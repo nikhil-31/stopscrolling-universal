@@ -378,6 +378,24 @@ describe("InsightsScreen", () => {
     expect(screen.getByRole("button", { name: /^github\.com,/ })).toBeVisible();
   });
 
+  it("shows focus totals and filters the day to that verdict", async () => {
+    const user = userEvent.setup();
+    const day = dayFilterState();
+    const listSegments = (day.snapshot?.listSegments ?? []).map((segment: ScreenTimeTimelineSegment, index: number) => ({
+      ...segment,
+      verdict: index === 0 ? "Productive" as const : "Distracting" as const,
+    }));
+    render(<InsightsScreen state={snapshot({
+      ...day,
+      snapshot: day.snapshot ? { ...day.snapshot, listSegments, timelineSegments: listSegments } : undefined,
+    })} />);
+    expect(screen.getByRole("button", { name: "Highlight Productive on the timeline" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Highlight Distracting on the timeline" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Highlight Productive on the timeline" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Showing only Productive");
+    expect(screen.queryByText("Safari")).toBeNull();
+  });
+
   it("clears the app filter when the same row is clicked again", async () => {
     const user = userEvent.setup();
     render(<InsightsScreen state={snapshot(dayFilterState())} />);

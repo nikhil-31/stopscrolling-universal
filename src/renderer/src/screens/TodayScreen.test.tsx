@@ -197,6 +197,37 @@ describe("TodayScreen app filter", () => {
   });
 });
 
+describe("TodayScreen focus filter", () => {
+  it("shows productive and distracting totals and filters the timeline", async () => {
+    const user = userEvent.setup();
+    const base = snapshot();
+    const listSegments = [
+      { ...base.snapshot.listSegments[0], verdict: "Productive" as const },
+      { ...base.snapshot.listSegments[1], verdict: "Distracting" as const },
+    ];
+    const state = snapshot({
+      snapshot: { ...base.snapshot, listSegments, timelineSegments: listSegments },
+      timelines: [{
+        ...base.timelines[0],
+        segments: listSegments,
+      }],
+    });
+    render(<TodayScreen state={state} />);
+    expect(screen.getByRole("region", { name: "Focus" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Highlight Productive on the timeline" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Highlight Distracting on the timeline" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Highlight Distracting on the timeline" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Showing only Distracting");
+    expect(screen.queryByText("Development")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Showing only Cursor");
+    expect(screen.queryByRole("button", { name: "Highlight Distracting on the timeline" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Highlight Productive on the timeline" })).toBeVisible();
+  });
+});
+
 describe("TodayScreen device lines", () => {
   it("shows a line per device on the timeline and follows the app filter", async () => {
     const user = userEvent.setup();

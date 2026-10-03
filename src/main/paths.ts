@@ -50,6 +50,14 @@ export function googleTokensPath() {
   return join(userDataDir(), "google-calendar.dat");
 }
 
+export function gameMatchPath() {
+  return join(userDataDir(), "game-matches.json");
+}
+
+export function gameAssetPath() {
+  return join(userDataDir(), "game-assets");
+}
+
 export function networkLogPath() {
   return join(userDataDir(), "network.log");
 }

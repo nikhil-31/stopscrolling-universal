@@ -1,5 +1,6 @@
 import { app, BrowserWindow, crashReporter } from "electron";
 import { AppController } from "./app-controller";
+import { installGameAssetProtocol, registerGameAssetScheme } from "./game-asset-protocol";
 import { installMainCrashHandlers, localCrashReporterOptions, logElectronChildProcessGone } from "./crash-reporting";
 import { installApplicationMenu, installIpc } from "./ipc";
 import { isQuitting, markQuitting, shouldShowWindowOnLaunch, syncLaunchAtLogin } from "./lifecycle";
@@ -13,10 +14,12 @@ app.on("child-process-gone", (_event, details) => {
 });
 
 app.setName("Stop Scrolling");
+registerGameAssetScheme();
 
 const controller = new AppController();
 
 app.whenReady().then(async () => {
+  installGameAssetProtocol(controller.gameAssets);
   installIpc(controller);
   installApplicationMenu(controller);
   await controller.boot();

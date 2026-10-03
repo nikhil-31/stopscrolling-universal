@@ -98,7 +98,7 @@ export function installIpc(controller: AppController) {
     void controller.refreshVisibleRange();
   });
   ipcMain.on(IPC.syncAll, () => {
-    void controller.tracker.flushOutbox();
+    void controller.syncPending();
   });
   ipcMain.on(IPC.pullFromServer, () => {
     void controller.tracker.pullFromServer().then(() => controller.refreshVisibleRange());
@@ -225,6 +225,18 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.googleDisconnect, () => {
     controller.google.disconnect();
     controller.updateSettings({ showGoogleCalendarEvents: false });
+  });
+  ipcMain.on(IPC.linkRiot, (_event, riotId: string) => {
+    void controller.gameSync.linkRiot(riotId);
+  });
+  ipcMain.on(IPC.disconnectRiot, () => {
+    void controller.gameSync.disconnectRiot();
+  });
+  ipcMain.on(IPC.connectSteam, () => {
+    void controller.gameSync.connectSteam();
+  });
+  ipcMain.on(IPC.disconnectSteam, () => {
+    void controller.gameSync.disconnectSteam();
   });
   ipcMain.on(IPC.setCalendarView, (_event, view: CalendarView) => {
     controller.setCalendarView(view);
@@ -374,7 +386,7 @@ export function installApplicationMenu(controller: AppController) {
         {
           label: "Sync All Unsynced",
           click: () => {
-            void controller.tracker.flushOutbox();
+            void controller.syncPending();
           },
         },
       ],

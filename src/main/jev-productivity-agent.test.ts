@@ -154,6 +154,85 @@ describe("JevProductivityAgent", () => {
     expect(agent.verdictFor("web|youtube.com", "web|youtube.com#One")?.source).toBe("user");
   });
 
+  it("keeps the live app ahead of period ratings and does not mark the agent as reviewing", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => {
+      await gate;
+      return jsonResponse(answer("Neutral"));
+    });
+    const agent = new JevProductivityAgent({
+      getApiKey: () => "test-key",
+      cachePath: cachePath(),
+      fetch,
+      concurrency: 1,
+    });
+    agent.enqueueBackground([input({ key: "web|news.example#One", title: "One" }), input({ key: "web|news.example#Two", title: "Two" })]);
+    expect(agent.reviewing).toBe(false);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    agent.enqueueLive(input({ key: "app|Cursor#main.ts", title: "main.ts", breakdownKey: "app|Cursor" }));
+    release();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    const titles = fetch.mock.calls.map((call) => JSON.parse(String(call[1]?.body)).state.title);
+    expect(titles).toEqual(["One", "main.ts", "Two"]);
+  });
+
+  it("leaves a queued live app in place when the daily cap is full", async () => {
+    let now = Date.parse("2026-09-20T00:00:00.000Z");
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => {
+      await gate;
+      return jsonResponse(answer("Neutral"));
+    });
+    const agent = new JevProductivityAgent({
+      getApiKey: () => "test-key",
+      cachePath: cachePath(),
+      fetch,
+      concurrency: 1,
+      dailyCap: 1,
+      now: () => new Date(now),
+    });
+    agent.enqueue(input({ key: "a", title: "first" }));
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    agent.enqueueLive(input({ key: "live", title: "live app" }));
+    agent.enqueueBackground([input({ key: "background", title: "background app" })]);
+    now = Date.parse("2026-09-21T00:00:00.000Z");
+    release();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    const second = JSON.parse(String(fetch.mock.calls[1]?.[1]?.body));
+    expect(second.state.title).toBe("live app");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not requeue a verdict you set yourself", () => {
+    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => jsonResponse(answer("Distracting")));
+    const agent = new JevProductivityAgent({ getApiKey: () => "test-key", cachePath: cachePath(), fetch });
+    const rated = input();
+    agent.override(rated.key, "Productive");
+    agent.enqueueBackground([rated]);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(agent.lookup(rated.key)?.source).toBe("user");
+  });
+
+  it("finishes a review when the daily cap leaves titles queued", async () => {
+    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => jsonResponse(answer("Neutral")));
+    const agent = new JevProductivityAgent({
+      getApiKey: () => "test-key",
+      cachePath: cachePath(),
+      fetch,
+      dailyCap: 1,
+    });
+    await agent.reviewAll([input({ key: "a", title: "a" }), input({ key: "b", title: "b" })]);
+    expect(agent.reviewing).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(agent.lookup("b")).toBeUndefined();
+  });
+
   it("reports progress while reviewing", async () => {
     const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => jsonResponse(answer("Productive")));
     const agent = new JevProductivityAgent({ getApiKey: () => "test-key", cachePath: cachePath(), fetch });

@@ -59,6 +59,10 @@ interface StopScrollingDesktop {
     Promise<{ redeemed: boolean; nonce: string; redeemed_at: string }>;
   googleConnect: () => void;
   googleDisconnect: () => void;
+  linkRiot: (riotId: string) => void;
+  disconnectRiot: () => void;
+  connectSteam: () => void;
+  disconnectSteam: () => void;
   setCalendarView: (view: import("@shared/calendar-workspace").CalendarView) => void;
   upsertCalendarLabel: (patch: Partial<import("@shared/calendar-workspace").CalendarLabel> & Pick<import("@shared/calendar-workspace").CalendarLabel, "name">) => void;
   deleteCalendarLabel: (id: string) => void;

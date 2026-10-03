@@ -1,5 +1,6 @@
 import { websiteHostname } from "./browser";
 import { overlayCategory, type JevCategoryCache } from "./jev";
+import { stampSegmentVerdicts, type ProductivityCache } from "./jev-productivity";
 import { deviceKey, resolvedDeviceName } from "./device";
 import { persistenceKey } from "./payload";
 import {
@@ -638,6 +639,7 @@ export function entriesToTimelines(
   anchor: Date,
   extraDeviceKeys: Array<{ platform: string; name: string; timeZone?: string }> = [],
   bounds?: { start: Date; end: Date },
+  productivityCache?: ProductivityCache | null,
 ): ScreenTimeDeviceTimeline[] {
   const window = bounds ?? periodBounds("day", anchor);
   const windowStart = window.start.getTime();
@@ -652,6 +654,9 @@ export function entriesToTimelines(
     const list = byKey.get(key) ?? [];
     list.push(segmentFromEntry(entry));
     byKey.set(key, list);
+  }
+  if (productivityCache) {
+    for (const [key, segments] of byKey) byKey.set(key, stampSegmentVerdicts(segments, productivityCache));
   }
   for (const extra of extraDeviceKeys) {
     const key = deviceKey(extra.platform, extra.name);
@@ -775,6 +780,19 @@ export function blockMatchesApp(block: ScreenTimeSessionBlock, appKey: string) {
 export function filterSegmentsForApp(segments: ScreenTimeTimelineSegment[], appKey: string) {
   if (!appKey) return segments;
   return segments.filter((segment) => appBreakdownKey(segment) === appKey);
+}
+
+export function filterSegmentsForVerdict(segments: ScreenTimeTimelineSegment[], verdict: string) {
+  if (!verdict) return segments;
+  return segments.filter((segment) => (segment.verdict ?? "Unrated") === verdict);
+}
+
+export function filterTimelinesForVerdict(timelines: ScreenTimeDeviceTimeline[], verdict: string) {
+  if (!verdict) return timelines;
+  return timelines.map((timeline) => {
+    const segments = filterSegmentsForVerdict(timeline.segments, verdict);
+    return { ...timeline, segments, blocks: blockSegments(segments) };
+  });
 }
 
 export function filterTimelinesForApp(timelines: ScreenTimeDeviceTimeline[], appKey: string) {
@@ -1117,6 +1135,7 @@ export function snapshotFromRange(
   bucketSpec?: { period: InsightsPeriod; anchor: Date },
   categoryCache?: JevCategoryCache | null,
   timeZone = localTimeZone(),
+  productivityCache?: ProductivityCache | null,
 ): ScreenTimeSnapshot {
   const startMs = bounds.start.getTime();
   const endMs = bounds.end.getTime();
@@ -1137,7 +1156,8 @@ export function snapshotFromRange(
         : { ...segment, start: new Date(clipStart).toISOString(), end: new Date(clipEnd).toISOString() },
     );
   }
-  const breakdowns = buildBreakdowns(segments, categoryCache);
+  const stamped = productivityCache ? stampSegmentVerdicts(segments, productivityCache) : segments;
+  const breakdowns = buildBreakdowns(stamped, categoryCache);
   const useOverlaidCategories = Boolean(categoryCache && Object.keys(categoryCache).length && breakdowns.categories.length);
   const categories = useOverlaidCategories
     ? breakdowns.categories
@@ -1153,7 +1173,7 @@ export function snapshotFromRange(
   };
   const dailySum = sumTrackedSecondsInBounds(dailyTotals, bounds, timeZone);
   const buckets = bucketSpec
-    ? buildPeriodBuckets(segments, bucketSpec.period, bucketSpec.anchor, dailyTotals, timeZone)
+    ? buildPeriodBuckets(stamped, bucketSpec.period, bucketSpec.anchor, dailyTotals, timeZone)
     : [];
   const bucketSum = buckets.reduce((sum, bucket) => sum + bucket.seconds, 0);
   const totalSeconds = serverSummary?.trackedSecondsByDay
@@ -1168,8 +1188,8 @@ export function snapshotFromRange(
   return {
     totalSeconds,
     sessionCount: serverSummary?.sessionCount ?? segments.length,
-    timelineSegments: segments,
-    listSegments: segments,
+    timelineSegments: stamped,
+    listSegments: stamped,
     categories,
     apps,
     buckets,
@@ -1190,6 +1210,7 @@ export function snapshotFromEntries(
   },
   categoryCache?: JevCategoryCache | null,
   timeZone = localTimeZone(),
+  productivityCache?: ProductivityCache | null,
 ): ScreenTimeSnapshot {
   return snapshotFromRange(
     entries,
@@ -1198,6 +1219,7 @@ export function snapshotFromEntries(
     { period, anchor },
     categoryCache,
     timeZone,
+    productivityCache,
   );
 }
 

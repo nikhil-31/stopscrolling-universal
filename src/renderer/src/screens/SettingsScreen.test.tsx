@@ -56,6 +56,10 @@ beforeEach(() => {
     requestAccessibility: vi.fn(),
     googleConnect: vi.fn(),
     googleDisconnect: vi.fn(),
+    linkRiot: vi.fn(),
+    disconnectRiot: vi.fn(),
+    connectSteam: vi.fn(),
+    disconnectSteam: vi.fn(),
     upsertCalendarLabel: vi.fn(),
     deleteCalendarLabel: vi.fn(),
     syncAll: vi.fn(),
@@ -93,5 +97,19 @@ describe("Settings time zone", () => {
     render(<SettingsScreen state={snapshot(false)} />);
     expect(screen.getByTestId("settings-time-zone")).toBeDisabled();
     expect(screen.getByText("Sign in to save a time zone on your account.")).toBeVisible();
+  });
+
+  it("shows separate marks for Riot and Steam", () => {
+    render(<SettingsScreen state={snapshot(true)} />);
+    expect(screen.getByTestId("settings-riot-mark")).toBeVisible();
+    expect(screen.getByTestId("settings-steam-mark")).toBeVisible();
+  });
+
+  it("links a Riot ID", async () => {
+    const userEvents = userEvent.setup();
+    render(<SettingsScreen state={snapshot(true)} />);
+    await userEvents.type(screen.getByTestId("settings-riot-id"), "Player#NA1");
+    await userEvents.click(screen.getByTestId("settings-riot-link"));
+    expect(window.stopscrolling.linkRiot).toHaveBeenCalledWith("Player#NA1");
   });
 });

@@ -11,6 +11,7 @@ import type {
   MFAMethod,
   MFAPendingResponse,
   PeriodSummaryResponse,
+  GameMatchPayload,
   ScreenTimeApiPayload,
   ScreenTimeSyncSession,
   SyncDeviceStatus,
@@ -242,6 +243,41 @@ export class StopScrollingAPI {
     return this.request<{ inserted: number }>("api/events/bulk/", {
       method: "POST",
       body: JSON.stringify({ events }),
+    });
+  }
+
+  async linkRiotAccount(gameName: string, tagLine: string) {
+    return this.request<{ puuid: string; game_name: string; tag_line: string }>("api/games/riot/link/", {
+      method: "POST",
+      body: JSON.stringify({ game_name: gameName, tag_line: tagLine }),
+    });
+  }
+
+  async verifySteamOpenId(params: Record<string, string>) {
+    return this.request<{ steam_id64: string; persona_name?: string }>("api/games/steam/openid/", {
+      method: "POST",
+      body: JSON.stringify({ params }),
+    });
+  }
+
+  async riotMatches(since: string) {
+    const search = new URLSearchParams({ since });
+    const body = await this.request<{ matches?: GameMatchPayload[] }>(`api/games/riot/matches/?${search.toString()}`);
+    return body.matches ?? [];
+  }
+
+  async steamPlaytime(appId: string, endedAt: string) {
+    const search = new URLSearchParams({ app_id: appId, ended_at: endedAt });
+    const body = await this.request<{ match?: GameMatchPayload | null }>(
+      `api/games/steam/playtime/?${search.toString()}`,
+    );
+    return body.match ?? null;
+  }
+
+  async postMatchesBulk(matches: GameMatchPayload[]) {
+    return this.request<{ inserted: number }>("api/matches/bulk/", {
+      method: "POST",
+      body: JSON.stringify({ matches }),
     });
   }
 
