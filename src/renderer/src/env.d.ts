@@ -48,7 +48,17 @@ interface StopScrollingDesktop {
   createBlocklist: (input: import("@shared/types").BlocklistWritePayload) => void;
   updateBlocklist: (input: import("@shared/types").BlocklistUpdatePayload) => void;
   createBlockingSchedule: (input: import("@shared/types").BlockingScheduleWritePayload) =>
-    Promise<{ ok: true } | { ok: false; message: string }>;
+    Promise<{ ok: true; scheduleId: string } | { ok: false; message: string }>;
+  listBlockScreenPresets: () => Promise<Array<{ id: string; label: string; imageUrl: string }>>;
+  getBlockScreens: () => Promise<{
+    default: { imageFile: string; header: string; detail: string; imageUrl: string };
+    sessions: Record<string, { imageFile: string; header: string; detail: string; imageUrl: string }>;
+  }>;
+  chooseBlockScreenImage: () => Promise<
+    { imageFile: string; header: string; detail: string; imageUrl: string } | { error: string } | null
+  >;
+  saveDefaultBlockScreen: (fields: { imageFile: string; header: string; detail: string }) => Promise<unknown>;
+  saveSessionBlockScreen: (input: { scheduleId: string; imageFile: string; header: string; detail: string }) => Promise<unknown>;
   updateBlockingSchedule: (input: import("@shared/types").BlockingScheduleUpdatePayload) => void;
   deleteBlockingSchedule: (scheduleId: string) => void;
   refreshBlockingStatus: () => Promise<void>;

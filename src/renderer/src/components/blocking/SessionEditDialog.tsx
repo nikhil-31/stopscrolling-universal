@@ -1,9 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { scheduleToComposerDraft } from "@shared/blocking";
 import type { Blocklist, BlockingSchedule, DeviceListEntry } from "@shared/types";
 import { X } from "lucide-react";
 import { Button, IconButton } from "../ui";
+import { emptyBlockScreenDraft, type BlockScreenDraft } from "./BlockScreenEditor";
 import { SessionComposer } from "./SessionComposer";
 
 export function SessionEditDialog({
@@ -19,6 +20,22 @@ export function SessionEditDialog({
   loading?: boolean;
   onClose: () => void;
 }) {
+  const [blockScreen, setBlockScreen] = useState<BlockScreenDraft>(emptyBlockScreenDraft);
+  useEffect(() => {
+    const load = window.stopscrolling.getBlockScreens;
+    if (!load) return;
+    let cancel = false;
+    void load().then((screens) => {
+      if (cancel) return;
+      const row = screens.sessions[schedule.schedule_id];
+      setBlockScreen(row
+        ? { header: row.header, detail: row.detail, imageFile: row.imageFile, imageUrl: row.imageUrl }
+        : emptyBlockScreenDraft());
+    }).catch(() => {});
+    return () => {
+      cancel = true;
+    };
+  }, [schedule.schedule_id]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -55,12 +72,19 @@ export function SessionEditDialog({
           extraDevices={schedule.devices}
           submitLabel="Save session"
           loading={loading}
+          initialScreen={blockScreen}
           onCancel={onClose}
-          onSubmit={(payload) => {
+          onSubmit={(payload, screen) => {
             window.stopscrolling.updateBlockingSchedule({
               schedule_id: schedule.schedule_id,
               ...payload,
               is_active: schedule.is_active,
+            });
+            void window.stopscrolling.saveSessionBlockScreen?.({
+              scheduleId: schedule.schedule_id,
+              header: screen.header,
+              detail: screen.detail,
+              imageFile: screen.imageFile,
             });
             onClose();
           }}

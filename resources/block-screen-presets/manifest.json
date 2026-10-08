@@ -1,0 +1,22 @@
+[
+  {
+    "file": "glow.png",
+    "label": "Glow"
+  },
+  {
+    "file": "leaf.png",
+    "label": "Leaf"
+  },
+  {
+    "file": "pulse.gif",
+    "label": "Pulse"
+  },
+  {
+    "file": "rings.gif",
+    "label": "Rings"
+  },
+  {
+    "file": "rise.gif",
+    "label": "Rise"
+  }
+]

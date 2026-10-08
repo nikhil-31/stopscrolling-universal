@@ -36,6 +36,12 @@ body,
   height: auto;
 }
 
+.freedom-custom-image {
+  width: auto;
+  max-width: min(420px, 70vw);
+  max-height: 40vh;
+}
+
 .freedom-copy {
   display: flex;
   flex-direction: column;

@@ -1,7 +1,19 @@
 import { BrowserWindow } from "electron";
 import { hideFreedomScreen, showFreedomScreen } from "./freedom-window";
+import {
+  blockScreenImagePath,
+  importBlockScreenImage,
+  listBlockScreenPresets,
+  loadBlockScreens,
+  presentBlockScreen,
+  resolveBlockScreen,
+  saveDefaultBlockScreen,
+  saveSessionBlockScreen,
+  type BlockScreenFields,
+} from "./blocking/block-screens";
+import { freedomPageUrl, setBlockScreenMediaRoot, setFreedomContent } from "./blocking/freedom-page";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { normalizedEmail, signInError, signUpError } from "@shared/auth-validation";
 import {
   approveBlocks,
@@ -89,7 +101,7 @@ import { syncLaunchAtLogin } from "./lifecycle";
 import { GameAssetCache } from "./game-asset-cache";
 import { GameMatchSync } from "./game-match-sync";
 import { logObservability } from "./logger";
-import { deviceName as localDeviceName, gameAssetPath, gameMatchPath, hiddenDevicesPath, networkLogPath, observabilityLogPath } from "./paths";
+import { deviceName as localDeviceName, gameAssetPath, gameMatchPath, hiddenDevicesPath, networkLogPath, observabilityLogPath, userDataDir } from "./paths";
 import { loadSettings, saveSettings } from "./settings-store";
 import { loadTimesheetSummaries, saveTimesheetSummaries } from "./timesheet-summary-store";
 import { clearTokens, loadSessionUser, loadTokens, saveSessionUser, saveTokens } from "./token-store";
@@ -271,7 +283,11 @@ export class AppController {
     schedules: BlockingUiState["schedules"];
   }> | null = null;
   readonly helper: BlockingHelperBridge;
-  readonly localEnforcer = new LocalEnforcer(undefined, () => showFreedomScreen());
+  readonly localEnforcer = new LocalEnforcer(
+    undefined,
+    () => showFreedomScreen(),
+    (scheduleId) => this.prepareFreedomScreen(scheduleId),
+  );
   onBlockingStateChanged: (() => void) | null = null;
 
   constructor(helper = new BlockingHelperBridge()) {
@@ -1371,7 +1387,71 @@ export class AppController {
     }
   }
 
-  async createBlockingSchedule(input: BlockingScheduleWritePayload): Promise<{ ok: true } | { ok: false; message: string }> {
+  private blockScreenDir() {
+    const dir = join(userDataDir(), "block-screens");
+    setBlockScreenMediaRoot(dir);
+    return dir;
+  }
+
+  private prepareFreedomScreen(scheduleId: string) {
+    const dir = this.blockScreenDir();
+    const resolved = resolveBlockScreen(scheduleId, loadBlockScreens(dir));
+    setFreedomContent({
+      header: resolved.header,
+      detail: resolved.detail,
+      imagePath: blockScreenImagePath(dir, resolved.imageFile),
+    });
+  }
+
+  private async blockScreenBaseUrl() {
+    try {
+      return await freedomPageUrl();
+    } catch {
+      return "";
+    }
+  }
+
+  async blockScreens() {
+    const dir = this.blockScreenDir();
+    const store = loadBlockScreens(dir);
+    const base = await this.blockScreenBaseUrl();
+    const sessions: Record<string, ReturnType<typeof presentBlockScreen>> = {};
+    for (const [id, fields] of Object.entries(store.sessions)) {
+      sessions[id] = presentBlockScreen(base, fields);
+    }
+    return { default: presentBlockScreen(base, store.default), sessions };
+  }
+
+  async blockScreenPresets() {
+    const base = await this.blockScreenBaseUrl();
+    return listBlockScreenPresets().map((item) => ({
+      id: item.file,
+      label: item.label,
+      imageUrl: base ? `${base}presets/${encodeURIComponent(item.file)}` : "",
+    }));
+  }
+
+  async chooseBlockScreenImage(sourcePath: string) {
+    const dir = this.blockScreenDir();
+    const imageFile = importBlockScreenImage(dir, sourcePath);
+    const base = await this.blockScreenBaseUrl();
+    return presentBlockScreen(base, { imageFile, header: "", detail: "" });
+  }
+
+  async saveDefaultScreen(fields: BlockScreenFields) {
+    const dir = this.blockScreenDir();
+    const store = saveDefaultBlockScreen(dir, fields);
+    const base = await this.blockScreenBaseUrl();
+    return presentBlockScreen(base, store.default);
+  }
+
+  async saveSessionScreen(scheduleId: string, fields: BlockScreenFields) {
+    const dir = this.blockScreenDir();
+    saveSessionBlockScreen(dir, scheduleId, fields);
+    return this.blockScreens();
+  }
+
+  async createBlockingSchedule(input: BlockingScheduleWritePayload): Promise<{ ok: true; scheduleId: string } | { ok: false; message: string }> {
     if (!this.auth.user) {
       const message = "Sign in on the Account screen to create sessions.";
       this.blocking.statusMessage = message;
@@ -1379,10 +1459,10 @@ export class AppController {
       return { ok: false, message };
     }
     try {
-      await this.api.createBlockingSchedule(input);
+      const created = await this.api.createBlockingSchedule(input);
       this.statusMessage = "Session created.";
       await this.refreshBlocking();
-      return { ok: true };
+      return { ok: true, scheduleId: created.schedule_id };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not create session.";
       logObservability(`Blocking session create failed: ${message}`);
@@ -1417,6 +1497,7 @@ export class AppController {
     }
     try {
       await this.api.deleteBlockingSchedule(scheduleId);
+      saveSessionBlockScreen(this.blockScreenDir(), scheduleId, { imageFile: "", header: "", detail: "" });
       this.statusMessage = "Session deleted.";
       this.lastPolicySignature = null;
       await this.refreshBlocking();

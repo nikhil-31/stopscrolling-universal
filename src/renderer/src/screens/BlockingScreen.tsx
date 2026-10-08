@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   emptySessionDraft,
   formatRemaining,
@@ -16,10 +16,7 @@ import { formatClock } from "@shared/timeline";
 import { useClockFormat } from "../clock-format";
 import {
   Plus,
-  RefreshCw,
   Shield,
-  ShieldAlert,
-  ShieldCheck,
   ShieldOff,
   Trash2,
 } from "lucide-react";
@@ -59,10 +56,6 @@ export function BlockingScreen({
   const [showCreateBlocklist, setShowCreateBlocklist] = useState(false);
   const [selectedBlocklist, setSelectedBlocklist] = useState<Blocklist | null>(null);
   const [inventoryLoading, setInventoryLoading] = useState(false);
-  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
-  const [supportToken, setSupportToken] = useState("");
-  const [supportDeviceID, setSupportDeviceID] = useState("");
-  const [diagnosticsStatus, setDiagnosticsStatus] = useState<string | null>(null);
 
   const blocking = state.blocking ?? { schedules: [], blocklists: [], statusMessage: "", loading: false };
   const registeredDevices = (state.devices ?? []).filter(
@@ -113,24 +106,6 @@ export function BlockingScreen({
       await window.stopscrolling.refreshBlockingInventory();
     } finally {
       setInventoryLoading(false);
-    }
-  }
-
-  async function redeemSupportToken(event: FormEvent) {
-    event.preventDefault();
-    if (!occurrence || !supportToken.trim() || !supportDeviceID.trim()) return;
-    setDiagnosticsStatus("Submitting signed support token…");
-    try {
-      await window.stopscrolling.redeemBlockingBypass({
-        token: supportToken.trim(),
-        device_id: supportDeviceID.trim(),
-        occurrence_id: occurrence.occurrence_id,
-        action: "end",
-      });
-      setSupportToken("");
-      setDiagnosticsStatus("Support token redeemed.");
-    } catch (error) {
-      setDiagnosticsStatus(error instanceof Error ? error.message : "Support token redemption failed.");
     }
   }
 
@@ -202,14 +177,22 @@ export function BlockingScreen({
                 loading={blocking.loading}
                 submitLabel="Create blocking session"
                 submitError={createError}
-                onSubmit={(payload) => {
+                onSubmit={(payload, blockScreen) => {
                   setCreateError(null);
-                  void window.stopscrolling.createBlockingSchedule(payload).then((result) => {
-                    if (result.ok) {
-                      setShowCreateSession(false);
+                  void window.stopscrolling.createBlockingSchedule(payload).then(async (result) => {
+                    if (!result.ok) {
+                      setCreateError(result.message);
                       return;
                     }
-                    setCreateError(result.message);
+                    if (result.scheduleId && (blockScreen.header.trim() || blockScreen.detail.trim() || blockScreen.imageFile)) {
+                      await window.stopscrolling.saveSessionBlockScreen({
+                        scheduleId: result.scheduleId,
+                        header: blockScreen.header,
+                        detail: blockScreen.detail,
+                        imageFile: blockScreen.imageFile,
+                      });
+                    }
+                    setShowCreateSession(false);
                   });
                 }}
               />
@@ -315,123 +298,6 @@ export function BlockingScreen({
                 <Badge>{list.entry_count}</Badge>
               </button>
             ))}
-          </Grouped>
-        </div>
-
-        <div className="blocking-column">
-          <Grouped
-            title="Blocking Status"
-            description="Native helper permissions and enforcement"
-            action={(
-              <Badge tone={enforcementTone} dot={enforcementTone === "success"}>
-                {enforcementLabel.replace("Blocking ", "")}
-              </Badge>
-            )}
-          >
-            <div className="blocking-helper-status">
-              {enforcementTone === "success"
-                ? <ShieldCheck size={20} aria-hidden="true" />
-                : <ShieldAlert size={20} aria-hidden="true" />}
-              <span className="row-copy">
-                <strong>{enforcementLabel}</strong>
-                <span className="row-subtitle">
-                  {enforcement?.connected
-                    ? helperReady
-                      ? `Helper protocol ${enforcement.protocolVersion} connected`
-                      : "Blocking from this app until the system helper is approved."
-                    : capabilities?.reason || enforcement?.lastError || "Complete helper installation and required system permissions."}
-                </span>
-              </span>
-            </div>
-            <ol className="blocking-setup-checklist" data-testid="blocking-setup-checklist">
-              <li data-complete={blocking.hostSetup?.helperRegistered ? "true" : "false"}>
-                Helper registered
-              </li>
-              <li data-complete={blocking.hostSetup?.networkFilterApproved ? "true" : "false"}>
-                Network Filter approved
-              </li>
-              <li data-complete={blocking.hostSetup?.endpointSecurityApproved ? "true" : "false"}>
-                Endpoint Security / Full Disk Access approved
-              </li>
-            </ol>
-            {occurrence ? (
-              <div className="blocking-occurrence" aria-label="Active blocking occurrence">
-                <div className="inspector-kicker">Active occurrence</div>
-                <strong>{occurrence.schedule_name}</strong>
-                <span className="muted">
-                  {new Date(occurrence.start_at).toLocaleString()} – {new Date(occurrence.end_at).toLocaleString()}
-                </span>
-                <span className="muted">{occurrence.entries.length} enforced {occurrence.entries.length === 1 ? "entry" : "entries"}</span>
-                {strictActive ? <Badge tone="danger">Strict Mode locked</Badge> : <Badge tone="success">Normal session</Badge>}
-              </div>
-            ) : null}
-            <div className="form-actions">
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                icon={RefreshCw}
-                onClick={() => void window.stopscrolling.activateNativeBlocking()}
-              >
-                Retry
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => void window.stopscrolling.refreshBlockingStatus()}
-              >
-                Check setup
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => void refreshInventory()}
-                disabled={inventoryLoading || capabilities?.applicationInventory === false}
-              >
-                {inventoryLoading ? "Loading apps…" : "Refresh apps"}
-              </Button>
-            </div>
-            <details
-              className="blocking-diagnostics"
-              open={diagnosticsOpen}
-              onToggle={(event) => setDiagnosticsOpen(event.currentTarget.open)}
-            >
-              <summary>Support diagnostics</summary>
-              <p className="muted">For server-signed support tokens supplied by Stop Scrolling support.</p>
-              {!occurrence ? (
-                <p className="muted">No active occurrence is available for diagnostics.</p>
-              ) : (
-                <form className="form" onSubmit={(event) => void redeemSupportToken(event)}>
-                  <label className="field">
-                    <span>Signed support token</span>
-                    <textarea
-                      value={supportToken}
-                      onChange={(event) => setSupportToken(event.target.value)}
-                      required
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Device ID</span>
-                    <input
-                      value={supportDeviceID}
-                      onChange={(event) => setSupportDeviceID(event.target.value)}
-                      required
-                    />
-                  </label>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    variant="secondary"
-                    disabled={!supportToken.trim() || !supportDeviceID.trim() || capabilities?.bypassRedemption === false}
-                  >
-                    Redeem signed token
-                  </Button>
-                </form>
-              )}
-              {diagnosticsStatus ? <p role="status">{diagnosticsStatus}</p> : null}
-            </details>
           </Grouped>
         </div>
       </div>

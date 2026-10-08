@@ -71,7 +71,21 @@ const api = {
   createBlocklist: (input: import("@shared/types").BlocklistWritePayload) => ipcRenderer.send(IPC.createBlocklist, input),
   updateBlocklist: (input: import("@shared/types").BlocklistUpdatePayload) => ipcRenderer.send(IPC.updateBlocklist, input),
   createBlockingSchedule: (input: import("@shared/types").BlockingScheduleWritePayload) =>
-    ipcRenderer.invoke(IPC.createBlockingSchedule, input) as Promise<{ ok: true } | { ok: false; message: string }>,
+    ipcRenderer.invoke(IPC.createBlockingSchedule, input) as Promise<{ ok: true; scheduleId: string } | { ok: false; message: string }>,
+  listBlockScreenPresets: () => ipcRenderer.invoke(IPC.listBlockScreenPresets) as Promise<
+    Array<{ id: string; label: string; imageUrl: string }>
+  >,
+  getBlockScreens: () => ipcRenderer.invoke(IPC.getBlockScreens) as Promise<{
+    default: { imageFile: string; header: string; detail: string; imageUrl: string };
+    sessions: Record<string, { imageFile: string; header: string; detail: string; imageUrl: string }>;
+  }>,
+  chooseBlockScreenImage: () => ipcRenderer.invoke(IPC.chooseBlockScreenImage) as Promise<
+    { imageFile: string; header: string; detail: string; imageUrl: string } | { error: string } | null
+  >,
+  saveDefaultBlockScreen: (fields: { imageFile: string; header: string; detail: string }) =>
+    ipcRenderer.invoke(IPC.saveDefaultBlockScreen, fields),
+  saveSessionBlockScreen: (input: { scheduleId: string; imageFile: string; header: string; detail: string }) =>
+    ipcRenderer.invoke(IPC.saveSessionBlockScreen, input),
   updateBlockingSchedule: (input: import("@shared/types").BlockingScheduleUpdatePayload) => ipcRenderer.send(IPC.updateBlockingSchedule, input),
   deleteBlockingSchedule: (scheduleId: string) => ipcRenderer.send(IPC.deleteBlockingSchedule, scheduleId),
   refreshBlockingStatus: () => ipcRenderer.invoke(IPC.refreshBlockingStatus),

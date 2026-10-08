@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { effectiveTimeZone, localTimeZoneLabel } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
 import {
@@ -21,6 +21,67 @@ import {
   Toggle,
 } from "../components/ui";
 import { GameMark } from "../components/GameMark";
+import { BlockScreenEditor, emptyBlockScreenDraft, type BlockScreenDraft } from "../components/blocking/BlockScreenEditor";
+
+function BlockedScreenSettings() {
+  const [screenDraft, setScreenDraft] = useState<BlockScreenDraft>(emptyBlockScreenDraft);
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    const load = window.stopscrolling.getBlockScreens;
+    if (!load) return;
+    void load().then((screens) => {
+      setScreenDraft({
+        header: screens.default.header,
+        detail: screens.default.detail,
+        imageFile: screens.default.imageFile,
+        imageUrl: screens.default.imageUrl,
+      });
+    }).catch(() => {});
+  }, []);
+
+  return (
+    <Grouped
+      title="Blocked screen"
+      description="Shown for every session that does not set its own image, header, and detail."
+    >
+      <BlockScreenEditor
+        value={screenDraft}
+        onChange={setScreenDraft}
+        hint="Leave a field blank to keep the built-in blue page for that part."
+      />
+      <div className="block-screen-actions">
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          onClick={() => {
+            void window.stopscrolling.saveDefaultBlockScreen({
+              header: screenDraft.header,
+              detail: screenDraft.detail,
+              imageFile: screenDraft.imageFile,
+            }).then(() => setStatus("Blocked screen saved."));
+          }}
+        >
+          Save blocked screen
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            const cleared = emptyBlockScreenDraft();
+            setScreenDraft(cleared);
+            void window.stopscrolling.saveDefaultBlockScreen(cleared).then(() => setStatus("Using the built-in screen."));
+          }}
+        >
+          Use built-in screen
+        </Button>
+      </div>
+      {status ? <p className="muted">{status}</p> : null}
+    </Grouped>
+  );
+}
 
 export function SettingsScreen({ state }: { state: AppSnapshot }) {
   const settings = state.settings;
@@ -41,6 +102,7 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
         <nav className="settings-nav" aria-label="Settings sections">
           <a href="#general">General</a>
           <a href="#appearance">Appearance</a>
+          <a href="#blocked-screen">Blocked screen</a>
           <a href="#work-hours">Work hours</a>
           <a href="#labels">Labels</a>
           <a href="#calendars">Calendars</a>
@@ -132,6 +194,10 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
                 ))}
               </div>
             </Grouped>
+          </section>
+
+          <section id="blocked-screen" className="settings-section">
+            <BlockedScreenSettings />
           </section>
 
           <section id="work-hours" className="settings-section">

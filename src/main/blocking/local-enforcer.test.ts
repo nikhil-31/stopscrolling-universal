@@ -35,7 +35,8 @@ describe("local enforcer", () => {
     const closeWebsite = vi.fn(async () => {});
     const quitApp = vi.fn(async () => {});
     const onBlocked = vi.fn();
-    const enforcer = new LocalEnforcer({ closeWebsite, quitApp }, onBlocked);
+    const prepareScreen = vi.fn();
+    const enforcer = new LocalEnforcer({ closeWebsite, quitApp }, onBlocked, prepareScreen);
     enforcer.setPolicy(policy());
 
     await enforcer.enforce({ appName: "Google Chrome", bundleID: "com.google.Chrome", url: "https://www.instagram.com/" });
@@ -44,6 +45,8 @@ describe("local enforcer", () => {
 
     expect(closeWebsite).toHaveBeenCalledWith("Google Chrome", "com.google.Chrome");
     expect(quitApp).toHaveBeenCalledWith("Messages", "com.apple.MobileSMS");
+    expect(prepareScreen).toHaveBeenCalledTimes(2);
+    expect(prepareScreen).toHaveBeenCalledWith("sched-1");
     expect(onBlocked).toHaveBeenCalledTimes(1);
   });
 

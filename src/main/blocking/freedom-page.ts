@@ -1,6 +1,38 @@
-import { createServer } from "node:http";
+import { createServer, type ServerResponse } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { extname, join } from "node:path";
+import { BUILTIN_DETAIL, BUILTIN_HEADER, blockScreenPresetPath } from "./block-screens";
+
+export interface FreedomContent {
+  header: string;
+  detail: string;
+  imagePath: string;
+}
+
+const IMAGE_NAME = /^[\w-]+\.(png|jpg|jpeg|gif|webp)$/;
+
+let mediaRoot = "";
+let content: FreedomContent = {
+  header: BUILTIN_HEADER,
+  detail: BUILTIN_DETAIL,
+  imagePath: "",
+};
+
+export function setBlockScreenMediaRoot(dir: string) {
+  mediaRoot = dir;
+}
+
+export function setFreedomContent(next: FreedomContent) {
+  content = {
+    header: next.header.trim() || BUILTIN_HEADER,
+    detail: next.detail.trim() || BUILTIN_DETAIL,
+    imagePath: next.imagePath,
+  };
+}
+
+export function freedomContent() {
+  return content;
+}
 
 function markPath() {
   const candidates = [
@@ -11,16 +43,46 @@ function markPath() {
   return candidates.find((path) => existsSync(path)) ?? "";
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function contentType(path: string) {
+  const ext = extname(path).toLowerCase();
+  if (ext === ".gif") return "image/gif";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  return "image/png";
+}
+
+function namedMediaPath(name: string) {
+  let decoded = name;
+  try {
+    decoded = decodeURIComponent(name);
+  } catch {
+    return "";
+  }
+  if (!mediaRoot || !IMAGE_NAME.test(decoded)) return "";
+  const path = join(mediaRoot, "images", decoded);
+  return existsSync(path) ? path : "";
+}
+
 function pageHtml() {
-  const path = markPath();
-  const image = path
-    ? `<img alt="" src="data:image/png;base64,${readFileSync(path).toString("base64")}" />`
-    : "";
+  const customImage = Boolean(content.imagePath && existsSync(content.imagePath));
+  const path = customImage ? "" : markPath();
+  const image = customImage
+    ? `<img class="custom" alt="" src="/media" />`
+    : path
+      ? `<img alt="" src="data:image/png;base64,${readFileSync(path).toString("base64")}" />`
+      : "";
   return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>You are free</title>
+  <title>${escapeHtml(content.header)}</title>
   <style>
     html, body { margin: 0; height: 100%; background: #3e648c; }
     body { display: flex; align-items: center; justify-content: center; }
@@ -28,6 +90,7 @@ function pageHtml() {
     .mark { gap: 36px; }
     .words { gap: 28px; }
     img { width: 132px; height: auto; }
+    img.custom { width: auto; max-width: min(420px, 70vw); max-height: 40vh; }
     p, .name {
       margin: 0;
       color: #eff9ee;
@@ -47,12 +110,25 @@ function pageHtml() {
   <div class="mark">
     ${image}
     <div class="words">
-      <p>You are free.<br />Do what matters.</p>
+      <p>${escapeHtml(content.header)}<br />${escapeHtml(content.detail)}</p>
       <p class="name">Stop Scrolling</p>
     </div>
   </div>
 </body>
 </html>`;
+}
+
+function serveFile(response: ServerResponse, path: string) {
+  if (!path || !existsSync(path)) {
+    response.writeHead(404);
+    response.end();
+    return;
+  }
+  response.writeHead(200, {
+    "content-type": contentType(path),
+    "cache-control": "no-store",
+  });
+  response.end(readFileSync(path));
 }
 
 let starting: Promise<string> | null = null;
@@ -61,7 +137,26 @@ let starting: Promise<string> | null = null;
 export function freedomPageUrl(): Promise<string> {
   if (!starting) {
     starting = new Promise((resolve, reject) => {
-      const server = createServer((_request, response) => {
+      const server = createServer((request, response) => {
+        const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
+        if (requestUrl.pathname === "/media") {
+          serveFile(response, content.imagePath);
+          return;
+        }
+        if (requestUrl.pathname.startsWith("/media/")) {
+          serveFile(response, namedMediaPath(requestUrl.pathname.slice("/media/".length)));
+          return;
+        }
+        if (requestUrl.pathname.startsWith("/presets/")) {
+          let name = requestUrl.pathname.slice("/presets/".length);
+          try {
+            name = decodeURIComponent(name);
+          } catch {
+            name = "";
+          }
+          serveFile(response, blockScreenPresetPath(name));
+          return;
+        }
         response.writeHead(200, {
           "content-type": "text/html; charset=utf-8",
           "cache-control": "no-store",

@@ -2343,7 +2343,7 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
 .blocking-page { display: grid; gap: 16px; }
 .blocking-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.72fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -2436,6 +2436,65 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
   color: var(--brand);
   background: var(--brand-soft);
   border-radius: 8px;
+}
+.block-screen-editor { display: grid; gap: 12px; }
+.block-screen-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.block-screen-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 8px;
+}
+.block-screen-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 6px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: #3e648c;
+  color: #eff9ee;
+  cursor: pointer;
+}
+.block-screen-choice img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+.block-screen-choice span { font-size: 11px; }
+.block-screen-choice.is-selected { outline: 2px solid #eff9ee; }
+.block-screen-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 16px;
+  border-radius: var(--radius-md);
+  background: #3e648c;
+  color: #eff9ee;
+  text-align: center;
+}
+.block-screen-preview img,
+.block-screen-preview-mark {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}
+.block-screen-preview-mark {
+  border-radius: 50%;
+  background: rgba(239, 249, 238, 0.28);
+}
+.block-screen-preview strong {
+  font-family: "New York", "Iowan Old Style", Palatino, Georgia, serif;
+  font-size: 22px;
+  font-weight: 500;
+}
+.block-screen-preview span { font-size: 14px; }
+.block-screen-preview em {
+  font-style: normal;
+  font-size: 12px;
+  letter-spacing: 0.04em;
 }
 .blocking-create { margin-top: 14px; max-width: none; }
 .blocking-create.form { width: 100%; max-width: none; }
@@ -2644,37 +2703,6 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
   line-height: 1.45;
 }
 .blocking-strict-confirmation input { flex: 0 0 auto; margin-top: 2px; accent-color: var(--danger); }
-.blocking-helper-status { display: flex; align-items: center; gap: 10px; }
-.blocking-setup-checklist {
-  display: grid;
-  gap: 6px;
-  margin: 12px 0 0;
-  padding-left: 18px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.45;
-}
-.blocking-setup-checklist li[data-complete="true"] {
-  color: var(--text-primary);
-}
-.blocking-occurrence {
-  display: grid;
-  gap: 5px;
-  margin-top: 12px;
-  padding: 12px;
-  background: var(--surface-subtle);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-}
-.blocking-occurrence .badge { justify-self: start; }
-.blocking-diagnostics {
-  margin-top: 12px;
-  color: var(--text-tertiary);
-  font-size: 10px;
-}
-.blocking-diagnostics summary { cursor: pointer; user-select: none; }
-.blocking-diagnostics .form { margin-top: 10px; }
-.blocking-diagnostics textarea { min-height: 72px; resize: vertical; }
 .inspector-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; }
 .inspector-header .inspector-actions .button { margin: 0; }
 

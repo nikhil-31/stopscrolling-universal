@@ -17,6 +17,7 @@ export class LocalEnforcer {
       quitApp: (appName: string, bundleID: string) => Promise<void>;
     } = { closeWebsite: closeBlockedWebsite, quitApp: quitBlockedApp },
     private readonly onBlocked: () => void = () => {},
+    private readonly prepareScreen: (scheduleId: string) => void = () => {},
   ) {}
 
   setPolicy(policy: BlockingPolicyResponse) {
@@ -44,8 +45,10 @@ export class LocalEnforcer {
     if (Number.isFinite(expires) && now >= expires) return;
     const decision = blockDecision(target, this.policy.occurrences, now);
     if (!decision) return;
+    const scheduleId = this.policy.occurrences.find((item) => item.occurrence_id === decision.occurrenceId)?.schedule_id ?? "";
     this.acting = true;
     try {
+      this.prepareScreen(scheduleId);
       if (decision.kind === "website") {
         await this.actions.closeWebsite(target.appName, target.bundleID);
       } else {

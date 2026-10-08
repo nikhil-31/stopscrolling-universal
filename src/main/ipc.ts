@@ -1,4 +1,4 @@
-import { BrowserWindow, Menu, app, ipcMain, shell } from "electron";
+import { BrowserWindow, Menu, app, dialog, ipcMain, shell } from "electron";
 import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { IPC } from "@shared/ipc";
@@ -184,6 +184,46 @@ export function installIpc(controller: AppController) {
   ipcMain.handle(IPC.createBlockingSchedule, (event, input: BlockingScheduleWritePayload) => {
     assertTrustedRenderer(event);
     return controller.createBlockingSchedule(input);
+  });
+  ipcMain.handle(IPC.getBlockScreens, (event) => {
+    assertTrustedRenderer(event);
+    return controller.blockScreens();
+  });
+  ipcMain.handle(IPC.listBlockScreenPresets, (event) => {
+    assertTrustedRenderer(event);
+    return controller.blockScreenPresets();
+  });
+  ipcMain.handle(IPC.chooseBlockScreenImage, async (event) => {
+    assertTrustedRenderer(event);
+    const result = await dialog.showOpenDialog({
+      title: "Choose a blocked screen image",
+      properties: ["openFile"],
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    try {
+      return await controller.chooseBlockScreenImage(result.filePaths[0]);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Could not use that image." };
+    }
+  });
+  ipcMain.handle(IPC.saveDefaultBlockScreen, (event, fields: { imageFile?: string; header?: string; detail?: string }) => {
+    assertTrustedRenderer(event);
+    return controller.saveDefaultScreen({
+      imageFile: typeof fields?.imageFile === "string" ? fields.imageFile : "",
+      header: typeof fields?.header === "string" ? fields.header : "",
+      detail: typeof fields?.detail === "string" ? fields.detail : "",
+    });
+  });
+  ipcMain.handle(IPC.saveSessionBlockScreen, (event, input: { scheduleId?: string; imageFile?: string; header?: string; detail?: string }) => {
+    assertTrustedRenderer(event);
+    const scheduleId = typeof input?.scheduleId === "string" ? input.scheduleId : "";
+    if (!scheduleId) return controller.blockScreens();
+    return controller.saveSessionScreen(scheduleId, {
+      imageFile: typeof input.imageFile === "string" ? input.imageFile : "",
+      header: typeof input.header === "string" ? input.header : "",
+      detail: typeof input.detail === "string" ? input.detail : "",
+    });
   });
   ipcMain.on(IPC.updateBlockingSchedule, (_event, input: BlockingScheduleUpdatePayload) => {
     void controller.updateBlockingSchedule(input);

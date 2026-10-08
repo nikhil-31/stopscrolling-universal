@@ -17,16 +17,8 @@ const desktop = {
   updateBlockingSchedule: vi.fn(),
   deleteBlockingSchedule: vi.fn(),
   selectInspector: vi.fn(),
-  refreshBlockingStatus: vi.fn().mockResolvedValue(undefined),
   refreshBlockingInventory: vi.fn().mockResolvedValue(undefined),
-  activateNativeBlocking: vi.fn().mockResolvedValue({
-    helperRegistered: false,
-    networkFilterApproved: false,
-    endpointSecurityApproved: false,
-    lastError: "signed-host-unavailable",
-  }),
   cancelNormalSession: vi.fn().mockResolvedValue({}),
-  redeemBlockingBypass: vi.fn().mockResolvedValue({ redeemed: true }),
 };
 
 const device: DeviceListEntry = {
@@ -173,10 +165,7 @@ describe("BlockingScreen", () => {
       />,
     );
     expect(screen.getByRole("alert")).toHaveTextContent(/blocking helper unavailable/i);
-    expect(screen.getByTestId("blocking-setup-checklist")).toHaveTextContent(/Helper registered/);
-    expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
-    await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
-    expect(desktop.activateNativeBlocking).toHaveBeenCalled();
+    expect(screen.queryByText("Blocking Status")).toBeNull();
     expect(screen.getByText(/Deep work/)).toBeVisible();
     expect(screen.getByText("Social")).toBeVisible();
     expect(screen.queryByText("My Devices")).toBeNull();
@@ -641,32 +630,4 @@ describe("BlockingScreen", () => {
     });
   });
 
-  it("submits a server-signed support token through diagnostics", async () => {
-    const user = userEvent.setup();
-    render(
-      <BlockingScreen
-        state={snapshot({
-          isAuthenticated: true,
-          blocking: {
-            schedules: [namedSchedule],
-            blocklists: [blocklist],
-            activeOccurrence,
-            enforcement: connectedEnforcement,
-            statusMessage: "",
-            loading: false,
-          },
-        })}
-      />,
-    );
-    await user.click(screen.getByText("Support diagnostics"));
-    await user.type(screen.getByLabelText("Signed support token"), "server.signed.token");
-    await user.type(screen.getByLabelText("Device ID"), "device-id-1");
-    await user.click(screen.getByRole("button", { name: "Redeem signed token" }));
-    expect(desktop.redeemBlockingBypass).toHaveBeenCalledWith({
-      token: "server.signed.token",
-      device_id: "device-id-1",
-      occurrence_id: "occurrence-1",
-      action: "end",
-    });
-  });
 });

@@ -9,6 +9,7 @@ import type {
   DeviceListEntry,
 } from "@shared/types";
 import { Button, TextField } from "../ui";
+import { BlockScreenEditor, emptyBlockScreenDraft, type BlockScreenDraft } from "./BlockScreenEditor";
 
 type RegisteredDevice = DeviceListEntry & { deviceID: string };
 
@@ -21,6 +22,7 @@ export function SessionComposer({
   submitLabel,
   loading = false,
   submitError = null,
+  initialScreen = emptyBlockScreenDraft(),
   onSubmit,
   onCancel,
   extraActions,
@@ -33,7 +35,8 @@ export function SessionComposer({
   submitLabel: string;
   loading?: boolean;
   submitError?: string | null;
-  onSubmit: (payload: BlockingScheduleWritePayload) => void;
+  initialScreen?: BlockScreenDraft;
+  onSubmit: (payload: BlockingScheduleWritePayload, screen: BlockScreenDraft) => void;
   onCancel?: () => void;
   extraActions?: ReactNode;
 }) {
@@ -46,7 +49,12 @@ export function SessionComposer({
   const [selectedDeviceIds, setSelectedDeviceIds] = useState(initialDraft.selectedDeviceIds);
   const [strictMode, setStrictMode] = useState(initialDraft.strictMode);
   const [strictConfirmed, setStrictConfirmed] = useState(false);
+  const [blockScreen, setBlockScreen] = useState(initialScreen);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setBlockScreen(initialScreen);
+  }, [initialScreen.header, initialScreen.detail, initialScreen.imageFile, initialScreen.imageUrl]);
 
   const registeredIdKey = devices.map((device) => device.deviceID).join("|");
 
@@ -104,7 +112,7 @@ export function SessionComposer({
       strict_mode: strictMode,
     };
     if (initialDraft.isActive !== undefined) payload.is_active = initialDraft.isActive;
-    onSubmit(payload);
+    onSubmit(payload, blockScreen);
   }
 
   const catalogIds = new Set(blocklists.map((list) => list.blocklist_id));
@@ -255,6 +263,14 @@ export function SessionComposer({
             </span>
           </label>
         ) : null}
+      </fieldset>
+      <fieldset className="blocking-fieldset">
+        <legend>Blocked screen</legend>
+        <BlockScreenEditor
+          value={blockScreen}
+          onChange={setBlockScreen}
+          hint="Leave blank to use the screen from Settings."
+        />
       </fieldset>
       <Button variant="primary" type="submit" disabled={!canSubmit || loading}>
         {submitLabel}
