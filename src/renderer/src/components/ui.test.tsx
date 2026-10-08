@@ -201,7 +201,9 @@ describe("application chrome", () => {
         })}
       />,
     );
-    expect(screen.getByRole("complementary", { name: "Session inspector" })).toBeVisible();
+    const dialog = screen.getByRole("dialog", { name: "Deep work" });
+    expect(dialog).toBeVisible();
+    expect(dialog.closest(".blocking-dialog-scrim")?.parentElement).toBe(document.body);
     expect(screen.getByText("Session details")).toBeVisible();
     expect(screen.getByText("Deep work")).toBeVisible();
     expect(screen.getByText("Social")).toBeVisible();

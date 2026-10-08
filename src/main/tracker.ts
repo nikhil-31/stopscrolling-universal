@@ -44,6 +44,8 @@ export class ScreenTimeTracker {
   readonly collector: ActivityCollector = createCollector();
   isTracking = false;
   currentContext: ForegroundContext | null = null;
+  /** Called for every foreground sample, including repeats, so blocking can keep a session closed. */
+  onForeground: ((snapshot: ActivitySnapshot) => void) | null = null;
   pendingUploadCount = 0;
   registeredDevices: DeviceRow[] = [];
   deviceStatus: DeviceStatusRow[] = [];
@@ -265,6 +267,7 @@ export class ScreenTimeTracker {
       return;
     }
     const snapshot = result.snapshot;
+    this.onForeground?.(snapshot);
     this.observeProductivity(snapshot, this.openContext?.category ?? "");
     if (contextEquals(this.currentContext, snapshot)) {
       this.maybeCheckpoint();

@@ -55,6 +55,7 @@ export function BlockingScreen({
   const clockFormat = useClockFormat();
   const [tab, setTab] = useState<SessionTab>("sessions");
   const [showCreateSession, setShowCreateSession] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [showCreateBlocklist, setShowCreateBlocklist] = useState(false);
   const [selectedBlocklist, setSelectedBlocklist] = useState<Blocklist | null>(null);
   const [inventoryLoading, setInventoryLoading] = useState(false);
@@ -81,6 +82,7 @@ export function BlockingScreen({
   );
   const enforcement = blocking.enforcement;
   const capabilities = blocking.capabilities;
+  const helperReady = Boolean(blocking.hostSetup?.helperRegistered);
   const enforcementTone = !enforcement?.available
     ? "danger"
     : enforcement.connected && !enforcement.lastError
@@ -91,7 +93,9 @@ export function BlockingScreen({
     : enforcement.connected && !enforcement.lastError
       ? occurrence
         ? "Blocking is enforced"
-        : "Blocking helper ready"
+        : helperReady
+          ? "Blocking helper ready"
+          : "Blocking is ready"
       : "Blocking enforcement degraded";
   const inventoryUnavailableReason = capabilities?.applicationInventory === false
     ? capabilities.reason || "The blocking helper does not provide application inventory."
@@ -157,7 +161,9 @@ export function BlockingScreen({
         {enforcement?.lastError || capabilities?.reason || (
           occurrence
             ? `${occurrence.schedule_name} is active until ${formatClock(occurrence.end_at, clockFormat)}.`
-            : "Permissions and native helper setup are complete."
+            : helperReady
+              ? "Permissions and native helper setup are complete."
+              : "No session is blocking right now."
         )}
       </Banner>
       {blocking.statusMessage ? <p className="muted">{blocking.statusMessage}</p> : null}
@@ -170,7 +176,10 @@ export function BlockingScreen({
               <Button
                 size="sm"
                 icon={Plus}
-                onClick={() => setShowCreateSession((open) => !open)}
+                onClick={() => {
+                  setCreateError(null);
+                  setShowCreateSession((open) => !open);
+                }}
               >
                 Add Session
               </Button>
@@ -192,9 +201,16 @@ export function BlockingScreen({
                 devices={registeredDevices}
                 loading={blocking.loading}
                 submitLabel="Create blocking session"
+                submitError={createError}
                 onSubmit={(payload) => {
-                  window.stopscrolling.createBlockingSchedule(payload);
-                  setShowCreateSession(false);
+                  setCreateError(null);
+                  void window.stopscrolling.createBlockingSchedule(payload).then((result) => {
+                    if (result.ok) {
+                      setShowCreateSession(false);
+                      return;
+                    }
+                    setCreateError(result.message);
+                  });
                 }}
               />
             ) : null}
@@ -320,7 +336,9 @@ export function BlockingScreen({
                 <strong>{enforcementLabel}</strong>
                 <span className="row-subtitle">
                   {enforcement?.connected
-                    ? `Helper protocol ${enforcement.protocolVersion} connected`
+                    ? helperReady
+                      ? `Helper protocol ${enforcement.protocolVersion} connected`
+                      : "Blocking from this app until the system helper is approved."
                     : capabilities?.reason || enforcement?.lastError || "Complete helper installation and required system permissions."}
                 </span>
               </span>

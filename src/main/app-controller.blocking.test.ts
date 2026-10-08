@@ -117,6 +117,56 @@ describe("blocking session load", () => {
     await pending;
   });
 
+  it("enforces the active session in the app when the system helper is missing", async () => {
+    const transport: HelperTransport = {
+      kind: "unavailable",
+      request: async () => {
+        throw new Error("The signed macOS XPC client is not installed in this build.");
+      },
+    };
+    const controller = new AppController(new BlockingHelperBridge(transport));
+    controller.auth.user = user;
+    controller.api.setTokens({ access: "access", refresh: "refresh" });
+    controller.tracker.registerLocalDevice = async () => "device-1";
+    controller.api.blockingPublicKey = async () => ({
+      algorithm: "Ed25519",
+      kid: "kid",
+      public_key: "key",
+    });
+    const start = new Date(Date.now() - 60_000).toISOString();
+    const end = new Date(Date.now() + 60 * 60_000).toISOString();
+    controller.api.deviceBlockingPolicy = async () => ({
+      policy_version: 3,
+      device_id: "device-1",
+      server_time: start,
+      expires_at: end,
+      occurrences: [{
+        occurrence_id: "occ-1",
+        schedule_id: "schedule-1",
+        schedule_name: "Focus",
+        strict_mode: true,
+        start_at: start,
+        end_at: end,
+        entries: [{ entry_type: "website", identifier: "instagram.com", label: "Instagram" }],
+      }],
+      algorithm: "Ed25519",
+      kid: "kid",
+      signature: "sig",
+    });
+
+    await controller.refreshBlockingHelper(true);
+
+    expect(controller.blocking.enforcement?.available).toBe(true);
+    expect(controller.blocking.enforcement?.connected).toBe(true);
+    expect(controller.blocking.enforcement?.strictMode).toBe(false);
+    expect(controller.blocking.activeOccurrence?.occurrence_id).toBe("occ-1");
+    expect(controller.blocking.capabilities?.policyEnforcement).toBe(true);
+    expect(controller.blocking.capabilities?.reason).toBeNull();
+
+    await controller.refreshBlockingHelper(false);
+    expect(controller.blocking.activeOccurrence?.occurrence_id).toBe("occ-1");
+  });
+
   it("does not reload the timeline when opening blocking", () => {
     const controller = new AppController(new BlockingHelperBridge(helperTransport));
     const loadRange = vi.spyOn(controller.tracker, "loadRange").mockResolvedValue(undefined);

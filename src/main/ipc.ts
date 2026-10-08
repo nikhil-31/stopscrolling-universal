@@ -181,8 +181,9 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.updateBlocklist, (_event, input: BlocklistUpdatePayload) => {
     void controller.updateBlocklist(input);
   });
-  ipcMain.on(IPC.createBlockingSchedule, (_event, input: BlockingScheduleWritePayload) => {
-    void controller.createBlockingSchedule(input);
+  ipcMain.handle(IPC.createBlockingSchedule, (event, input: BlockingScheduleWritePayload) => {
+    assertTrustedRenderer(event);
+    return controller.createBlockingSchedule(input);
   });
   ipcMain.on(IPC.updateBlockingSchedule, (_event, input: BlockingScheduleUpdatePayload) => {
     void controller.updateBlockingSchedule(input);

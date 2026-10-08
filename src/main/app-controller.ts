@@ -1,4 +1,5 @@
 import { BrowserWindow } from "electron";
+import { hideFreedomScreen, showFreedomScreen } from "./freedom-window";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { normalizedEmail, signInError, signUpError } from "@shared/auth-validation";
@@ -76,10 +77,12 @@ import type {
   BlocklistUpdatePayload,
   BlockingScheduleUpdatePayload,
   BlockingScheduleWritePayload,
+  BlockingPolicyResponse,
   BypassRedeemInput,
 } from "@shared/types";
 import { isMfa, StopScrollingAPI } from "./api-client";
 import { BlockingHelperBridge } from "./blocking/bridge";
+import { LocalEnforcer } from "./blocking/local-enforcer";
 import { loadCalendarWorkspace, saveCalendarWorkspace } from "./calendar-workspace-store";
 import { GoogleCalendarService } from "./google-calendar";
 import { syncLaunchAtLogin } from "./lifecycle";
@@ -261,17 +264,22 @@ export class AppController {
   private helperTimer: NodeJS.Timeout | null = null;
   private helperBoundaryTimer: NodeJS.Timeout | null = null;
   private lastPolicySignature: string | null = null;
+  private usingLocalEnforcement = false;
   private blockingRefreshGeneration = 0;
   private blockingListsTask: Promise<{
     blocklists: BlockingUiState["blocklists"];
     schedules: BlockingUiState["schedules"];
   }> | null = null;
   readonly helper: BlockingHelperBridge;
+  readonly localEnforcer = new LocalEnforcer(undefined, () => showFreedomScreen());
   onBlockingStateChanged: (() => void) | null = null;
 
   constructor(helper = new BlockingHelperBridge()) {
     this.helper = helper;
     this.blocking = defaultBlocking(helper);
+    this.tracker.onForeground = (snapshot) => {
+      void this.localEnforcer.enforce(snapshot);
+    };
   }
 
   async boot() {
@@ -1059,35 +1067,57 @@ export class AppController {
 
   async refreshBlockingHelper(fetchPolicy = false) {
     if (!this.auth.user || !this.api.getTokens()) {
+      this.clearLocalEnforcement();
       await this.helper.refreshStatus();
       this.syncHelperSnapshot();
       return;
     }
+    let policy: BlockingPolicyResponse | null = null;
     try {
       if (fetchPolicy) {
         const deviceID = await this.tracker.registerLocalDevice();
-        const [policy, publicKey] = await Promise.all([
+        const [fetched, publicKey] = await Promise.all([
           this.api.deviceBlockingPolicy(deviceID),
           this.api.blockingPublicKey(),
         ]);
-        if (policy.algorithm !== "Ed25519" || publicKey.algorithm !== "Ed25519" || policy.kid !== publicKey.kid) {
+        if (fetched.algorithm !== "Ed25519" || publicKey.algorithm !== "Ed25519" || fetched.kid !== publicKey.kid) {
           throw new Error("Blocking policy signing key does not match the advertised public key.");
         }
-        if (policy.signature !== this.lastPolicySignature) {
-          await this.helper.applyPolicy(policy);
-          this.lastPolicySignature = policy.signature;
-        } else {
-          await this.helper.refreshStatus();
+        policy = fetched;
+        try {
+          if (policy.signature !== this.lastPolicySignature) {
+            await this.helper.applyPolicy(policy);
+            this.lastPolicySignature = policy.signature;
+          } else {
+            await this.helper.refreshStatus();
+          }
+        } catch (error) {
+          logObservability(`Blocking helper apply failed: ${error instanceof Error ? error.message : String(error)}`);
         }
-        const activeID = this.helper.status.activeOccurrenceID;
-        this.blocking.activeOccurrence =
-          policy.occurrences.find((occurrence) => occurrence.occurrence_id === activeID) ?? null;
-        this.scheduleBoundaryRefresh(policy.occurrences);
       } else {
-        await this.helper.refreshStatus();
+        try {
+          await this.helper.refreshStatus();
+        } catch (error) {
+          logObservability(`Blocking helper status failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
     } catch (error) {
       logObservability(`Blocking policy refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    const helperLive = this.helper.status.available && this.helper.status.connected;
+    if (policy && helperLive) {
+      this.clearLocalEnforcement();
+      const activeID = this.helper.status.activeOccurrenceID;
+      this.blocking.activeOccurrence =
+        policy.occurrences.find((occurrence) => occurrence.occurrence_id === activeID) ?? null;
+      this.scheduleBoundaryRefresh(policy.occurrences);
+    } else if (policy) {
+      this.localEnforcer.setPolicy(policy);
+      this.usingLocalEnforcement = true;
+      this.publishLocalEnforcement();
+      this.scheduleBoundaryRefresh(policy.occurrences);
+    } else if (this.usingLocalEnforcement) {
+      this.publishLocalEnforcement();
     }
     this.syncHelperSnapshot();
   }
@@ -1141,13 +1171,57 @@ export class AppController {
   }
 
   private syncHelperSnapshot() {
-    this.blocking.enforcement = this.helper.status;
+    const helperLive = this.helper.status.available && this.helper.status.connected;
     this.blocking.installedApplications = this.helper.inventory;
-    this.blocking.capabilities = this.helper.capabilities;
     this.blocking.hostSetup = this.helper.hostSetup;
+    if (this.usingLocalEnforcement && !helperLive) {
+      this.onBlockingStateChanged?.();
+      this.broadcast();
+      return;
+    }
+    if (helperLive) this.clearLocalEnforcement();
+    this.blocking.enforcement = this.helper.status;
+    this.blocking.capabilities = this.helper.capabilities;
     if (!this.helper.status.activeOccurrenceID) this.blocking.activeOccurrence = null;
     this.onBlockingStateChanged?.();
     this.broadcast();
+  }
+
+  private clearLocalEnforcement() {
+    this.usingLocalEnforcement = false;
+    this.localEnforcer.clear();
+    hideFreedomScreen();
+  }
+
+  private publishLocalEnforcement() {
+    const policy = this.localEnforcer.storedPolicy;
+    const active = this.localEnforcer.activeOccurrence();
+    this.blocking.activeOccurrence = active;
+    if (!active) hideFreedomScreen();
+    this.blocking.enforcement = {
+      available: true,
+      connected: true,
+      protocolVersion: 1,
+      policyVersion: policy?.policy_version ?? null,
+      activeOccurrenceIDs: active ? [active.occurrence_id.toLowerCase()] : [],
+      strictOccurrenceIDs: [],
+      activeOccurrenceID: active ? active.occurrence_id.toLowerCase() : null,
+      strictMode: false,
+      policyExpiresAt: policy && Number.isFinite(Date.parse(policy.expires_at))
+        ? Math.floor(Date.parse(policy.expires_at) / 1000)
+        : null,
+      lastError: null,
+      checkedAt: new Date().toISOString(),
+    };
+    this.blocking.capabilities = {
+      helperAvailable: false,
+      policyEnforcement: true,
+      applicationInventory: this.blocking.capabilities?.applicationInventory ?? false,
+      normalCancellation: true,
+      strictMode: false,
+      bypassRedemption: false,
+      reason: null,
+    };
   }
 
   async activateNativeBlocking() {
@@ -1172,6 +1246,7 @@ export class AppController {
 
   async refreshBlocking() {
     if (!this.auth.user) {
+      this.clearLocalEnforcement();
       if (this.inspector.kind === "schedule") this.inspector = emptyInspector();
       this.blocking = {
         ...defaultBlocking(this.helper),
@@ -1296,19 +1371,24 @@ export class AppController {
     }
   }
 
-  async createBlockingSchedule(input: BlockingScheduleWritePayload) {
+  async createBlockingSchedule(input: BlockingScheduleWritePayload): Promise<{ ok: true } | { ok: false; message: string }> {
     if (!this.auth.user) {
-      this.blocking.statusMessage = "Sign in on the Account screen to create sessions.";
+      const message = "Sign in on the Account screen to create sessions.";
+      this.blocking.statusMessage = message;
       this.broadcast();
-      return;
+      return { ok: false, message };
     }
     try {
       await this.api.createBlockingSchedule(input);
       this.statusMessage = "Session created.";
       await this.refreshBlocking();
+      return { ok: true };
     } catch (error) {
-      this.blocking.statusMessage = error instanceof Error ? error.message : "Could not create session.";
+      const message = error instanceof Error ? error.message : "Could not create session.";
+      logObservability(`Blocking session create failed: ${message}`);
+      this.blocking.statusMessage = message;
       this.broadcast();
+      return { ok: false, message };
     }
   }
 

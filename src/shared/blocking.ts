@@ -11,8 +11,35 @@ export const WEEKDAYS = [
   { value: 6, label: "Sun" },
 ] as const;
 
+/** macOS Intl names that the API's tzdata no longer accepts. */
+const LEGACY_TIME_ZONES: Record<string, string> = {
+  "Africa/Asmera": "Africa/Asmara",
+  "America/Buenos_Aires": "America/Argentina/Buenos_Aires",
+  "America/Catamarca": "America/Argentina/Catamarca",
+  "America/Cordoba": "America/Argentina/Cordoba",
+  "America/Godthab": "America/Nuuk",
+  "America/Indianapolis": "America/Indiana/Indianapolis",
+  "America/Jujuy": "America/Argentina/Jujuy",
+  "America/Louisville": "America/Kentucky/Louisville",
+  "America/Mendoza": "America/Argentina/Mendoza",
+  "Asia/Calcutta": "Asia/Kolkata",
+  "Asia/Katmandu": "Asia/Kathmandu",
+  "Asia/Rangoon": "Asia/Yangon",
+  "Asia/Saigon": "Asia/Ho_Chi_Minh",
+  "Atlantic/Faeroe": "Atlantic/Faroe",
+  "Europe/Kiev": "Europe/Kyiv",
+  "Pacific/Enderbury": "Pacific/Kanton",
+  "Pacific/Ponape": "Pacific/Pohnpei",
+  "Pacific/Truk": "Pacific/Chuuk",
+};
+
+export function canonicalTimeZone(name: string) {
+  const zone = name.trim();
+  return LEGACY_TIME_ZONES[zone] ?? zone;
+}
+
 export function defaultTimeZone(preferred?: string | null) {
-  return effectiveTimeZone(preferred);
+  return canonicalTimeZone(effectiveTimeZone(preferred));
 }
 
 export function parseCommaSeparated(value: string) {
@@ -177,6 +204,21 @@ export function clockLabel(time: string) {
 export function parseMinutes(time: string) {
   const [hours, minutes] = time.split(":").map(Number);
   return (hours || 0) * 60 + (minutes || 0);
+}
+
+/** Reasons the schedule API rejects before a session exists. */
+export function sessionWriteError(input: { startTime: string; endTime: string; timeZone: string }) {
+  if (parseMinutes(input.endTime) <= parseMinutes(input.startTime)) {
+    return "End time has to be later than the start time on the same day.";
+  }
+  const zone = input.timeZone.trim();
+  if (!zone) return "Time zone needs to be an IANA name, such as Asia/Kolkata.";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zone }).format(0);
+  } catch {
+    return "Time zone needs to be an IANA name, such as Asia/Kolkata.";
+  }
+  return null;
 }
 
 export function isScheduleRunningNow(

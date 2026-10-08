@@ -70,7 +70,8 @@ const api = {
   friendsRemove: (id: number) => ipcRenderer.send(IPC.friendsRemove, id),
   createBlocklist: (input: import("@shared/types").BlocklistWritePayload) => ipcRenderer.send(IPC.createBlocklist, input),
   updateBlocklist: (input: import("@shared/types").BlocklistUpdatePayload) => ipcRenderer.send(IPC.updateBlocklist, input),
-  createBlockingSchedule: (input: import("@shared/types").BlockingScheduleWritePayload) => ipcRenderer.send(IPC.createBlockingSchedule, input),
+  createBlockingSchedule: (input: import("@shared/types").BlockingScheduleWritePayload) =>
+    ipcRenderer.invoke(IPC.createBlockingSchedule, input) as Promise<{ ok: true } | { ok: false; message: string }>,
   updateBlockingSchedule: (input: import("@shared/types").BlockingScheduleUpdatePayload) => ipcRenderer.send(IPC.updateBlockingSchedule, input),
   deleteBlockingSchedule: (scheduleId: string) => ipcRenderer.send(IPC.deleteBlockingSchedule, scheduleId),
   refreshBlockingStatus: () => ipcRenderer.invoke(IPC.refreshBlockingStatus),

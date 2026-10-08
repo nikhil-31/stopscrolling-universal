@@ -12,7 +12,9 @@ import {
   scheduleDeviceLabel,
   scheduleRowKind,
   scheduleStatusLabel,
+  defaultTimeZone,
   scheduleToComposerDraft,
+  sessionWriteError,
 } from "./blocking";
 import type { BlockingSchedule } from "./types";
 
@@ -37,6 +39,19 @@ function schedule(patch: Partial<BlockingSchedule> = {}): BlockingSchedule {
 }
 
 describe("blocking helpers", () => {
+  it("rejects a session whose end is not after its start", () => {
+    expect(sessionWriteError({ startTime: "18:00", endTime: "09:00", timeZone: "Asia/Kolkata" }))
+      .toMatch(/later than the start time/);
+    expect(sessionWriteError({ startTime: "09:00", endTime: "17:00", timeZone: "not-a-zone" }))
+      .toMatch(/IANA/);
+    expect(sessionWriteError({ startTime: "09:00", endTime: "17:00", timeZone: "Asia/Kolkata" })).toBeNull();
+  });
+
+  it("stores the current IANA name for a legacy macOS time zone", () => {
+    expect(defaultTimeZone("Asia/Calcutta")).toBe("Asia/Kolkata");
+    expect(defaultTimeZone("Asia/Kolkata")).toBe("Asia/Kolkata");
+  });
+
   it("parses website and app identifiers", () => {
     expect(blocklistEntriesFromText("twitter.com, reddit.com", "com.apple.Safari")).toEqual([
       { entry_type: "website", identifier: "twitter.com" },

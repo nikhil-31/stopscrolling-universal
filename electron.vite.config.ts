@@ -34,6 +34,7 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, "src/renderer/index.html"),
           settings: resolve(__dirname, "src/renderer/settings.html"),
+          freedom: resolve(__dirname, "src/renderer/freedom.html"),
         },
       },
     },

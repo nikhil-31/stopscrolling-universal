@@ -13,7 +13,7 @@ const desktop = {
   navigate: vi.fn(),
   createBlocklist: vi.fn(),
   updateBlocklist: vi.fn(),
-  createBlockingSchedule: vi.fn(),
+  createBlockingSchedule: vi.fn().mockResolvedValue({ ok: true }),
   updateBlockingSchedule: vi.fn(),
   deleteBlockingSchedule: vi.fn(),
   selectInspector: vi.fn(),
@@ -413,7 +413,15 @@ describe("BlockingScreen", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Edit session" }));
-    expect(screen.getByRole("dialog", { name: "Deep work" })).toBeVisible();
+    const dialog = document.getElementById("session-edit-title")?.closest("[role='dialog']");
+    const editorScrim = dialog?.closest(".blocking-dialog-scrim");
+    const detailsScrim = [...document.querySelectorAll(".blocking-dialog-scrim")]
+      .find((node) => !node.classList.contains("blocking-dialog-scrim-front"));
+    expect(dialog).toBeVisible();
+    expect(editorScrim?.parentElement).toBe(document.body);
+    expect(editorScrim).toHaveClass("blocking-dialog-scrim-front");
+    expect(detailsScrim).toBeTruthy();
+    expect(detailsScrim).not.toHaveClass("blocking-dialog-scrim-front");
     expect(screen.getByLabelText("Start time")).toHaveValue("16:00");
     expect(screen.getByRole("checkbox", { name: /Social/ })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Studio Mac" })).toBeChecked();
@@ -437,7 +445,8 @@ describe("BlockingScreen", () => {
       is_active: true,
       strict_mode: false,
     });
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByLabelText("Session name")).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Deep work" })).toBeVisible();
   });
 
   it("cancels session edits without saving", async () => {
@@ -462,8 +471,10 @@ describe("BlockingScreen", () => {
     await user.type(screen.getByLabelText("Session name"), " night");
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(desktop.updateBlockingSchedule).not.toHaveBeenCalled();
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("complementary", { name: "Session inspector" })).toBeVisible();
+    expect(screen.queryByLabelText("Session name")).toBeNull();
+    const details = screen.getByRole("dialog", { name: "Deep work" });
+    expect(details).toBeVisible();
+    expect(details.closest(".blocking-dialog-scrim")?.parentElement).toBe(document.body);
     expect(screen.getByRole("button", { name: "Edit session" })).toBeVisible();
   });
 

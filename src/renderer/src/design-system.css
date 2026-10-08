@@ -1792,10 +1792,13 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
 .blocking-dialog-scrim {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 80;
   display: grid;
   place-items: center;
   background: rgba(10, 10, 16, 0.45);
+}
+.blocking-dialog-scrim-front {
+  z-index: 90;
 }
 .blocking-dialog {
   position: relative;

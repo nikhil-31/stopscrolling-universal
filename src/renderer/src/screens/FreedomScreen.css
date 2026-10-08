@@ -1,0 +1,56 @@
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: #3e648c;
+}
+
+.freedom-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #3e648c;
+  color: #eff9ee;
+  cursor: default;
+  appearance: none;
+  outline: none;
+  font-family: "New York", "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+}
+
+.freedom-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 36px;
+}
+
+.freedom-butterfly {
+  width: 132px;
+  height: auto;
+}
+
+.freedom-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  font-size: 36px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.28;
+  text-align: center;
+}
+
+.freedom-name {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-align: center;
+}

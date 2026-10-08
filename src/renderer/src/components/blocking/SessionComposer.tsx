@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { defaultTimeZone, scheduleDeviceLabel, WEEKDAYS, type SessionComposerDraft } from "@shared/blocking";
+import { canonicalTimeZone, defaultTimeZone, scheduleDeviceLabel, sessionWriteError, WEEKDAYS, type SessionComposerDraft } from "@shared/blocking";
 import { deviceDisplayName } from "@shared/device";
 import type {
   Blocklist,
@@ -20,6 +20,7 @@ export function SessionComposer({
   extraDevices = [],
   submitLabel,
   loading = false,
+  submitError = null,
   onSubmit,
   onCancel,
   extraActions,
@@ -31,6 +32,7 @@ export function SessionComposer({
   extraDevices?: BlockingScheduleDeviceRef[];
   submitLabel: string;
   loading?: boolean;
+  submitError?: string | null;
   onSubmit: (payload: BlockingScheduleWritePayload) => void;
   onCancel?: () => void;
   extraActions?: ReactNode;
@@ -85,13 +87,18 @@ export function SessionComposer({
       setError("Choose a name, time range, days, at least one blocklist, and one device.");
       return;
     }
+    const writeError = sessionWriteError({ startTime, endTime, timeZone });
+    if (writeError) {
+      setError(writeError);
+      return;
+    }
     setError(null);
     const payload: BlockingScheduleWritePayload = {
       name: name.trim(),
       start_time: startTime,
       end_time: endTime,
       days_of_week: [...selectedDays].sort((a, b) => a - b),
-      time_zone: timeZone.trim() || defaultTimeZone(initialDraft.timeZone),
+      time_zone: canonicalTimeZone(timeZone.trim() || defaultTimeZone(initialDraft.timeZone)),
       blocklist_ids: selectedBlocklistIds,
       device_ids: selectedDeviceIds,
       strict_mode: strictMode,
@@ -109,7 +116,7 @@ export function SessionComposer({
 
   return (
     <form className="form blocking-create" onSubmit={submit}>
-      {error ? <p className="muted" role="alert">{error}</p> : null}
+      {error || submitError ? <p className="muted" role="alert">{error || submitError}</p> : null}
       <TextField
         label="Session name"
         value={name}

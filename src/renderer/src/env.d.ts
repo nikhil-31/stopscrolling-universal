@@ -47,7 +47,8 @@ interface StopScrollingDesktop {
   friendsRemove: (id: number) => void;
   createBlocklist: (input: import("@shared/types").BlocklistWritePayload) => void;
   updateBlocklist: (input: import("@shared/types").BlocklistUpdatePayload) => void;
-  createBlockingSchedule: (input: import("@shared/types").BlockingScheduleWritePayload) => void;
+  createBlockingSchedule: (input: import("@shared/types").BlockingScheduleWritePayload) =>
+    Promise<{ ok: true } | { ok: false; message: string }>;
   updateBlockingSchedule: (input: import("@shared/types").BlockingScheduleUpdatePayload) => void;
   deleteBlockingSchedule: (scheduleId: string) => void;
   refreshBlockingStatus: () => Promise<void>;

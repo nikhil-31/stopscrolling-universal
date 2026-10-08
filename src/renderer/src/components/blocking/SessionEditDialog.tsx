@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { scheduleToComposerDraft } from "@shared/blocking";
 import type { Blocklist, BlockingSchedule, DeviceListEntry } from "@shared/types";
 import { X } from "lucide-react";
@@ -28,8 +29,8 @@ export function SessionEditDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  return (
-    <div className="blocking-dialog-scrim" onClick={onClose}>
+  return createPortal(
+    <div className="blocking-dialog-scrim blocking-dialog-scrim-front" onClick={onClose}>
       <div
         className="blocking-dialog blocking-dialog-composer"
         role="dialog"
@@ -78,6 +79,7 @@ export function SessionEditDialog({
           )}
         />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

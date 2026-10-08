@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   clockLabel,
   formatRemaining,
@@ -85,18 +86,38 @@ function ScheduleInspector({
     closeInspector();
   }
 
-  return (
-    <aside className="inspector" aria-label="Session inspector">
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (document.getElementById("session-edit-title")) return;
+      event.preventDefault();
+      closeInspector();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const title = kind === "current" ? "Current Session" : schedule.name;
+
+  return createPortal(
+    <div className="blocking-dialog-scrim" onClick={closeInspector}>
+      <div
+        className="blocking-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={schedule.name}
+        onClick={(event) => event.stopPropagation()}
+      >
       <IconButton
-        className="inspector-close"
-        label="Close inspector"
+        className="blocking-dialog-close"
+        label="Close session details"
         icon={X}
         onClick={closeInspector}
       />
       <div className="inspector-header">
         <span className="row-copy">
           <div className="inspector-kicker">Session details</div>
-          <h2>{kind === "current" ? "Current Session" : schedule.name}</h2>
+          <h2>{title}</h2>
           <p className="muted">{kind === "current" ? schedule.name : scheduleWhen(schedule)}</p>
         </span>
         <div className="inspector-actions">
@@ -169,7 +190,9 @@ function ScheduleInspector({
         <p className="muted">This active Strict Mode session cannot be ended, edited, or deleted until it finishes.</p>
       ) : null}
       {actionError ? <p className="muted" role="alert">{actionError}</p> : null}
-    </aside>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
