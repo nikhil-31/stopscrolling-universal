@@ -12,6 +12,7 @@ import { BlocklistComposer } from "../components/blocking/BlocklistComposer";
 import { BlocklistDetailDialog } from "../components/blocking/BlocklistDetailDialog";
 import { SessionComposer } from "../components/blocking/SessionComposer";
 import { SessionEditDialog } from "../components/blocking/SessionEditDialog";
+import { SessionModal } from "../components/blocking/SessionModal";
 import { formatClock } from "@shared/timeline";
 import { useClockFormat } from "../clock-format";
 import {
@@ -110,6 +111,17 @@ export function BlockingScreen({
   }
 
   useEffect(() => {
+    if (!showCreateSession) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setShowCreateSession(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showCreateSession]);
+
+  useEffect(() => {
     setSelectedBlocklist((current) => {
       if (!current) return null;
       return blocking.blocklists.find((list) => list.blocklist_id === current.blocklist_id) ?? null;
@@ -153,7 +165,7 @@ export function BlockingScreen({
                 icon={Plus}
                 onClick={() => {
                   setCreateError(null);
-                  setShowCreateSession((open) => !open);
+                  setShowCreateSession(true);
                 }}
               >
                 Add Session
@@ -169,40 +181,12 @@ export function BlockingScreen({
                 { value: "history", label: "Session History" },
               ]}
             />
-            {showCreateSession ? (
-              <SessionComposer
-                initialDraft={emptySessionDraft(state.auth?.user?.time_zone)}
-                blocklists={blocking.blocklists}
-                devices={registeredDevices}
-                loading={blocking.loading}
-                submitLabel="Create blocking session"
-                submitError={createError}
-                onSubmit={(payload, blockScreen) => {
-                  setCreateError(null);
-                  void window.stopscrolling.createBlockingSchedule(payload).then(async (result) => {
-                    if (!result.ok) {
-                      setCreateError(result.message);
-                      return;
-                    }
-                    if (result.scheduleId && (blockScreen.header.trim() || blockScreen.detail.trim() || blockScreen.imageFile)) {
-                      await window.stopscrolling.saveSessionBlockScreen({
-                        scheduleId: result.scheduleId,
-                        header: blockScreen.header,
-                        detail: blockScreen.detail,
-                        imageFile: blockScreen.imageFile,
-                      });
-                    }
-                    setShowCreateSession(false);
-                  });
-                }}
-              />
-            ) : null}
             <div className="blocking-session-list">
               {blocking.loading && !visibleSchedules.length ? <LoadingState label="Loading sessions…" /> : null}
               {tab === "history" ? (
                 <EmptyState title="No session history" body="Completed sessions aren’t stored yet." />
               ) : null}
-              {tab === "sessions" && !blocking.loading && !visibleSchedules.length && !showCreateSession ? (
+              {tab === "sessions" && !blocking.loading && !visibleSchedules.length ? (
                 <EmptyState title="No sessions yet" body="Create a blocklist, then schedule a session." />
               ) : null}
               {visibleSchedules.map((schedule) => {
@@ -323,6 +307,44 @@ export function BlockingScreen({
           loading={blocking.loading}
           onClose={() => onCloseEdit?.()}
         />
+      ) : null}
+      {showCreateSession ? (
+        <SessionModal
+          title="New session"
+          titleId="session-create-title"
+          subtitle="Choose when to block, what to block, and the screen you see."
+          closeLabel="Close new session"
+          onClose={() => setShowCreateSession(false)}
+          size="form"
+        >
+          <SessionComposer
+            initialDraft={emptySessionDraft(state.auth?.user?.time_zone)}
+            blocklists={blocking.blocklists}
+            devices={registeredDevices}
+            loading={blocking.loading}
+            submitLabel="Create blocking session"
+            submitError={createError}
+            onCancel={() => setShowCreateSession(false)}
+            onSubmit={(payload, blockScreen) => {
+              setCreateError(null);
+              void window.stopscrolling.createBlockingSchedule(payload).then(async (result) => {
+                if (!result.ok) {
+                  setCreateError(result.message);
+                  return;
+                }
+                if (result.scheduleId && (blockScreen.header.trim() || blockScreen.detail.trim() || blockScreen.imageFile)) {
+                  await window.stopscrolling.saveSessionBlockScreen({
+                    scheduleId: result.scheduleId,
+                    header: blockScreen.header,
+                    detail: blockScreen.detail,
+                    imageFile: blockScreen.imageFile,
+                  });
+                }
+                setShowCreateSession(false);
+              });
+            }}
+          />
+        </SessionModal>
       ) : null}
     </div>
   );

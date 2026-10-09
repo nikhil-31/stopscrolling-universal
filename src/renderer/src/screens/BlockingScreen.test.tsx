@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { useState } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSnapshot } from "@shared/snapshot";
@@ -245,6 +245,34 @@ describe("BlockingScreen", () => {
       days_of_week: [0, 1, 2, 3, 4],
       strict_mode: false,
     }));
+  });
+
+  it("opens new sessions in a dialog with footer actions", async () => {
+    const user = userEvent.setup();
+    render(
+      <BlockingScreen
+        state={snapshot({
+          isAuthenticated: true,
+          devices: [device],
+          blocking: { schedules: [], blocklists: [blocklist], statusMessage: "", loading: false },
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add Session" }));
+    const dialog = screen.getByRole("dialog", { name: "New session" });
+    expect(dialog.closest(".blocking-dialog-scrim")?.parentElement).toBe(document.body);
+    for (const section of ["Schedule", "What to block", "Protection", "Blocked screen"]) {
+      expect(within(dialog).getByRole("region", { name: section })).toBeVisible();
+    }
+    const footer = dialog.querySelector(".blocking-modal-footer");
+    expect(footer).toContainElement(within(dialog).getByRole("button", { name: "Create blocking session" }));
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "New session" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Add Session" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "New session" })).toBeNull();
   });
 
   it("shows an empty history tab", async () => {

@@ -28,6 +28,10 @@ const desktop = {
   setDeviceVisible: vi.fn(),
   setDeviceNickname: vi.fn(),
   deleteDevice: vi.fn(),
+  getBlockScreens: vi.fn().mockResolvedValue({
+    default: { imageFile: "", header: "", detail: "", imageUrl: "" },
+    sessions: {},
+  }),
 };
 
 function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
@@ -169,10 +173,20 @@ describe("application chrome", () => {
     expect(desktop.selectInspector).toHaveBeenCalledWith({ kind: "none" });
   });
 
-  it("shows blocking session details in the inspector", () => {
+  it("shows blocking session details in the inspector", async () => {
     render(
       <Inspector
         state={snapshot({
+          blocking: {
+            blocklists: [{
+              blocklist_id: "list-1",
+              name: "Social",
+              entries: [],
+              entry_count: 2,
+              created_at: "2026-09-10T00:00:00Z",
+              updated_at: "2026-09-10T00:00:00Z",
+            }],
+          } as unknown as AppSnapshot["blocking"],
           inspector: {
             kind: "schedule",
             segment: null,
@@ -184,7 +198,7 @@ describe("application chrome", () => {
               end_time: "18:00:00",
               days_of_week: [0, 1, 2, 3, 4],
               time_zone: "UTC",
-              is_active: true,
+              is_active: false,
               blocklists: [{ blocklist_id: "list-1", name: "Social" }],
               devices: [{
                 device_id: "device-id-1",
@@ -204,13 +218,64 @@ describe("application chrome", () => {
     const dialog = screen.getByRole("dialog", { name: "Deep work" });
     expect(dialog).toBeVisible();
     expect(dialog.closest(".blocking-dialog-scrim")?.parentElement).toBe(document.body);
-    expect(screen.getByText("Session details")).toBeVisible();
-    expect(screen.getByText("Deep work")).toBeVisible();
-    expect(screen.getByText("Social")).toBeVisible();
-    expect(screen.getByText("Studio Mac")).toBeVisible();
-    expect(screen.getByText("UTC")).toBeVisible();
-    expect(screen.getByLabelText("Repeats Mon, Tue, Wed, Thu, Fri")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Edit session" })).toBeVisible();
+    expect(within(dialog).getByRole("heading", { name: "Deep work" })).toBeVisible();
+    expect(within(dialog).getByText("Scheduled")).toBeVisible();
+    expect(within(dialog).getAllByText("16:00 – 18:00")).toHaveLength(1);
+    expect(within(dialog).getByText("Social")).toBeVisible();
+    expect(within(dialog).getByText("2 entries")).toBeVisible();
+    expect(within(dialog).getByText("Studio Mac")).toBeVisible();
+    expect(within(dialog).getByText("macos")).toBeVisible();
+    expect(within(dialog).getByText("UTC")).toBeVisible();
+    expect(within(dialog).getByLabelText("Repeats Mon, Tue, Wed, Thu, Fri")).toBeVisible();
+    const footer = dialog.querySelector(".blocking-modal-footer");
+    expect(footer).toContainElement(within(dialog).getByRole("button", { name: "Edit session" }));
+    expect(footer).toContainElement(within(dialog).getByRole("button", { name: "Delete session" }));
+    expect(await within(dialog).findByText("Using the built-in screen.")).toBeVisible();
+  });
+
+  it("shows a session block screen override in the details", async () => {
+    desktop.getBlockScreens.mockResolvedValueOnce({
+      default: { imageFile: "", header: "", detail: "", imageUrl: "" },
+      sessions: {
+        "sched-1": {
+          imageFile: "preset:pulse.gif",
+          header: "Stay here",
+          detail: "One thing.",
+          imageUrl: "http://127.0.0.1/presets/pulse.gif",
+        },
+      },
+    });
+    render(
+      <Inspector
+        state={snapshot({
+          inspector: {
+            kind: "schedule",
+            segment: null,
+            block: null,
+            schedule: {
+              schedule_id: "sched-1",
+              name: "Deep work",
+              start_time: "16:00:00",
+              end_time: "18:00:00",
+              days_of_week: [0, 1, 2, 3, 4],
+              time_zone: "UTC",
+              is_active: false,
+              blocklists: [],
+              devices: [],
+              blocklist_count: 0,
+              device_count: 0,
+              created_at: "2026-09-10T00:00:00Z",
+              updated_at: "2026-09-10T00:00:00Z",
+            },
+          },
+        })}
+      />,
+    );
+    const dialog = screen.getByRole("dialog", { name: "Deep work" });
+    expect(await within(dialog).findByText("Stay here")).toBeVisible();
+    expect(within(dialog).getByText("One thing.")).toBeVisible();
+    expect(dialog.querySelector(".block-screen-preview img")).toHaveAttribute("src", "http://127.0.0.1/presets/pulse.gif");
+    expect(within(dialog).queryByText("Using the built-in screen.")).toBeNull();
   });
 
   it("asks to edit a blocking session from the inspector", async () => {

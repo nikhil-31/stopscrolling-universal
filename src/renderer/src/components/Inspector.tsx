@@ -8,7 +8,6 @@ import {
   scheduleDeviceLabel,
   scheduleRowKind,
   scheduleStatusLabel,
-  scheduleWhen,
   WEEKDAYS,
 } from "@shared/blocking";
 import { formatFullDate } from "@shared/calendar-workspace";
@@ -19,6 +18,7 @@ import type { BlockingSchedule, ScreenTimeSessionBlock } from "@shared/types";
 import { Clock3, Globe2, Laptop2, Shield, X } from "lucide-react";
 import { useClockFormat } from "../clock-format";
 import { useSessionTitle } from "../session-title";
+import { SessionModal, SessionModalBody } from "./blocking/SessionModal";
 import { Badge, Button, IconButton } from "./ui";
 
 function closeInspector() {
@@ -40,6 +40,14 @@ function WeekStrip({ days }: { days: number[] }) {
   );
 }
 
+function sessionScreenOverride(
+  screen: { imageFile: string; header: string; detail: string; imageUrl: string } | undefined,
+) {
+  if (!screen) return null;
+  if (!screen.imageFile && !screen.header.trim() && !screen.detail.trim()) return null;
+  return screen;
+}
+
 function ScheduleInspector({
   schedule,
   state,
@@ -51,6 +59,9 @@ function ScheduleInspector({
 }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);
+  const [blockScreen, setBlockScreen] = useState<
+    { imageFile: string; header: string; detail: string; imageUrl: string } | "builtin" | null
+  >(null);
   const now = new Date();
   const kind = scheduleRowKind(schedule, now);
   const status = scheduleStatusLabel(kind);
@@ -62,6 +73,8 @@ function ScheduleInspector({
     occurrence
     && state.blocking?.enforcement?.strictOccurrenceIDs?.includes(occurrence.occurrence_id),
   );
+  const windowLabel = `${clockLabel(schedule.start_time)} – ${clockLabel(schedule.end_time)}`;
+  const statusLine = kind === "current" ? `${status} · ${schedule.name}` : status;
 
   async function endSession() {
     if (!occurrence || strictActive) return;
@@ -97,52 +110,34 @@ function ScheduleInspector({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const title = kind === "current" ? "Current Session" : schedule.name;
+  useEffect(() => {
+    const load = window.stopscrolling.getBlockScreens;
+    if (!load) {
+      setBlockScreen("builtin");
+      return;
+    }
+    let cancelled = false;
+    setBlockScreen(null);
+    void load().then((screens) => {
+      if (cancelled) return;
+      setBlockScreen(sessionScreenOverride(screens.sessions[schedule.schedule_id]) ?? "builtin");
+    }).catch(() => {
+      if (!cancelled) setBlockScreen("builtin");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [schedule.schedule_id]);
 
-  return createPortal(
-    <div className="blocking-dialog-scrim" onClick={closeInspector}>
-      <div
-        className="blocking-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label={schedule.name}
-        onClick={(event) => event.stopPropagation()}
-      >
-      <IconButton
-        className="blocking-dialog-close"
-        label="Close session details"
-        icon={X}
-        onClick={closeInspector}
-      />
-      <div className="inspector-header">
-        <span className="row-copy">
-          <div className="inspector-kicker">Session details</div>
-          <h2>{title}</h2>
-          <p className="muted">{kind === "current" ? schedule.name : scheduleWhen(schedule)}</p>
-        </span>
-        <div className="inspector-actions">
-          {occurrence ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              disabled={strictActive || ending}
-              title={strictActive ? "Active Strict Mode sessions cannot be ended." : undefined}
-              onClick={() => void endSession()}
-            >
-              {ending ? "Ending…" : "End session"}
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            size="sm"
-            variant="primary"
-            disabled={strictActive}
-            title={strictActive ? "Active Strict Mode sessions cannot be edited." : undefined}
-            onClick={() => onEdit?.(schedule)}
-          >
-            Edit session
-          </Button>
+  return (
+    <SessionModal
+      title={schedule.name}
+      titleId="session-details-title"
+      subtitle={statusLine}
+      closeLabel="Close session details"
+      onClose={closeInspector}
+      footer={(
+        <>
           <Button
             type="button"
             size="sm"
@@ -153,46 +148,99 @@ function ScheduleInspector({
           >
             Delete session
           </Button>
+          <div className="blocking-modal-footer-end">
+            {occurrence ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={strictActive || ending}
+                title={strictActive ? "Active Strict Mode sessions cannot be ended." : undefined}
+                onClick={() => void endSession()}
+              >
+                {ending ? "Ending…" : "End session"}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant="primary"
+              disabled={strictActive}
+              title={strictActive ? "Active Strict Mode sessions cannot be edited." : undefined}
+              onClick={() => onEdit?.(schedule)}
+            >
+              Edit session
+            </Button>
+          </div>
+        </>
+      )}
+    >
+      <SessionModalBody>
+        {strictActive ? (
+          <p className="blocking-modal-notice" role="status">
+            This active Strict Mode session cannot be ended, edited, or deleted until it finishes.
+          </p>
+        ) : null}
+        {actionError ? <p className="blocking-modal-notice" role="alert">{actionError}</p> : null}
+        <div className="blocking-session-summary">
+          <span className="small muted">{kind === "current" ? "Time remaining" : "Window"}</span>
+          <strong>{remaining ?? windowLabel}</strong>
+          <span className="small muted">{schedule.time_zone}</span>
+          <WeekStrip days={schedule.days_of_week} />
         </div>
-      </div>
-      <div className="inspector-meta">
-        <Badge tone={kind === "current" ? "success" : kind === "schedule" ? "accent" : "neutral"} dot={kind === "current"}>
-          {status}
-        </Badge>
-        {strictActive ? <Badge tone="danger">Strict Mode locked</Badge> : null}
-        <Badge><Clock3 size={11} aria-hidden="true" />{clockLabel(schedule.start_time)} – {clockLabel(schedule.end_time)}</Badge>
-      </div>
-      <WeekStrip days={schedule.days_of_week} />
-      <div className="inspector-duration">
-        <span className="small muted">{kind === "current" ? "Time remaining" : "Window"}</span>
-        <strong>{remaining ?? `${clockLabel(schedule.start_time)} – ${clockLabel(schedule.end_time)}`}</strong>
-        <span className="small muted">{schedule.time_zone}</span>
-      </div>
-      <div className="inspector-kicker"><Shield size={11} aria-hidden="true" /> Blocklists</div>
-      {schedule.blocklists.length ? schedule.blocklists.map((list) => (
-        <div className="data-row" key={list.blocklist_id}>
-          <span className="row-copy">
-            <span className="row-title">{list.name}</span>
-            <span className="row-subtitle">Blocklist</span>
-          </span>
-        </div>
-      )) : <p className="muted">No blocklists</p>}
-      <div className="inspector-kicker"><Laptop2 size={11} aria-hidden="true" /> Devices</div>
-      {schedule.devices.length ? schedule.devices.map((device) => (
-        <div className="data-row" key={device.device_id}>
-          <span className="row-copy">
-            <span className="row-title">{scheduleDeviceLabel(device)}</span>
-            <span className="row-subtitle">{device.device_platform || "Device"}</span>
-          </span>
-        </div>
-      )) : <p className="muted">No devices</p>}
-      {strictActive ? (
-        <p className="muted">This active Strict Mode session cannot be ended, edited, or deleted until it finishes.</p>
-      ) : null}
-      {actionError ? <p className="muted" role="alert">{actionError}</p> : null}
-      </div>
-    </div>,
-    document.body,
+        <section className="blocking-modal-section" aria-label="Block screen">
+          <h3>Block screen</h3>
+          {blockScreen && blockScreen !== "builtin" ? (
+            <div className="block-screen-preview">
+              {blockScreen.imageUrl ? <img src={blockScreen.imageUrl} alt="" /> : <span className="block-screen-preview-mark" />}
+              <strong>{blockScreen.header.trim() || "You are free."}</strong>
+              <span>{blockScreen.detail.trim() || "Do what matters."}</span>
+              <em>Stop Scrolling</em>
+            </div>
+          ) : blockScreen === "builtin" ? (
+            <p className="muted">Using the built-in screen.</p>
+          ) : null}
+        </section>
+        <section className="blocking-modal-section" aria-label="Blocklists">
+          <h3>Blocklists</h3>
+          {schedule.blocklists.length ? (
+            <div>
+              {schedule.blocklists.map((list) => {
+                const known = state.blocking?.blocklists.find((item) => item.blocklist_id === list.blocklist_id);
+                const count = known?.entry_count;
+                return (
+                  <div className="data-row" key={list.blocklist_id}>
+                    <span className="blocking-list-icon"><Shield size={14} aria-hidden="true" /></span>
+                    <span className="row-copy">
+                      <span className="row-title">{list.name}</span>
+                      {count == null ? null : (
+                        <span className="row-subtitle">{count} {count === 1 ? "entry" : "entries"}</span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : <p className="muted">No blocklists</p>}
+        </section>
+        <section className="blocking-modal-section" aria-label="Devices">
+          <h3>Devices</h3>
+          {schedule.devices.length ? (
+            <div>
+              {schedule.devices.map((device) => (
+                <div className="data-row" key={device.device_id}>
+                  <span className="blocking-list-icon"><Laptop2 size={14} aria-hidden="true" /></span>
+                  <span className="row-copy">
+                    <span className="row-title">{scheduleDeviceLabel(device)}</span>
+                    <span className="row-subtitle">{device.device_platform || "Device"}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : <p className="muted">No devices</p>}
+        </section>
+      </SessionModalBody>
+    </SessionModal>
   );
 }
 
