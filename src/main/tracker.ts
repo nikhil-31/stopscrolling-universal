@@ -21,6 +21,7 @@ import { contextEquals } from "./collectors/types";
 import { loadCheckpoint, saveCheckpoint } from "./checkpoint";
 import { decideIdle, IDLE_THRESHOLD_SECONDS, recoveredSessionEnd } from "./idle-session";
 import { logObservability } from "./logger";
+import { openLocalHistory } from "./history-store";
 import { PendingUploadStore } from "./outbox";
 import { JevClassifier } from "./jev-classifier";
 import { JevProductivityAgent, type ProductivityInput } from "./jev-productivity-agent";
@@ -41,6 +42,7 @@ function rangeKey(start: Date, end: Date, timeZone: string) {
 
 export class ScreenTimeTracker {
   readonly outbox = new PendingUploadStore();
+  readonly history = openLocalHistory();
   readonly collector: ActivityCollector = createCollector();
   isTracking = false;
   currentContext: ForegroundContext | null = null;
@@ -101,6 +103,7 @@ export class ScreenTimeTracker {
     });
     this.productivityAgent.onResolved = (_key, entry) => this.applyProductivity(entry);
     this.pendingUploadCount = this.outbox.count();
+    this.history.remember(this.outbox.load());
     this.recoverCheckpoint();
     powerMonitor.on("lock-screen", () => {
       void this.closeForPower("lock");
@@ -319,12 +322,10 @@ export class ScreenTimeTracker {
   async loadRange(start: Date, end: Date, timeZone: string) {
     const generation = ++this.loadGeneration;
     if (!this.syncReady()) {
-      this.serverEntries = [];
+      this.serverEntries = this.history.overlapping(start, end);
       this.rangeCache.clear();
       this.loadingEntries = false;
-      this.entriesUnavailableReason = this.api.getTokens()
-        ? null
-        : "Sign in to load multi-device timelines. Local sessions still record to the outbox.";
+      this.entriesUnavailableReason = null;
       this.pendingUploadCount = this.outbox.count();
       this.onChange();
       return;
@@ -341,7 +342,13 @@ export class ScreenTimeTracker {
       this.entriesUnavailableReason = null;
     } catch (error) {
       if (generation !== this.loadGeneration) return;
-      this.entriesUnavailableReason = error instanceof Error ? error.message : "Timeline unavailable";
+      const local = this.history.overlapping(start, end);
+      if (local.length) {
+        this.serverEntries = local;
+        this.entriesUnavailableReason = null;
+      } else {
+        this.entriesUnavailableReason = error instanceof Error ? error.message : "Timeline unavailable";
+      }
     }
     this.loadingEntries = false;
     this.pendingUploadCount = this.outbox.count();
@@ -373,6 +380,7 @@ export class ScreenTimeTracker {
     const entries = sessions.map((session) =>
       entryFromSession(session, currentDevicePlatform(), deviceName(), timeZone),
     );
+    this.history.remember(entries);
     this.rangeCache.delete(key);
     this.rangeCache.set(key, entries);
     while (this.rangeCache.size > RANGE_CACHE_LIMIT) {
@@ -473,6 +481,7 @@ export class ScreenTimeTracker {
       const entry = this.liveEntry(this.openStart, this.openContext, bounded);
       entry.source = "local";
       this.outbox.append(entry);
+      this.history.remember([entry]);
       this.pendingUploadCount = this.outbox.count();
       this.onSessionClosed(entry);
       if (this.pendingUploadCount >= FLUSH_THRESHOLD) void this.flushOutbox();
@@ -507,6 +516,7 @@ export class ScreenTimeTracker {
       const entry = this.liveEntry(start, checkpoint.context, end);
       entry.source = "local";
       this.outbox.append(entry);
+      this.history.remember([entry]);
       this.onSessionClosed(entry);
     }
     saveCheckpoint(null);

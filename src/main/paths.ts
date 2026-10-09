@@ -34,6 +34,14 @@ export function outboxKeyPath() {
   return join(userDataDir(), "outbox.key");
 }
 
+export function historyDir() {
+  return join(userDataDir(), "session-history");
+}
+
+export function historyKeyPath() {
+  return join(userDataDir(), "session-history.key");
+}
+
 export function checkpointPath() {
   return join(userDataDir(), "open-session.json");
 }

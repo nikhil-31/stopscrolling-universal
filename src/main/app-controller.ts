@@ -1,5 +1,6 @@
 import { BrowserWindow } from "electron";
 import { hideFreedomScreen, showFreedomScreen } from "./freedom-window";
+import { mergeEntries } from "./local-history";
 import {
   blockScreenImagePath,
   importBlockScreenImage,
@@ -515,7 +516,23 @@ export class AppController {
     const devices = this.deviceEntries();
     const registeredKeys = new Set(devices.map((device) => device.visibilityKey));
     const localKey = deviceKey(currentDevicePlatform(), localDeviceName());
-    const mergedEntries = this.tracker.mergedEntries();
+    const period = this.navigation === "insights" ? this.insightsPeriod : "day";
+    const calendarRange = usesCalendarRange(this.navigation);
+    const anchor =
+      this.navigation === "insights"
+        ? this.insightsAnchor
+        : calendarRange
+          ? this.calendarAnchor
+          : this.todayDay;
+    const todayBounds = todayPeriodBounds("day", this.todayDay, zone);
+    const todayWindow = usesTodayWindow(this.navigation);
+    const snapshotBounds = todayWindow
+      ? todayBounds
+      : periodBounds(period, anchor, zone);
+    const mergedEntries = mergeEntries(
+      this.tracker.mergedEntries(),
+      this.tracker.history.overlapping(snapshotBounds.start, snapshotBounds.end),
+    );
     const allEntries = this.auth.user && registeredKeys.size
       ? mergedEntries.filter((entry) => {
         const key = deviceKey(entry.platform, entry.deviceName);
@@ -538,19 +555,6 @@ export class AppController {
     const entries = this.navigation === "insights" || this.navigation === "today"
       ? filterEntriesForInsights(allEntries, deviceKeyForNav, this.hiddenDeviceKeys)
       : allEntries;
-    const period = this.navigation === "insights" ? this.insightsPeriod : "day";
-    const calendarRange = usesCalendarRange(this.navigation);
-    const anchor =
-      this.navigation === "insights"
-        ? this.insightsAnchor
-        : calendarRange
-          ? this.calendarAnchor
-          : this.todayDay;
-    const todayBounds = todayPeriodBounds("day", this.todayDay, zone);
-    const todayWindow = usesTodayWindow(this.navigation);
-    const snapshotBounds = todayWindow
-      ? todayBounds
-      : periodBounds(period, anchor, zone);
     const serverSummary = deviceScoped ? undefined : this.mappedServerSummary(snapshotBounds);
     const categoryCache = this.tracker.categoryCache();
     const productivityCache = this.tracker.productivityAgent.cache;
