@@ -752,8 +752,30 @@ a { color: var(--brand); }
 }
 
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
-.device-picker { flex-wrap: wrap; justify-content: flex-end; max-width: 420px; }
+.device-picker {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: 100%;
+}
+.device-picker button { min-width: 0; overflow: hidden; }
+.device-picker-all { flex-shrink: 0; }
+.device-picker-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .device-picker-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.device-picker button[aria-selected="true"] {
+  color: var(--text);
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-xs);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .device-picker button[aria-selected="true"] {
+    background: var(--surface-hover);
+  }
+}
+:root[data-theme="dark"] .device-picker button[aria-selected="true"] {
+  background: var(--surface-hover);
+}
 .page-eyebrow { margin-bottom: 3px; color: var(--brand); font-size: 10px; font-weight: 750; letter-spacing: 0.1em; text-transform: uppercase; }
 .page-header h2 { margin: 0; font-size: 24px; font-weight: 750; letter-spacing: -0.04em; }
 .page-header p { max-width: 590px; margin: 5px 0 0; color: var(--text-secondary); font-size: 11px; }
@@ -1092,10 +1114,12 @@ a { color: var(--brand); }
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  min-width: 0;
   margin-bottom: 14px;
 }
 .today-chrome-title {
   display: flex;
+  flex-shrink: 0;
   align-items: baseline;
   gap: 8px;
   margin: 0;
@@ -1105,7 +1129,15 @@ a { color: var(--brand); }
 }
 .today-chrome-title > span:first-child { color: var(--text-tertiary); font-weight: 550; }
 .today-chrome-slash { color: var(--text-tertiary); font-weight: 400; }
-.today-chrome-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.today-chrome-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
 .activity-board { display: grid; gap: 16px; }
 .activity-split {
   display: grid;

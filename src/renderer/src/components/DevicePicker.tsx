@@ -39,7 +39,7 @@ export function DevicePicker({
         type="button"
         role="tab"
         aria-selected={deviceKey === ALL_DEVICES}
-        className={deviceKey === ALL_DEVICES ? "active" : ""}
+        className={deviceKey === ALL_DEVICES ? "active device-picker-all" : "device-picker-all"}
         onClick={() => onChange(ALL_DEVICES)}
       >
         All devices
@@ -60,7 +60,7 @@ export function DevicePicker({
               aria-hidden="true"
               style={{ background: deviceColor(device.visibilityKey, visibleDevices) }}
             />
-            {label}
+            <span className="device-picker-label">{label}</span>
           </button>
         );
       })}
