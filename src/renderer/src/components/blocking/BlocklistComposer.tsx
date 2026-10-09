@@ -20,6 +20,26 @@ const emptyDraft: ComposerDraft = {
   appEntries: [],
 };
 
+function FilterMark({ selected }: { selected: boolean }) {
+  return (
+    <span className="blocking-filter-add" aria-hidden="true">
+      {selected ? (
+        <Check size={12} strokeWidth={2.75} />
+      ) : (
+        <svg viewBox="0 0 16 16" width="12" height="12">
+          <path
+            d="M8 3.15v9.7M3.15 8h9.7"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+          />
+        </svg>
+      )}
+    </span>
+  );
+}
+
 function installedApplicationIdentifier(application: InstalledApplication) {
   return application.signingIdentifier
     || application.bundleIdentifier
@@ -109,6 +129,7 @@ export function BlocklistComposer({
 
   return (
     <form className="form blocking-create blocking-composer" onSubmit={submit}>
+      <div className="blocking-modal-body">
       {error ? <p className="muted" role="alert">{error}</p> : null}
       <label className="field">
         <span className="sr-only">Name your blocklist</span>
@@ -302,7 +323,7 @@ export function BlocklistComposer({
                 key={filter.id}
                 onClick={() => toggleId(filter.id, selectedCommonIds, setSelectedCommonIds)}
               >
-                <span className="blocking-filter-add">{selected ? <Check size={11} /> : <Plus size={11} />}</span>
+                <FilterMark selected={selected} />
                 {filter.label}
               </button>
             );
@@ -329,22 +350,26 @@ export function BlocklistComposer({
                 key={category.id}
                 onClick={() => toggleId(category.id, selectedCategoryIds, setSelectedCategoryIds)}
               >
-                <span className="blocking-filter-add">{selected ? <Check size={11} /> : <Plus size={11} />}</span>
+                <FilterMark selected={selected} />
                 {category.label}
               </button>
             );
           })}
         </div>
       </section>
-
-      <Button className="blocking-composer-submit" variant="primary" type="submit" disabled={loading}>
-        {submitLabel}
-      </Button>
-      {onCancel && !showMultipleSites ? (
-        <Button type="button" variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      ) : null}
+      </div>
+      <footer className="blocking-modal-footer">
+        <div className="blocking-modal-footer-end">
+          {onCancel && !showMultipleSites ? (
+            <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+              Cancel
+            </Button>
+          ) : null}
+          <Button variant="primary" size="sm" type="submit" disabled={loading}>
+            {submitLabel}
+          </Button>
+        </div>
+      </footer>
     </form>
   );
 }

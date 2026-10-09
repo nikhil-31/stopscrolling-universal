@@ -214,6 +214,7 @@ describe("BlockingScreen", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Add Blocklist" }));
+    expect(screen.getByRole("dialog", { name: "New blocklist" })).toBeVisible();
     await user.type(screen.getByPlaceholderText("Name your blocklist"), "News");
     await user.type(screen.getByPlaceholderText("Add custom website (e.g. cnn.com)"), "nytimes.com");
     await user.click(screen.getByRole("button", { name: "Add site" }));
@@ -536,6 +537,24 @@ describe("BlockingScreen", () => {
     await user.click(screen.getByRole("button", { name: "Delete session" }));
     expect(desktop.deleteBlockingSchedule).toHaveBeenCalledWith("sched-1");
     expect(desktop.selectInspector).toHaveBeenCalledWith({ kind: "none" });
+  });
+
+  it("closes a new blocklist without creating it", async () => {
+    const user = userEvent.setup();
+    render(
+      <BlockingScreen
+        state={snapshot({
+          isAuthenticated: true,
+          blocking: { schedules: [], blocklists: [], statusMessage: "", loading: false },
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add Blocklist" }));
+    expect(screen.getByRole("dialog", { name: "New blocklist" })).toBeVisible();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "New blocklist" })).toBeNull();
+    expect(desktop.createBlocklist).not.toHaveBeenCalled();
   });
 
   it("selects helper inventory apps and persists stable identifiers", async () => {

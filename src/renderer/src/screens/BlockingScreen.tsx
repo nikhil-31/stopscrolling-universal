@@ -111,15 +111,16 @@ export function BlockingScreen({
   }
 
   useEffect(() => {
-    if (!showCreateSession) return;
+    if (!showCreateSession && !showCreateBlocklist) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       setShowCreateSession(false);
+      setShowCreateBlocklist(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showCreateSession]);
+  }, [showCreateSession, showCreateBlocklist]);
 
   useEffect(() => {
     setSelectedBlocklist((current) => {
@@ -238,30 +239,16 @@ export function BlockingScreen({
                 size="sm"
                 icon={Plus}
                 onClick={() => {
-                  setShowCreateBlocklist((open) => !open);
-                  if (!showCreateBlocklist) void refreshInventory();
+                  setShowCreateBlocklist(true);
+                  void refreshInventory();
                 }}
               >
                 Add Blocklist
               </Button>
             )}
           >
-            {showCreateBlocklist ? (
-              <BlocklistComposer
-                submitLabel="Create blocklist"
-                loading={blocking.loading}
-                installedApplications={blocking.installedApplications}
-                inventoryLoading={inventoryLoading}
-                inventoryUnavailableReason={inventoryUnavailableReason}
-                onRefreshInventory={() => void refreshInventory()}
-                onSubmit={(payload) => {
-                  window.stopscrolling.createBlocklist(payload);
-                  setShowCreateBlocklist(false);
-                }}
-              />
-            ) : null}
             {blocking.loading && !blocking.blocklists.length ? <LoadingState label="Loading blocklists…" /> : null}
-            {!blocking.loading && !blocking.blocklists.length && !showCreateBlocklist ? (
+            {!blocking.loading && !blocking.blocklists.length ? (
               <EmptyState title="No blocklists" body="Create a blocklist with websites and apps to use in sessions." />
             ) : null}
             {blocking.blocklists.map((list) => (
@@ -307,6 +294,30 @@ export function BlockingScreen({
           loading={blocking.loading}
           onClose={() => onCloseEdit?.()}
         />
+      ) : null}
+      {showCreateBlocklist ? (
+        <SessionModal
+          title="New blocklist"
+          titleId="blocklist-create-title"
+          subtitle="Choose the websites and apps a session can block."
+          closeLabel="Close new blocklist"
+          onClose={() => setShowCreateBlocklist(false)}
+          size="form"
+        >
+          <BlocklistComposer
+            submitLabel="Create blocklist"
+            loading={blocking.loading}
+            installedApplications={blocking.installedApplications}
+            inventoryLoading={inventoryLoading}
+            inventoryUnavailableReason={inventoryUnavailableReason}
+            onRefreshInventory={() => void refreshInventory()}
+            onCancel={() => setShowCreateBlocklist(false)}
+            onSubmit={(payload) => {
+              window.stopscrolling.createBlocklist(payload);
+              setShowCreateBlocklist(false);
+            }}
+          />
+        </SessionModal>
       ) : null}
       {showCreateSession ? (
         <SessionModal
