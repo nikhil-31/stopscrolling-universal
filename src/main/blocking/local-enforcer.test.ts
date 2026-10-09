@@ -43,7 +43,7 @@ describe("local enforcer", () => {
     await enforcer.enforce({ appName: "Messages", bundleID: "com.apple.MobileSMS", url: "" });
     await enforcer.enforce({ appName: "Notes", bundleID: "com.apple.Notes", url: "" });
 
-    expect(closeWebsite).toHaveBeenCalledWith("Google Chrome", "com.google.Chrome");
+    expect(closeWebsite).toHaveBeenCalledWith("Google Chrome", "com.google.Chrome", ["instagram.com"]);
     expect(quitApp).toHaveBeenCalledWith("Messages", "com.apple.MobileSMS");
     expect(prepareScreen).toHaveBeenCalledTimes(2);
     expect(prepareScreen).toHaveBeenCalledWith("sched-1");

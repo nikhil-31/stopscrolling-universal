@@ -17,6 +17,8 @@ describe("freedom page", () => {
     expect(html).toContain("Stop Scrolling");
     expect(html).toContain("#3e648c");
     expect(html).toContain("data:image/png;base64,");
+    expect(html).toContain("popstate");
+    expect(html).toContain('history.pushState(null, "", location.href)');
   });
 
   it("serves a session header and its image", async () => {

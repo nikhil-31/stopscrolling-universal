@@ -114,6 +114,12 @@ function pageHtml() {
       <p class="name">Stop Scrolling</p>
     </div>
   </div>
+  <script>
+    history.pushState(null, "", location.href);
+    addEventListener("popstate", function () {
+      history.pushState(null, "", location.href);
+    });
+  </script>
 </body>
 </html>`;
 }
