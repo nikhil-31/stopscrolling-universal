@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isQuitMenuItem } from "../collectors/ax-browser";
+import { isBrowserTab, isQuitMenuItem, omniboxIsFreedomPage, shouldCommitNavigation } from "../collectors/ax-browser";
 import { blockedTabScript, listTabsScript, matchingTabs, setTabsScript } from "./local-actions";
 
 describe("blocked tab script", () => {
@@ -36,6 +36,29 @@ describe("blocked tab script", () => {
     expect(setTabsScript("Google Chrome", tabs, page)).toContain(`set URL of tab 1 of window 1 to "${page}"`);
     expect(setTabsScript("Google Chrome", tabs, page)).toContain(`set URL of tab 1 of window 2 to "${page}"`);
     expect(setTabsScript("Google Chrome", tabs, page)).not.toContain("tab 2 of window 1");
+  });
+
+  it("commits the freedom page and leaves a blocked host in the address bar", () => {
+    expect(omniboxIsFreedomPage(page, page)).toBe(true);
+    expect(omniboxIsFreedomPage("http://127.0.0.1:43123", page)).toBe(true);
+    expect(omniboxIsFreedomPage("127.0.0.1:43123", page)).toBe(true);
+    expect(omniboxIsFreedomPage("https://www.instagram.com/", page)).toBe(false);
+    expect(omniboxIsFreedomPage("instagram.com", page)).toBe(false);
+    expect(omniboxIsFreedomPage("", page)).toBe(false);
+  });
+
+  it("commits a written address bar value and refuses a paste that still shows the blocked host", () => {
+    expect(shouldCommitNavigation(true, "https://www.instagram.com/", page)).toBe(true);
+    expect(shouldCommitNavigation(false, "https://www.instagram.com/", page)).toBe(false);
+    expect(shouldCommitNavigation(false, page, page)).toBe(true);
+    expect(shouldCommitNavigation(false, "", page)).toBe(false);
+  });
+
+  it("treats a tab strip item as a browser tab", () => {
+    expect(isBrowserTab("AXRadioButton", "tab")).toBe(true);
+    expect(isBrowserTab("AXTab", "Tab")).toBe(true);
+    expect(isBrowserTab("AXRadioButton", "radio button")).toBe(false);
+    expect(isBrowserTab("AXButton", "tab")).toBe(false);
   });
 
   it("treats a menu title that starts with Quit as the quit target", () => {

@@ -25,8 +25,13 @@ mac:
     - dmg
     - zip
   hardenedRuntime: true
+  provisioningProfile: release-native/macos/embedded.provisionprofile
   entitlements: release-native/macos/StopScrolling.entitlements
   entitlementsInherit: build/entitlements.mac.plist
+  signIgnore:
+    - Library/PrivilegedHelperTools/com.stopscrolling.helper
+    - Library/SystemExtensions/.*
+    - Resources/native/macos/libStopScrollingHostClient.dylib
   extendInfo:
     CFBundleName: Stop Scrolling
     CFBundleDisplayName: Stop Scrolling

@@ -122,6 +122,25 @@ export interface FriendRequest {
   updated_at: string;
 }
 
+export interface PeriodSummaryBucketApp {
+  label: string;
+  seconds: number;
+}
+
+export interface PeriodSummaryBucketDevice {
+  device_platform: string;
+  device_name: string;
+  seconds: number;
+  top_apps: PeriodSummaryBucketApp[];
+}
+
+export interface PeriodSummaryBucket {
+  start: string;
+  end: string;
+  seconds: number;
+  devices: PeriodSummaryBucketDevice[];
+}
+
 export interface PeriodSummaryResponse {
   start: string;
   end: string;
@@ -140,6 +159,7 @@ export interface PeriodSummaryResponse {
     device_label?: string;
   }>;
   tracked_seconds_by_day?: Record<string, number>;
+  buckets?: PeriodSummaryBucket[];
 }
 
 export interface SyncStatusResponse {
@@ -340,7 +360,11 @@ export interface AppSettings {
   timerBonusDay: string;
   /** When true, the productivity agent sends window titles to JEV for per-page verdicts. */
   agentSendTitles: boolean;
+  /** What to open when Jev rates the front window distracting. */
+  distractionResponse: DistractionResponse;
 }
+
+export type DistractionResponse = "off" | "popup" | "block";
 
 export interface ScreenTimeApiPayload {
   recorded_at: string;
@@ -540,6 +564,8 @@ export interface InstalledApplication {
   signingIdentifier: string | null;
   packageFamilyName: string | null;
   publisherThumbprint: string | null;
+  /** Renderer URL for the system icon. Bytes stay on the app-icon protocol. */
+  iconUrl?: string | null;
 }
 
 export interface BlockingCapabilities {

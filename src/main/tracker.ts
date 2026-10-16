@@ -25,7 +25,7 @@ import { openLocalHistory } from "./history-store";
 import { PendingUploadStore } from "./outbox";
 import { JevClassifier } from "./jev-classifier";
 import { JevProductivityAgent, type ProductivityInput } from "./jev-productivity-agent";
-import { deviceName, jevCategoriesPath, jevProductivityPath, localDeviceIdPath } from "./paths";
+import { deviceName, devicesCachePath, jevCategoriesPath, jevProductivityPath, localDeviceIdPath } from "./paths";
 import { resolveTypesafeApiKey } from "./typesafe-key-store";
 import type { StopScrollingAPI } from "./api-client";
 
@@ -48,8 +48,10 @@ export class ScreenTimeTracker {
   currentContext: ForegroundContext | null = null;
   /** Called for every foreground sample, including repeats, so blocking can keep a session closed. */
   onForeground: ((snapshot: ActivitySnapshot) => void) | null = null;
+  /** Called when a productivity verdict is stored, so a live rating can open the nudge immediately. */
+  onProductivity: (() => void) | null = null;
   pendingUploadCount = 0;
-  registeredDevices: DeviceRow[] = [];
+  registeredDevices: DeviceRow[] = loadDeviceCache();
   deviceStatus: DeviceStatusRow[] = [];
   serverEntries: ScreenTimeEntry[] = [];
   loadingEntries = false;
@@ -371,11 +373,48 @@ export class ScreenTimeTracker {
     }
   }
 
-  private async fetchRange(key: string, start: Date, end: Date, timeZone: string) {
+  /** Newest sessions for the Insights list. Bars come from the summary buckets. */
+  async loadPreview(start: Date, end: Date, timeZone: string, limit: number, deviceId?: string) {
+    const generation = ++this.loadGeneration;
+    if (!this.syncReady()) {
+      this.loadingEntries = false;
+      this.onChange();
+      return;
+    }
+    const key = `${rangeKey(start, end, timeZone)}|${limit}|${deviceId ?? ""}`;
+    const cached = this.rangeCache.get(key);
+    if (cached) this.serverEntries = cached;
+    this.loadingEntries = !cached;
+    this.onChange();
+    try {
+      const entries = await this.fetchRange(key, start, end, timeZone, limit, deviceId);
+      if (generation !== this.loadGeneration) return;
+      this.serverEntries = entries;
+      this.entriesUnavailableReason = null;
+    } catch (error) {
+      if (generation !== this.loadGeneration) return;
+      this.entriesUnavailableReason = error instanceof Error ? error.message : "Timeline unavailable";
+    }
+    this.loadingEntries = false;
+    this.pendingUploadCount = this.outbox.count();
+    this.onChange();
+  }
+
+  private async fetchRange(
+    key: string,
+    start: Date,
+    end: Date,
+    timeZone: string,
+    limit?: number,
+    deviceId?: string,
+  ) {
     const sessions = await this.api.sessions({
       start: start.toISOString(),
       end: end.toISOString(),
       time_zone: timeZone,
+      limit,
+      order: limit ? "desc" : undefined,
+      device_id: deviceId,
     });
     const entries = sessions.map((session) =>
       entryFromSession(session, currentDevicePlatform(), deviceName(), timeZone),
@@ -396,6 +435,7 @@ export class ScreenTimeTracker {
     try {
       this.registeredDevices = await this.api.devices();
       this.deviceStatus = await this.api.deviceStatus();
+      saveDeviceCache(this.registeredDevices);
     } catch (error) {
       logObservability(`Device refresh failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -407,6 +447,7 @@ export class ScreenTimeTracker {
     await this.registerLocalDevice();
     const devices = await this.api.devices();
     this.registeredDevices = devices;
+    saveDeviceCache(devices);
     const collected: ScreenTimeEntry[] = [];
     for (const device of devices) {
       let since: string | undefined;
@@ -562,6 +603,7 @@ export class ScreenTimeTracker {
   private applyProductivity(entry: ProductivityCacheEntry) {
     if (entry.source === "jev" && !acceptedProductivityVerdict(entry.verdict, entry.confidence)) return;
     this.onChange();
+    this.onProductivity?.();
   }
 
   private liveEntry(start: Date, context: ForegroundContext, end: Date): ScreenTimeEntry {
@@ -580,4 +622,26 @@ export class ScreenTimeTracker {
       source: "live",
     };
   }
+}
+
+function loadDeviceCache(): DeviceRow[] {
+  try {
+    const parsed = JSON.parse(readFileSync(devicesCachePath(), "utf8")) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((row): row is DeviceRow => (
+      Boolean(row)
+      && typeof row === "object"
+      && typeof (row as DeviceRow).device_name === "string"
+      && (row as DeviceRow).device_name.length > 0
+      && typeof (row as DeviceRow).device_platform === "string"
+    ));
+  } catch {
+    return [];
+  }
+}
+
+function saveDeviceCache(devices: DeviceRow[]) {
+  if (!devices.length) return;
+  mkdirSync(dirname(devicesCachePath()), { recursive: true });
+  writeFileSync(devicesCachePath(), JSON.stringify(devices));
 }

@@ -1,3 +1,4 @@
+import { withApplicationIcons } from "@shared/application-icons";
 import type {
   BlockingCapabilities,
   BlockingEnforcementStatus,
@@ -135,12 +136,16 @@ export class BlockingHelperBridge {
 
   async refreshInventory() {
     try {
-      if (!(await this.registeredHelper())) return this.inventory;
-      this.inventory = parseInventory(await this.transport.request({ operation: "inventory" }));
+      if (!(await this.registeredHelper())) return false;
+      this.inventory = withApplicationIcons(
+        parseInventory(await this.transport.request({ operation: "inventory" })),
+        process.platform,
+      );
+      return true;
     } catch (error) {
       this.recordFailure(error);
+      return false;
     }
-    return this.inventory;
   }
 
   async applyPolicy(policy: BlockingPolicyResponse) {

@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -10,6 +10,7 @@ import {
   loadBlockScreens,
   resolveBlockScreen,
   saveDefaultBlockScreen,
+  saveNudgeReminder,
   saveSessionBlockScreen,
 } from "./block-screens";
 
@@ -36,7 +37,11 @@ describe("block screens", () => {
       header: "Focus",
       detail: "Stay with it.",
     });
-    expect(resolveBlockScreen("sched-3", { default: { imageFile: "", header: "", detail: "" }, sessions: {} })).toEqual({
+    expect(resolveBlockScreen("sched-3", {
+      default: { imageFile: "", header: "", detail: "" },
+      sessions: {},
+      reminder: { imageFile: "", detail: "" },
+    })).toEqual({
       imageFile: "",
       header: BUILTIN_HEADER,
       detail: BUILTIN_DETAIL,
@@ -51,6 +56,19 @@ describe("block screens", () => {
     const store = loadBlockScreens(root);
     expect(store.sessions["sched-1"]).toBeUndefined();
     expect(resolveBlockScreen("sched-1", store).header).toBe("Focus");
+  });
+
+  it("keeps a gif reminder when the blocked screen is saved", () => {
+    const root = dir();
+    writeFileSync(join(root, "wave.gif"), "gif");
+    const imageFile = importBlockScreenImage(root, join(root, "wave.gif"));
+    saveNudgeReminder(root, { imageFile, detail: "Put it down." });
+    saveDefaultBlockScreen(root, { imageFile: "", header: "Focus", detail: "Stay with it." });
+
+    const store = loadBlockScreens(root);
+    expect(store.reminder).toEqual({ imageFile, detail: "Put it down." });
+    expect(imageFile.endsWith(".gif")).toBe(true);
+    expect(existsSync(join(root, "images", imageFile))).toBe(true);
   });
 
   it("keeps a built-in image choice", () => {

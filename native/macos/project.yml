@@ -11,6 +11,9 @@ settings:
   MACOSX_DEPLOYMENT_TARGET: "13.0"
   CODE_SIGN_STYLE: Automatic
   ALWAYS_SEARCH_USER_PATHS: false
+  DEVELOPMENT_TEAM: B8NU7A4C87
+  STOPSCROLLING_POLICY_KEY_ID: 5b3ededa090fe7a2
+  STOPSCROLLING_POLICY_PUBLIC_KEY: "evejR1MXc6d60ogtFIA3PbApJHUqv4v7bOuedZchFFg="
 targets:
   BlockingCore:
     type: library.static
@@ -46,6 +49,7 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: com.stopscrolling.helper
       PRODUCT_NAME: com.stopscrolling.helper
       INFOPLIST_FILE: Resources/Helper/Info.plist
+      CREATE_INFOPLIST_SECTION_IN_BINARY: true
       CODE_SIGN_ENTITLEMENTS: Resources/Helper/Helper.entitlements
       SKIP_INSTALL: true
     scheme: {}
@@ -101,6 +105,19 @@ targets:
       CODE_SIGN_ENTITLEMENTS: Resources/EndpointSecurity/EndpointSecurity.entitlements
       SKIP_INSTALL: true
       GENERATE_INFOPLIST_FILE: false
+    scheme: {}
+  StopScrollingHostProfile:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/HostProfileStub
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.stopscrolling.desktop
+      PRODUCT_NAME: StopScrollingHostProfile
+      CODE_SIGN_ENTITLEMENTS: Resources/Host/StopScrolling.entitlements
+      ENABLE_HARDENED_RUNTIME: true
+      GENERATE_INFOPLIST_FILE: true
+      SKIP_INSTALL: true
     scheme: {}
 schemes:
   StopScrollingNative:

@@ -4,8 +4,9 @@ import { useState } from "react";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { applicationIconUrl } from "@shared/application-icons";
 import type { AppSnapshot } from "@shared/snapshot";
-import type { Blocklist, BlockingSchedule, DeviceListEntry } from "@shared/types";
+import type { Blocklist, BlockingSchedule, DeviceListEntry, InstalledApplication } from "@shared/types";
 import { Inspector } from "../components/Inspector";
 import { BlockingScreen } from "./BlockingScreen";
 
@@ -65,6 +66,16 @@ const blocklist: Blocklist = {
   entry_count: 3,
   created_at: "2026-09-10T00:00:00Z",
   updated_at: "2026-09-10T00:00:00Z",
+};
+
+const safariApplication: InstalledApplication = {
+  displayName: "Safari",
+  executablePath: "/Applications/Safari.app/Contents/MacOS/Safari",
+  bundleIdentifier: "com.apple.Safari",
+  signingIdentifier: "com.apple.Safari",
+  packageFamilyName: null,
+  publisherThumbprint: null,
+  iconUrl: applicationIconUrl("/Applications/Safari.app"),
 };
 
 const namedSchedule: BlockingSchedule = {
@@ -306,6 +317,7 @@ describe("BlockingScreen", () => {
           blocking: {
             schedules: [],
             blocklists: [blocklist],
+            installedApplications: [safariApplication],
             statusMessage: "",
             loading: false,
           },
@@ -322,6 +334,11 @@ describe("BlockingScreen", () => {
     expect(screen.getByText("Apps")).toBeVisible();
     expect(screen.getByText("Safari")).toBeVisible();
     expect(screen.getByText("com.apple.Safari")).toBeVisible();
+    const safari = screen.getByText("Safari");
+    const safariIcon = safari.closest(".data-row")?.querySelector("img");
+    expect(safariIcon).toHaveAttribute("src", applicationIconUrl("/Applications/Safari.app"));
+    expect(safariIcon && (safariIcon.compareDocumentPosition(safari) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy();
+    expect(screen.getByText("instagram.com").closest(".data-row")?.querySelector("img")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Close blocklist details" }));
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -573,6 +590,7 @@ describe("BlockingScreen", () => {
               signingIdentifier: "com.tinyspeck.slackmacgap",
               packageFamilyName: null,
               publisherThumbprint: null,
+              iconUrl: applicationIconUrl("/Applications/Slack.app"),
             }],
             statusMessage: "",
             loading: false,
@@ -584,7 +602,16 @@ describe("BlockingScreen", () => {
     await user.click(screen.getByRole("button", { name: "Add Blocklist" }));
     await user.type(screen.getByPlaceholderText("Name your blocklist"), "Apps");
     await user.type(screen.getByPlaceholderText("Search installed applications"), "Slack");
-    await user.click(screen.getByRole("checkbox", { name: /Slack/ }));
+    const slack = screen.getByRole("checkbox", { name: /Slack/ });
+    const slackLabel = slack.closest("label");
+    const slackIcon = slackLabel?.querySelector("img");
+    const slackName = slackLabel?.querySelector("strong");
+    expect(slackIcon).toHaveAttribute("src", applicationIconUrl("/Applications/Slack.app"));
+    expect(slackName).toHaveTextContent("Slack");
+    expect(slackIcon && slackName && (slackIcon.compareDocumentPosition(slackName) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy();
+    await user.click(slack);
+    expect(screen.getByRole("button", { name: "Remove Slack" }).querySelector("img"))
+      .toHaveAttribute("src", applicationIconUrl("/Applications/Slack.app"));
     await user.click(screen.getByRole("button", { name: "Create blocklist" }));
 
     expect(desktop.createBlocklist).toHaveBeenCalledWith({

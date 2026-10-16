@@ -41,13 +41,9 @@ export class LocalHistoryStore {
     const startMs = start.getTime();
     const endMs = end.getTime();
     if (!(endMs > startMs)) return [];
-    const from = dayKey(new Date(startMs - RANGE_PAD_MS).toISOString());
-    const to = dayKey(new Date(endMs).toISOString());
-    if (!from || !to) return [];
     const matches: ScreenTimeEntry[] = [];
-    for (const day of this.dayNames()) {
-      if (day < from || day > to) continue;
-      for (const entry of this.loadDay(day)) {
+    for (const day of this.daySpan(start, end)) {
+      for (const entry of this.entriesForDay(day)) {
         const entryStart = Date.parse(entry.startTimeUTC);
         const entryEnd = Date.parse(entry.endTimeUTC);
         if (entryEnd > startMs && entryStart < endMs) matches.push(entry);
@@ -56,21 +52,62 @@ export class LocalHistoryStore {
     return matches.sort((a, b) => Date.parse(a.startTimeUTC) - Date.parse(b.startTimeUTC));
   }
 
+  /** UTC day-file names that can overlap the range, oldest first. */
+  daySpan(start: Date, end: Date): string[] {
+    const startMs = start.getTime();
+    const endMs = end.getTime();
+    if (!(endMs > startMs)) return [];
+    const from = dayKey(new Date(startMs - RANGE_PAD_MS).toISOString());
+    const to = dayKey(new Date(endMs).toISOString());
+    if (!from || !to) return [];
+    return this.dayNames().filter((day) => day >= from && day <= to).sort();
+  }
+
+  entriesForDay(day: string): ScreenTimeEntry[] {
+    return this.loadDay(day);
+  }
+
+  /** Day files on disk, oldest names included, without decrypting them. */
+  listedDays(): string[] {
+    return this.dayNames();
+  }
+
+  /**
+   * Device identities in one day file. Uses a cached day when Insights already
+   * loaded it, and otherwise decrypts without keeping the sessions in memory.
+   */
+  identitiesForDay(day: string): Array<{ platform: string; deviceName: string; timeZoneIdentifier: string }> {
+    const entries = this.days.get(day) ?? this.parseDay(day);
+    const seen = new Map<string, { platform: string; deviceName: string; timeZoneIdentifier: string }>();
+    for (const entry of entries) {
+      if (!entry.deviceName) continue;
+      const key = `${entry.platform}\0${entry.deviceName}`;
+      if (!seen.has(key)) {
+        seen.set(key, {
+          platform: entry.platform,
+          deviceName: entry.deviceName,
+          timeZoneIdentifier: entry.timeZoneIdentifier,
+        });
+      }
+    }
+    return [...seen.values()];
+  }
+
   private loadDay(day: string): ScreenTimeEntry[] {
     const cached = this.days.get(day);
     if (cached) return cached;
+    const entries = this.parseDay(day);
+    this.days.set(day, entries);
+    return entries;
+  }
+
+  private parseDay(day: string): ScreenTimeEntry[] {
     const path = this.file(day);
-    if (!existsSync(path)) {
-      this.days.set(day, []);
-      return [];
-    }
+    if (!existsSync(path)) return [];
     try {
       const parsed = JSON.parse(decryptAesGcm(readFileSync(path), this.key).toString("utf8")) as ScreenTimeEntry[];
-      const entries = Array.isArray(parsed) ? parsed : [];
-      this.days.set(day, entries);
-      return entries;
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
-      this.days.set(day, []);
       return [];
     }
   }

@@ -1,5 +1,7 @@
 import { BrowserWindow } from "electron";
 import { hideFreedomScreen, showFreedomScreen } from "./freedom-window";
+import { DistractionNudge, foregroundBlocked, foregroundVerdict } from "./distraction-nudge";
+import { hideNudgeCard, showNudgeCard } from "./nudge-window";
 import { mergeEntries } from "./local-history";
 import {
   blockScreenImagePath,
@@ -9,13 +11,18 @@ import {
   presentBlockScreen,
   resolveBlockScreen,
   saveDefaultBlockScreen,
+  saveNudgeReminder,
   saveSessionBlockScreen,
   type BlockScreenFields,
 } from "./blocking/block-screens";
 import { freedomPageUrl, setBlockScreenMediaRoot, setFreedomContent } from "./blocking/freedom-page";
+import { readFocusedBrowserContext } from "./collectors/ax-browser";
+import { isAccessibilityGranted, requestAccessibilityAccess } from "./collectors/macos-accessibility";
+import type { ActivitySnapshot } from "./collectors/types";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { normalizedEmail, signInError, signUpError } from "@shared/auth-validation";
+import { looksLikeBrowser, websiteHostname } from "@shared/browser";
 import {
   approveBlocks,
   assignLabel,
@@ -43,7 +50,8 @@ import {
 import { publishGameAssets } from "@shared/game-assets";
 import { withMatchLines, withMatchSnapshot } from "@shared/game-match";
 import { deviceKey, resolvedDeviceName, withComputedOnline } from "@shared/device";
-import { buildAgentView, classifiesFocus, ensureLiveEntryVisible, JEV_PRODUCTIVITY_CRITERIA, productivityInputsFromSegments, type ProductivityVerdict } from "@shared/jev-productivity";
+import { overlayCategory } from "@shared/jev";
+import { acceptedProductivityVerdict, buildAgentView, classifiesFocus, ensureLiveEntryVisible, JEV_PRODUCTIVITY_CRITERIA, productivityInputsFromSegments, type ProductivityVerdict } from "@shared/jev-productivity";
 import { IPC } from "@shared/ipc";
 import { currentDevicePlatform, effectiveTimeZone as resolveTimeZone, toDateInput } from "@shared/platform";
 import { TIMER_BONUS_STEP_SECONDS, usesTodayWindow } from "@shared/timer";
@@ -66,8 +74,12 @@ import {
   normalizeInsightsDeviceKey,
   normalizeInsightsTab,
   normalizeTodayTab,
+  appBreakdownKey,
+  bucketsFromDailyTotals,
+  mergePeriodSummaries,
   periodBounds,
   rankedAppsBySeconds,
+  serverPeriodBuckets,
   snapshotFromEntries,
   snapshotFromRange,
   startOfMonth,
@@ -78,6 +90,8 @@ import type {
   AppSettings,
   CalendarOverlayEvent,
   DeviceListEntry,
+  DeviceRow,
+  DistractionResponse,
   InsightsPeriod,
   InsightsTab,
   NavigationItem,
@@ -101,8 +115,9 @@ import { GoogleCalendarService } from "./google-calendar";
 import { syncLaunchAtLogin } from "./lifecycle";
 import { GameAssetCache } from "./game-asset-cache";
 import { GameMatchSync } from "./game-match-sync";
+import { closeBlockedWebsite, quitBlockedApp } from "./blocking/local-actions";
 import { logObservability } from "./logger";
-import { deviceName as localDeviceName, gameAssetPath, gameMatchPath, hiddenDevicesPath, networkLogPath, observabilityLogPath, userDataDir } from "./paths";
+import { deviceName as localDeviceName, gameAssetPath, gameMatchPath, hiddenDevicesPath, localComputerName, networkLogPath, observabilityLogPath, userDataDir } from "./paths";
 import { loadSettings, saveSettings } from "./settings-store";
 import { loadTimesheetSummaries, saveTimesheetSummaries } from "./timesheet-summary-store";
 import { clearTokens, loadSessionUser, loadTokens, saveSessionUser, saveTokens } from "./token-store";
@@ -154,6 +169,7 @@ const LIVE_SESSION_RESOLUTION_MS = 15_000;
 const SLOW_SNAPSHOT_MS = 50;
 const PREFETCH_DELAY_MS = 3_000;
 const SUMMARY_CACHE_LIMIT = 8;
+const INSIGHTS_PREVIEW_LIMIT = 500;
 const TIMESHEET_SUMMARY_DEBOUNCE_MS = 1_500;
 const TIMESHEET_SUMMARY_POLL_MS = 30_000;
 const TIMESHEET_SUMMARY_BATCH = 200;
@@ -162,8 +178,61 @@ function usesCalendarRange(navigation: NavigationItem) {
   return navigation === "calendar" || navigation === "timesheet";
 }
 
-function rangeCacheKey(bounds: { start: Date; end: Date }, zone: string) {
-  return `${bounds.start.getTime()}|${bounds.end.getTime()}|${zone}`;
+function rangeCacheKey(
+  bounds: { start: Date; end: Date },
+  zone: string,
+  bucket = "",
+  deviceId = "",
+) {
+  return `${bounds.start.getTime()}|${bounds.end.getTime()}|${zone}|${bucket}|${deviceId}`;
+}
+
+function summaryHasChart(summary: PeriodSummaryResponse | null | undefined) {
+  if (!summary) return false;
+  if (Array.isArray(summary.buckets) && summary.buckets.length > 0) return true;
+  return Boolean(summary.tracked_seconds_by_day && Object.keys(summary.tracked_seconds_by_day).length > 0);
+}
+
+function insightCategoryFill(
+  current: Array<{ category: string }>,
+  rollup: LocalInsightRollup | null,
+  preview: Array<{ category: string; seconds: number; percentage: number }>,
+) {
+  if (current.length) return {};
+  if (rollup?.categories.length) return { categories: rollup.categories };
+  if (preview.length) return { categories: preview };
+  return {};
+}
+
+function observedDeviceRow(platform: string, name: string, timeZone: string): DeviceRow {
+  return {
+    device_id: "",
+    device_platform: platform,
+    device_name: name,
+    label: "",
+    time_zone: timeZone || "",
+    registered_at: "",
+    updated_at: "",
+    last_seen_at: null,
+    session_count: 0,
+  };
+}
+
+interface LocalInsightRollup {
+  key: string;
+  totals: Record<string, number>;
+  totalSeconds: number;
+  apps: Array<{
+    key: string;
+    label: string;
+    subtitle: string;
+    category: string;
+    seconds: number;
+    percentage: number;
+    colorIndex: number;
+  }>;
+  categories: Array<{ category: string; seconds: number; percentage: number }>;
+  devicesByDay: Record<string, Record<string, number>>;
 }
 
 interface SnapshotDataView {
@@ -228,7 +297,13 @@ export class AppController {
   calendarEvents: CalendarOverlayEvent[] = [];
   commandPaletteOpen = false;
   serverSummary: PeriodSummaryResponse | null = null;
-  serverSummaryRange: { start: number; end: number } | null = null;
+  serverSummaryRange: { start: number; end: number; bucket: string; deviceId: string } | null = null;
+  private localInsightRollup: LocalInsightRollup | null = null;
+  private localInsightJob = 0;
+  private localInsightJobKey = "";
+  private insightChartPending = false;
+  private observedDevices: DeviceRow[] = [];
+  private deviceIndexStarted = false;
   google = new GoogleCalendarService();
   api = new StopScrollingAPI(this.settings.apiBaseUrl, null, (tokens) => {
     if (tokens) saveTokens(tokens);
@@ -275,9 +350,14 @@ export class AppController {
   private timesheetSummaryTimer: NodeJS.Timeout | null = null;
   private timesheetSummaryInFlight = false;
   private helperTimer: NodeJS.Timeout | null = null;
+  private inventoryLoaded = false;
   private helperBoundaryTimer: NodeJS.Timeout | null = null;
   private lastPolicySignature: string | null = null;
   private usingLocalEnforcement = false;
+  private askedForAccessibility = false;
+  private blockWatchTimer: NodeJS.Timeout | null = null;
+  private classifierWatchTimer: NodeJS.Timeout | null = null;
+  private latestForeground: ActivitySnapshot | null = null;
   private blockingRefreshGeneration = 0;
   private blockingListsTask: Promise<{
     blocklists: BlockingUiState["blocklists"];
@@ -286,17 +366,85 @@ export class AppController {
   readonly helper: BlockingHelperBridge;
   readonly localEnforcer = new LocalEnforcer(
     undefined,
-    () => showFreedomScreen(),
+    () => this.showBlockFreedom(),
     (scheduleId) => this.prepareFreedomScreen(scheduleId),
   );
+  readonly distractionNudge = new DistractionNudge({
+    show: ({ label, site }) => showNudgeCard(label, site, () => this.distractionNudge.dismiss()),
+    hide: () => hideNudgeCard(),
+  });
+  private freedomOwner: "block" | null = null;
+  private classifierActing = false;
   onBlockingStateChanged: (() => void) | null = null;
 
   constructor(helper = new BlockingHelperBridge()) {
     this.helper = helper;
     this.blocking = defaultBlocking(helper);
     this.tracker.onForeground = (snapshot) => {
+      this.latestForeground = snapshot;
       void this.localEnforcer.enforce(snapshot);
+      this.considerDistractionNudge(snapshot);
     };
+    this.tracker.onProductivity = () => {
+      if (this.latestForeground) this.considerDistractionNudge(this.latestForeground);
+    };
+    this.syncClassifierWatch();
+  }
+
+  private considerDistractionNudge(snapshot: ActivitySnapshot) {
+    const verdict = foregroundVerdict((key) => {
+      const entry = this.tracker.productivityAgent.lookup(key);
+      if (!entry) return undefined;
+      if (entry.source !== "user" && !acceptedProductivityVerdict(entry.verdict, entry.confidence)) return undefined;
+      return entry.verdict;
+    }, snapshot);
+    const blocked = foregroundBlocked(this.localEnforcer.storedPolicy, snapshot, Date.now());
+    const response = this.distractionResponse();
+    if (response === "popup") {
+      this.distractionNudge.consider({ target: snapshot, verdict, blocked });
+    } else {
+      this.distractionNudge.consider({ target: snapshot, verdict: null, blocked: false });
+    }
+    if (response === "block" && verdict === "Distracting" && !blocked) {
+      void this.enforceClassifierBlock(snapshot);
+    }
+  }
+
+  private distractionResponse(): DistractionResponse {
+    const value = this.settings.distractionResponse as string;
+    if (value === "off") return "off";
+    if (value === "block" || value === "screen" || value === "both") return "block";
+    return "popup";
+  }
+
+  private async enforceClassifierBlock(snapshot: ActivitySnapshot) {
+    if (this.classifierActing) return;
+    this.classifierActing = true;
+    try {
+      this.prepareFreedomScreen("");
+      const host = websiteHostname(snapshot.url);
+      if (host) {
+        await closeBlockedWebsite(snapshot.appName, snapshot.bundleID, [host]);
+        return;
+      }
+      await quitBlockedApp(snapshot.appName, snapshot.bundleID);
+      showFreedomScreen();
+    } catch (error) {
+      logObservability(`Jev block failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.classifierActing = false;
+    }
+  }
+
+  private showBlockFreedom() {
+    this.freedomOwner = "block";
+    showFreedomScreen();
+  }
+
+  private hideBlockFreedom() {
+    if (this.freedomOwner !== "block") return;
+    this.freedomOwner = null;
+    hideFreedomScreen();
   }
 
   async boot() {
@@ -322,9 +470,11 @@ export class AppController {
       await this.tracker.startTracking();
     }
     this.startTimelineRefresh();
+    this.scheduleDeviceIndex();
     this.gameSync.start();
     await this.refreshVisibleRange();
     this.schedulePrefetch();
+    this.syncClassifierWatch();
     logObservability("Bootstrap complete");
   }
 
@@ -398,7 +548,7 @@ export class AppController {
       insightsDeviceKey: view.insightsDeviceKey,
       snapshot: view.snapshot,
       timelines: view.timelines,
-      loadingEntries: this.tracker.loadingEntries,
+      loadingEntries: this.tracker.loadingEntries || this.insightChartPending,
       entriesUnavailableReason: this.tracker.entriesUnavailableReason,
       devices: view.devices,
       hiddenDeviceKeys: [...this.hiddenDeviceKeys],
@@ -487,6 +637,8 @@ export class AppController {
       this.calendarView,
       this.serverSummary,
       this.serverSummaryRange,
+      this.localInsightRollup,
+      this.observedDevices,
       this.tracker.categoryCache(),
       this.tracker.productivityAgent.cache,
       this.gameSync.matchRevision,
@@ -529,9 +681,10 @@ export class AppController {
     const snapshotBounds = todayWindow
       ? todayBounds
       : periodBounds(period, anchor, zone);
+    const insightRange = this.navigation === "insights" && period !== "day";
     const mergedEntries = mergeEntries(
       this.tracker.mergedEntries(),
-      this.tracker.history.overlapping(snapshotBounds.start, snapshotBounds.end),
+      insightRange ? [] : this.tracker.history.overlapping(snapshotBounds.start, snapshotBounds.end),
     );
     const allEntries = this.auth.user && registeredKeys.size
       ? mergedEntries.filter((entry) => {
@@ -555,16 +708,68 @@ export class AppController {
     const entries = this.navigation === "insights" || this.navigation === "today"
       ? filterEntriesForInsights(allEntries, deviceKeyForNav, this.hiddenDeviceKeys)
       : allEntries;
-    const serverSummary = deviceScoped ? undefined : this.mappedServerSummary(snapshotBounds);
+    const serverSummary = deviceScoped && !this.usesInsightBuckets()
+      ? undefined
+      : this.mappedServerSummary(snapshotBounds);
     const categoryCache = this.tracker.categoryCache();
     const productivityCache = this.tracker.productivityAgent.cache;
     const matches = this.gameSync.matches();
-    const snapshot = withMatchSnapshot(
-      todayWindow
-        ? snapshotFromRange(entries, todayBounds, serverSummary, undefined, categoryCache, zone, productivityCache)
-        : snapshotFromEntries(entries, period, anchor, serverSummary, categoryCache, zone, productivityCache),
-      matches,
-    );
+    const summaryBuckets = Array.isArray(serverSummary?.buckets) && serverSummary.buckets.length
+      ? serverSummary.buckets
+      : undefined;
+    const dailyTotals = serverSummary?.trackedSecondsByDay;
+    const hasDailyTotals = Boolean(dailyTotals && Object.keys(dailyTotals).length > 0);
+    const localRollup = insightRange && !summaryBuckets && !hasDailyTotals
+      ? this.localInsightChart(snapshotBounds, zone)
+      : null;
+    if (!insightRange || summaryBuckets || hasDailyTotals || localRollup) this.insightChartPending = false;
+    const useSummaryChart = Boolean(insightRange && (summaryBuckets || hasDailyTotals || localRollup));
+    const listEntries = insightRange && entries.length > INSIGHTS_PREVIEW_LIMIT
+      ? entries.slice(entries.length - INSIGHTS_PREVIEW_LIMIT)
+      : entries;
+    const baseSnapshot = todayWindow
+      ? snapshotFromRange(entries, todayBounds, serverSummary, undefined, categoryCache, zone, productivityCache)
+      : snapshotFromEntries(
+        useSummaryChart ? [] : listEntries,
+        period,
+        anchor,
+        serverSummary,
+        categoryCache,
+        zone,
+        productivityCache,
+      );
+    const previewSnapshot = useSummaryChart
+      ? snapshotFromEntries(
+        listEntries,
+        period,
+        anchor,
+        undefined,
+        categoryCache,
+        zone,
+        productivityCache,
+      )
+      : null;
+    const preparedSnapshot = useSummaryChart
+      ? {
+        ...baseSnapshot,
+        buckets: summaryBuckets
+          ? serverPeriodBuckets(summaryBuckets, period, anchor, zone)
+          : bucketsFromDailyTotals(
+            hasDailyTotals ? dailyTotals ?? {} : localRollup?.totals ?? {},
+            period,
+            anchor,
+            zone,
+            localRollup?.devicesByDay ?? {},
+          ),
+        listSegments: previewSnapshot?.listSegments ?? [],
+        timelineSegments: [],
+        ...insightCategoryFill(baseSnapshot.categories, localRollup, previewSnapshot?.categories ?? []),
+        ...(localRollup && !summaryBuckets && !hasDailyTotals
+          ? { totalSeconds: localRollup.totalSeconds, apps: localRollup.apps }
+          : {}),
+      }
+      : baseSnapshot;
+    const snapshot = withMatchSnapshot(preparedSnapshot, matches);
     const extraDevices = this.tracker.registeredDevices.map((device) => ({
       platform: device.device_platform,
       name: device.device_name,
@@ -679,18 +884,36 @@ export class AppController {
     const bounds = this.visibleRange();
     const zone = this.effectiveTimeZone();
     const syncing = Boolean(this.api.getTokens() && this.settings.syncEnabled);
-    const summaryKey = rangeCacheKey(bounds, zone);
-    const cachedSummary = syncing ? this.summaryCache.get(summaryKey) : undefined;
-    if (cachedSummary) this.applySummary(cachedSummary, bounds);
-    const summaryPromise = this.fetchPeriodSummary(bounds, zone);
+    const fast = this.usesInsightBuckets();
+    const bucket = fast ? this.insightBucket() : undefined;
     const devicesPromise = syncing ? this.tracker.refreshDevices(false) : Promise.resolve();
-    await this.tracker.loadRange(bounds.start, bounds.end, zone);
+    if (fast && this.hiddenDeviceKeys.size > 0 && this.insightsDeviceKey === ALL_DEVICES) {
+      await devicesPromise;
+      if (generation !== this.refreshGeneration) return;
+    }
+    const scope = fast ? this.insightSummaryScope() : "";
+    const summaryKey = rangeCacheKey(bounds, zone, bucket ?? "", scope);
+    const cachedSummary = syncing ? this.summaryCache.get(summaryKey) : undefined;
+    if (cachedSummary) this.applySummary(cachedSummary, bounds, bucket ?? "", scope);
+    const summaryPromise = fast
+      ? this.fetchInsightSummary(bounds, zone, bucket, scope)
+      : this.fetchPeriodSummary(bounds, zone, undefined, undefined);
+    const previewDeviceId = fast && scope && !scope.includes(",") ? scope : undefined;
+    const previewPromise = fast
+      ? this.tracker.loadPreview(bounds.start, bounds.end, zone, INSIGHTS_PREVIEW_LIMIT, previewDeviceId)
+      : null;
+    if (!fast) await this.tracker.loadRange(bounds.start, bounds.end, zone);
     if (generation !== this.refreshGeneration) return;
     const summary = await summaryPromise;
+    if (previewPromise) await previewPromise;
     if (generation !== this.refreshGeneration) return;
+    if (fast && !summaryHasChart(summary)) {
+      this.serverSummary = null;
+      this.serverSummaryRange = null;
+    }
     if (syncing && this.api.getTokens() && this.settings.syncEnabled) {
       if (summary) this.rememberSummary(summaryKey, summary);
-      this.applySummary(summary ?? null, bounds);
+      this.applySummary(summary ?? null, bounds, bucket ?? "", scope);
     } else {
       this.serverSummary = null;
       this.serverSummaryRange = null;
@@ -900,6 +1123,10 @@ export class AppController {
     saveSettings(this.settings);
     this.api.setBaseUrl(this.settings.apiBaseUrl);
     if (patch.launchAtLogin !== undefined) syncLaunchAtLogin(this.settings.launchAtLogin);
+    if (patch.distractionResponse !== undefined) {
+      this.syncClassifierWatch();
+      if (this.latestForeground) this.considerDistractionNudge(this.latestForeground);
+    }
     this.broadcast();
   }
 
@@ -1089,6 +1316,7 @@ export class AppController {
     if (!this.auth.user || !this.api.getTokens()) {
       this.clearLocalEnforcement();
       await this.helper.refreshStatus();
+      await this.loadInventoryOnce();
       this.syncHelperSnapshot();
       return;
     }
@@ -1125,7 +1353,7 @@ export class AppController {
       logObservability(`Blocking policy refresh failed: ${error instanceof Error ? error.message : String(error)}`);
     }
     const helperLive = this.helper.status.available && this.helper.status.connected;
-    if (policy && helperLive) {
+    if (policy && helperLive && this.networkFilterIsEnforcing()) {
       this.clearLocalEnforcement();
       const activeID = this.helper.status.activeOccurrenceID;
       this.blocking.activeOccurrence =
@@ -1139,12 +1367,20 @@ export class AppController {
     } else if (this.usingLocalEnforcement) {
       this.publishLocalEnforcement();
     }
+    await this.loadInventoryOnce();
     this.syncHelperSnapshot();
   }
 
   async refreshBlockingInventory() {
-    await this.helper.refreshInventory();
+    const loaded = await this.helper.refreshInventory();
+    if (loaded) this.inventoryLoaded = true;
     this.syncHelperSnapshot();
+  }
+
+  private async loadInventoryOnce() {
+    if (this.inventoryLoaded) return;
+    if (!this.helper.status.available || !this.helper.status.connected) return;
+    this.inventoryLoaded = await this.helper.refreshInventory();
   }
 
   async cancelNormalSession(payload: { scheduleID: string; occurrenceID: string }) {
@@ -1184,6 +1420,8 @@ export class AppController {
   async shutdown() {
     if (this.helperTimer) clearInterval(this.helperTimer);
     if (this.helperBoundaryTimer) clearTimeout(this.helperBoundaryTimer);
+    this.stopBlockWatch();
+    this.stopClassifierWatch();
     if (this.broadcastTimer) clearTimeout(this.broadcastTimer);
     if (this.prefetchTimer) clearTimeout(this.prefetchTimer);
     this.gameSync.stop();
@@ -1194,12 +1432,12 @@ export class AppController {
     const helperLive = this.helper.status.available && this.helper.status.connected;
     this.blocking.installedApplications = this.helper.inventory;
     this.blocking.hostSetup = this.helper.hostSetup;
-    if (this.usingLocalEnforcement && !helperLive) {
+    if (helperLive && this.networkFilterIsEnforcing()) this.clearLocalEnforcement();
+    if (this.usingLocalEnforcement) {
       this.onBlockingStateChanged?.();
       this.broadcast();
       return;
     }
-    if (helperLive) this.clearLocalEnforcement();
     this.blocking.enforcement = this.helper.status;
     this.blocking.capabilities = this.helper.capabilities;
     if (!this.helper.status.activeOccurrenceID) this.blocking.activeOccurrence = null;
@@ -1207,17 +1445,96 @@ export class AppController {
     this.broadcast();
   }
 
+  private networkFilterIsEnforcing() {
+    return this.helper.hostSetup?.networkFilterApproved === true;
+  }
+
   private clearLocalEnforcement() {
     this.usingLocalEnforcement = false;
+    this.stopBlockWatch();
     this.localEnforcer.clear();
-    hideFreedomScreen();
+    this.hideBlockFreedom();
+  }
+
+  private startBlockWatch() {
+    if (this.blockWatchTimer) return;
+    this.blockWatchTimer = setInterval(() => {
+      this.watchBlockedBrowser();
+    }, 250);
+  }
+
+  private stopBlockWatch() {
+    if (!this.blockWatchTimer) return;
+    clearInterval(this.blockWatchTimer);
+    this.blockWatchTimer = null;
+  }
+
+  private syncClassifierWatch() {
+    if (this.distractionResponse() === "block") this.startClassifierWatch();
+    else this.stopClassifierWatch();
+  }
+
+  private startClassifierWatch() {
+    if (this.classifierWatchTimer) return;
+    this.classifierWatchTimer = setInterval(() => {
+      this.watchClassifierBrowser();
+    }, 250);
+  }
+
+  private stopClassifierWatch() {
+    if (!this.classifierWatchTimer) return;
+    clearInterval(this.classifierWatchTimer);
+    this.classifierWatchTimer = null;
+  }
+
+  /** Re-read the focused tab so Back from the block page is redirected again. */
+  private watchClassifierBrowser() {
+    if (this.distractionResponse() !== "block") return;
+    const latest = this.latestForeground;
+    if (!latest || (!looksLikeBrowser(latest.bundleID) && !looksLikeBrowser(latest.appName))) return;
+    try {
+      const tab = readFocusedBrowserContext();
+      if (!tab.url) return;
+      if (tab.appName && latest.appName && tab.appName.toLowerCase() !== latest.appName.toLowerCase()) return;
+      this.considerDistractionNudge({
+        appName: latest.appName,
+        bundleID: latest.bundleID,
+        title: tab.title || latest.title,
+        url: tab.url,
+      });
+    } catch (error) {
+      logObservability(`Jev block watch failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private watchBlockedBrowser() {
+    if (!this.usingLocalEnforcement || !this.localEnforcer.activeOccurrence()) return;
+    const latest = this.latestForeground;
+    if (!latest || (!looksLikeBrowser(latest.bundleID) && !looksLikeBrowser(latest.appName))) return;
+    try {
+      const tab = readFocusedBrowserContext();
+      if (!tab.url) return;
+      if (tab.appName && latest.appName && tab.appName.toLowerCase() !== latest.appName.toLowerCase()) return;
+      void this.localEnforcer.enforce({
+        appName: latest.appName,
+        bundleID: latest.bundleID,
+        title: tab.title || latest.title,
+        url: tab.url,
+      });
+    } catch (error) {
+      logObservability(`Blocked-site watch failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   private publishLocalEnforcement() {
     const policy = this.localEnforcer.storedPolicy;
     const active = this.localEnforcer.activeOccurrence();
     this.blocking.activeOccurrence = active;
-    if (!active) hideFreedomScreen();
+    if (!active) this.hideBlockFreedom();
+    if (active && !this.askedForAccessibility && !isAccessibilityGranted()) {
+      this.askedForAccessibility = true;
+      requestAccessibilityAccess();
+    }
     this.blocking.enforcement = {
       available: true,
       connected: true,
@@ -1233,6 +1550,7 @@ export class AppController {
       lastError: null,
       checkedAt: new Date().toISOString(),
     };
+    this.startBlockWatch();
     this.blocking.capabilities = {
       helperAvailable: false,
       policyEnforcement: true,
@@ -1397,6 +1715,15 @@ export class AppController {
     return dir;
   }
 
+  previewBlockScreen() {
+    this.prepareFreedomScreen("");
+    showFreedomScreen();
+  }
+
+  previewDistractionPopup(label: string, site: string) {
+    showNudgeCard(label, site, () => hideNudgeCard());
+  }
+
   private prepareFreedomScreen(scheduleId: string) {
     const dir = this.blockScreenDir();
     const resolved = resolveBlockScreen(scheduleId, loadBlockScreens(dir));
@@ -1447,6 +1774,20 @@ export class AppController {
     const store = saveDefaultBlockScreen(dir, fields);
     const base = await this.blockScreenBaseUrl();
     return presentBlockScreen(base, store.default);
+  }
+
+  async nudgeReminder() {
+    const dir = this.blockScreenDir();
+    const reminder = loadBlockScreens(dir).reminder;
+    const base = await this.blockScreenBaseUrl();
+    return presentBlockScreen(base, { imageFile: reminder.imageFile, header: "", detail: reminder.detail });
+  }
+
+  async saveReminder(fields: { imageFile: string; detail: string }) {
+    const dir = this.blockScreenDir();
+    const reminder = saveNudgeReminder(dir, fields);
+    const base = await this.blockScreenBaseUrl();
+    return presentBlockScreen(base, { imageFile: reminder.imageFile, header: "", detail: reminder.detail });
   }
 
   async saveSessionScreen(scheduleId: string, fields: BlockScreenFields) {
@@ -1562,7 +1903,7 @@ export class AppController {
         key,
         withComputedOnline({
           visibilityKey: key,
-          deviceName: resolvedDeviceName(device.device_platform, device.device_name),
+          deviceName: this.displayDeviceName(device.device_platform, device.device_name),
           nickname: device.label ?? "",
           devicePlatform: device.device_platform,
           deviceID: device.device_id,
@@ -1577,12 +1918,83 @@ export class AppController {
         }),
       );
     }
+    const extras = [
+      ...this.observedDevices,
+      ...this.tracker.serverEntries.map((entry) => observedDeviceRow(entry.platform, entry.deviceName, entry.timeZoneIdentifier)),
+      observedDeviceRow(currentDevicePlatform(), localDeviceName(), this.effectiveTimeZone()),
+    ];
+    for (const device of extras) {
+      if (!device.device_name) continue;
+      const key = deviceKey(device.device_platform, device.device_name);
+      if (byKey.has(key)) continue;
+      byKey.set(
+        key,
+        withComputedOnline({
+          visibilityKey: key,
+          deviceName: this.displayDeviceName(device.device_platform, device.device_name),
+          nickname: device.label ?? "",
+          devicePlatform: device.device_platform,
+          deviceID: device.device_id || null,
+          sessionCount: device.session_count,
+          timeZone: device.time_zone,
+          lastSeenAt: device.last_seen_at,
+          lastOnlineAt: null,
+          reportedOnline: null,
+          isRegistered: Boolean(device.device_id),
+          isLocal: device.device_id === this.tracker.localDeviceId || key === deviceKey(currentDevicePlatform(), localDeviceName()),
+        }),
+      );
+    }
     return Array.from(byKey.values()).sort((a, b) => Number(b.isOnline) - Number(a.isOnline) || a.deviceName.localeCompare(b.deviceName));
   }
 
-  private applySummary(summary: PeriodSummaryResponse | null, bounds: { start: Date; end: Date }) {
+  /** Shows the Mac computer name instead of the hostname in the device picker. */
+  private displayDeviceName(platform: string, name: string) {
+    const resolved = resolvedDeviceName(platform, name);
+    const host = localDeviceName();
+    if (resolved === host || resolved === host.replace(/\.local$/, "")) {
+      const friendly = localComputerName();
+      if (friendly) return friendly;
+    }
+    return resolved;
+  }
+
+  /** Finds devices recorded on this Mac so the picker still works when the device API is down. */
+  private scheduleDeviceIndex() {
+    if (this.deviceIndexStarted) return;
+    this.deviceIndexStarted = true;
+    const days = this.tracker.history.listedDays().sort();
+    const found = new Map<string, DeviceRow>();
+    let index = 0;
+    const step = () => {
+      const stop = Math.min(index + 4, days.length);
+      for (; index < stop; index += 1) {
+        for (const identity of this.tracker.history.identitiesForDay(days[index])) {
+          const key = deviceKey(identity.platform, identity.deviceName);
+          if (found.has(key)) continue;
+          found.set(key, observedDeviceRow(identity.platform, identity.deviceName, identity.timeZoneIdentifier));
+        }
+      }
+      if (index < days.length) {
+        setImmediate(step);
+        return;
+      }
+      this.observedDevices = [...found.values()];
+      this.broadcast();
+    };
+    setImmediate(step);
+  }
+
+  private applySummary(
+    summary: PeriodSummaryResponse | null,
+    bounds: { start: Date; end: Date },
+    bucket = "",
+    deviceId = "",
+  ) {
     this.serverSummary = summary;
-    this.serverSummaryRange = summary ? { start: bounds.start.getTime(), end: bounds.end.getTime() } : null;
+    this.serverSummaryRange = summary
+      ? { start: bounds.start.getTime(), end: bounds.end.getTime(), bucket, deviceId }
+      : null;
   }
 
   private rememberSummary(key: string, summary: PeriodSummaryResponse) {
@@ -1595,7 +2007,7 @@ export class AppController {
     }
   }
 
-  /** Warms the week and month Insights ranges so switching periods skips the loading state. */
+  /** Warms Insights summaries so switching periods skips the loading state. */
   private schedulePrefetch() {
     if (this.prefetchTimer) clearTimeout(this.prefetchTimer);
     this.prefetchTimer = setTimeout(() => {
@@ -1604,38 +2016,203 @@ export class AppController {
     }, PREFETCH_DELAY_MS);
   }
 
+  private insightBucket(): "day" | "month" | undefined {
+    if (this.navigation !== "insights" || this.insightsPeriod === "day") return undefined;
+    return this.insightsPeriod === "year" ? "month" : "day";
+  }
+
+  private insightDeviceId(): string | undefined {
+    if (this.insightsDeviceKey === ALL_DEVICES) return undefined;
+    return this.tracker.registeredDevices.find(
+      (device) => deviceKey(device.device_platform, device.device_name) === this.insightsDeviceKey,
+    )?.device_id;
+  }
+
+  private localInsightChart(
+    bounds: { start: Date; end: Date },
+    zone: string,
+  ): LocalInsightRollup | null {
+    const key = `${bounds.start.getTime()}|${bounds.end.getTime()}|${zone}|${this.insightsDeviceKey}|${[...this.hiddenDeviceKeys].sort().join("\n")}`;
+    if (this.localInsightRollup?.key === key) return this.localInsightRollup;
+    this.scheduleLocalInsightRollup(key, bounds, zone);
+    this.insightChartPending = true;
+    return null;
+  }
+
+  /** Rolls local sessions into daily totals a few days at a time so Insights stays responsive. */
+  private scheduleLocalInsightRollup(
+    key: string,
+    bounds: { start: Date; end: Date },
+    zone: string,
+  ) {
+    if (this.localInsightJobKey === key) return;
+    this.localInsightJobKey = key;
+    const job = ++this.localInsightJob;
+    const days = this.tracker.history.daySpan(bounds.start, bounds.end);
+    const totals: Record<string, number> = {};
+    const appSeconds = new Map<string, { label: string; category: string; seconds: number }>();
+    const categorySeconds = new Map<string, number>();
+    const deviceDaySeconds = new Map<string, Map<string, number>>();
+    const categoryCache = this.tracker.categoryCache();
+    const hidden = this.hiddenDeviceKeys;
+    const selected = this.insightsDeviceKey;
+    const startMs = bounds.start.getTime();
+    const endMs = bounds.end.getTime();
+    let index = 0;
+    const step = () => {
+      if (job !== this.localInsightJob) return;
+      const stop = Math.min(index + 3, days.length);
+      for (; index < stop; index += 1) {
+        for (const entry of this.tracker.history.entriesForDay(days[index])) {
+          const device = deviceKey(entry.platform, entry.deviceName);
+          if (hidden.has(device)) continue;
+          if (selected !== ALL_DEVICES && device !== selected) continue;
+          const entryStart = Date.parse(entry.startTimeUTC);
+          const entryEnd = Date.parse(entry.endTimeUTC);
+          const clipStart = entryStart > startMs ? entryStart : startMs;
+          const clipEnd = entryEnd < endMs ? entryEnd : endMs;
+          if (!(clipEnd > clipStart)) continue;
+          const seconds = (clipEnd - clipStart) / 1000;
+          const day = toDateInput(new Date(clipStart), zone);
+          totals[day] = (totals[day] ?? 0) + seconds;
+          const dayDevices = deviceDaySeconds.get(day) ?? new Map<string, number>();
+          dayDevices.set(device, (dayDevices.get(device) ?? 0) + seconds);
+          deviceDaySeconds.set(day, dayDevices);
+          const label = entry.appName || "Unknown";
+          const category = overlayCategory(
+            entry.category || "Application",
+            appBreakdownKey({ url: entry.url, appName: entry.appName, label: entry.title || label }),
+            categoryCache,
+          );
+          categorySeconds.set(category, (categorySeconds.get(category) ?? 0) + seconds);
+          const existing = appSeconds.get(label);
+          appSeconds.set(label, {
+            label,
+            category: existing?.category || category,
+            seconds: (existing?.seconds ?? 0) + seconds,
+          });
+        }
+      }
+      if (index < days.length) {
+        setImmediate(step);
+        return;
+      }
+      const totalSeconds = Object.values(totals).reduce((sum, seconds) => sum + seconds, 0);
+      const apps = [...appSeconds.values()]
+        .sort((a, b) => b.seconds - a.seconds || a.label.localeCompare(b.label))
+        .map((app, colorIndex) => ({
+          key: app.label,
+          label: app.label,
+          subtitle: app.category,
+          category: app.category,
+          seconds: app.seconds,
+          percentage: totalSeconds ? app.seconds / totalSeconds : 0,
+          colorIndex,
+        }));
+      const categories = [...categorySeconds.entries()]
+        .map(([category, seconds]) => ({
+          category,
+          seconds,
+          percentage: totalSeconds ? seconds / totalSeconds : 0,
+        }))
+        .sort((a, b) => b.seconds - a.seconds || a.category.localeCompare(b.category));
+      const devicesByDay: Record<string, Record<string, number>> = {};
+      for (const [day, shares] of deviceDaySeconds) devicesByDay[day] = Object.fromEntries(shares);
+      this.localInsightRollup = { key, totals, totalSeconds, apps, categories, devicesByDay };
+      this.insightChartPending = false;
+      this.broadcast();
+    };
+    setImmediate(step);
+  }
+
+  /** Week, month, and year Insights render from the summary instead of every session. */
+  private usesInsightBuckets(): boolean {
+    if (!this.insightBucket()) return false;
+    if (!this.api.getTokens() || !this.settings.syncEnabled) return false;
+    return true;
+  }
+
+  /**
+   * Cache identity for the summary on screen.
+   * Hidden devices cannot be removed from an all-devices total, so that view is the
+   * visible device ids joined together and fetched one device at a time.
+   */
+  private insightSummaryScope(): string {
+    if (this.insightsDeviceKey !== ALL_DEVICES) return this.insightDeviceId() ?? "";
+    if (this.hiddenDeviceKeys.size === 0) return "";
+    return this.visibleInsightDeviceIds().join(",");
+  }
+
+  private visibleInsightDeviceIds() {
+    return this.tracker.registeredDevices
+      .filter((device) => !this.hiddenDeviceKeys.has(deviceKey(device.device_platform, device.device_name)))
+      .flatMap((device) => device.device_id ? [device.device_id] : [])
+      .sort();
+  }
+
   private async prefetchInsightsRanges() {
     if (!this.api.getTokens() || !this.settings.syncEnabled) return;
     const zone = this.effectiveTimeZone();
-    for (const period of ["week", "month"] as const) {
+    const scope = this.insightSummaryScope();
+    for (const period of ["week", "month", "year"] as const) {
       const bounds = periodBounds(period, this.insightsAnchor, zone);
-      const key = rangeCacheKey(bounds, zone);
-      await this.tracker.prefetchRange(bounds.start, bounds.end, zone);
+      const bucket = period === "year" ? "month" : "day";
+      const key = rangeCacheKey(bounds, zone, bucket, scope);
       if (this.summaryCache.has(key)) continue;
-      const summary = await this.fetchPeriodSummary(bounds, zone);
+      const summary = await this.fetchInsightSummary(bounds, zone, bucket, scope);
       if (summary) this.rememberSummary(key, summary);
     }
   }
 
-  private async fetchPeriodSummary(bounds: { start: Date; end: Date }, zone: string) {
+  private async fetchInsightSummary(
+    bounds: { start: Date; end: Date },
+    zone: string,
+    bucket: "day" | "month" | undefined,
+    scope: string,
+  ) {
+    if (!scope.includes(",")) return this.fetchPeriodSummary(bounds, zone, bucket, scope || undefined);
+    const parts = await Promise.all(
+      scope.split(",").map((deviceId) => this.fetchPeriodSummary(bounds, zone, bucket, deviceId)),
+    );
+    return mergePeriodSummaries(parts);
+  }
+
+  private async fetchPeriodSummary(
+    bounds: { start: Date; end: Date },
+    zone: string,
+    bucket?: "day" | "month",
+    deviceId?: string,
+  ) {
     if (!this.api.getTokens() || !this.settings.syncEnabled) return null;
+    const request = (withBucket: boolean) => this.api.periodSummary({
+      start: bounds.start.toISOString(),
+      end: bounds.end.toISOString(),
+      time_zone: zone,
+      include_daily_totals: true,
+      bucket: withBucket ? bucket : undefined,
+      device_id: deviceId,
+    });
     try {
-      return await this.api.periodSummary({
-        start: bounds.start.toISOString(),
-        end: bounds.end.toISOString(),
-        time_zone: zone,
-        include_daily_totals: true,
-      });
+      return await request(Boolean(bucket));
     } catch {
-      return null;
+      if (!bucket) return null;
+      try {
+        return await request(false);
+      } catch {
+        return null;
+      }
     }
   }
 
   private mappedServerSummary(bounds: { start: Date; end: Date }) {
     if (!this.serverSummary || !this.serverSummaryRange) return undefined;
+    const bucket = this.usesInsightBuckets() ? (this.insightBucket() ?? "") : "";
+    const deviceId = this.usesInsightBuckets() ? this.insightSummaryScope() : "";
     if (
       this.serverSummaryRange.start !== bounds.start.getTime() ||
-      this.serverSummaryRange.end !== bounds.end.getTime()
+      this.serverSummaryRange.end !== bounds.end.getTime() ||
+      this.serverSummaryRange.bucket !== bucket ||
+      this.serverSummaryRange.deviceId !== deviceId
     ) {
       return undefined;
     }
@@ -1644,6 +2221,7 @@ export class AppController {
       sessionCount: this.serverSummary.session_count,
       categories: this.serverSummary.categories,
       trackedSecondsByDay: this.serverSummary.tracked_seconds_by_day,
+      buckets: this.serverSummary.buckets,
       apps: rankedAppsBySeconds((this.serverSummary.apps ?? []).map((app, index) => ({
         key: app.id ?? `${app.app_name ?? "app"}-${index}`,
         label: app.app_name ?? "Unknown",

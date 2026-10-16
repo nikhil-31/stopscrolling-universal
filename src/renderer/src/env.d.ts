@@ -32,6 +32,8 @@ interface StopScrollingDesktop {
   setTypesafeApiKey: (key: string) => void;
   agentReviewAll: () => void;
   agentOverride: (key: string, verdict: string) => void;
+  previewBlockScreen: () => void;
+  previewDistractionPopup: (label: string, site: string) => void;
   setDeviceVisible: (key: string, visible: boolean) => void;
   setDeviceNickname: (deviceID: string, nickname: string) => void;
   deleteDevice: (deviceID: string) => void;
@@ -58,6 +60,13 @@ interface StopScrollingDesktop {
     { imageFile: string; header: string; detail: string; imageUrl: string } | { error: string } | null
   >;
   saveDefaultBlockScreen: (fields: { imageFile: string; header: string; detail: string }) => Promise<unknown>;
+  getNudgeReminder: () => Promise<{ imageFile: string; header: string; detail: string; imageUrl: string }>;
+  saveNudgeReminder: (fields: { imageFile: string; detail: string }) => Promise<{
+    imageFile: string;
+    header: string;
+    detail: string;
+    imageUrl: string;
+  }>;
   saveSessionBlockScreen: (input: { scheduleId: string; imageFile: string; header: string; detail: string }) => Promise<unknown>;
   updateBlockingSchedule: (input: import("@shared/types").BlockingScheduleUpdatePayload) => void;
   deleteBlockingSchedule: (scheduleId: string) => void;

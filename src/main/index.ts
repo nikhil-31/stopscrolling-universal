@@ -1,5 +1,6 @@
 import { app, BrowserWindow, crashReporter } from "electron";
 import { AppController } from "./app-controller";
+import { installApplicationIconProtocol } from "./application-icon-protocol";
 import { installGameAssetProtocol, registerGameAssetScheme } from "./game-asset-protocol";
 import { installMainCrashHandlers, localCrashReporterOptions, logElectronChildProcessGone } from "./crash-reporting";
 import { installApplicationMenu, installIpc } from "./ipc";
@@ -20,6 +21,7 @@ const controller = new AppController();
 
 app.whenReady().then(async () => {
   installGameAssetProtocol(controller.gameAssets);
+  installApplicationIconProtocol(() => controller.helper.inventory);
   installIpc(controller);
   installApplicationMenu(controller);
   await controller.boot();

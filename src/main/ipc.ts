@@ -134,6 +134,13 @@ export function installIpc(controller: AppController) {
       controller.overrideAgentVerdict(payload.key, payload.verdict);
     }
   });
+  ipcMain.on(IPC.previewBlockScreen, () => {
+    controller.previewBlockScreen();
+  });
+  ipcMain.on(IPC.previewDistractionPopup, (_event, payload: { label?: unknown; site?: unknown }) => {
+    if (typeof payload?.label !== "string") return;
+    controller.previewDistractionPopup(payload.label, typeof payload.site === "string" ? payload.site : "");
+  });
   ipcMain.on(IPC.setTypesafeApiKey, (_event, key: string) => {
     controller.setTypesafeApiKey(typeof key === "string" ? key : "");
   });
@@ -212,6 +219,17 @@ export function installIpc(controller: AppController) {
     return controller.saveDefaultScreen({
       imageFile: typeof fields?.imageFile === "string" ? fields.imageFile : "",
       header: typeof fields?.header === "string" ? fields.header : "",
+      detail: typeof fields?.detail === "string" ? fields.detail : "",
+    });
+  });
+  ipcMain.handle(IPC.getNudgeReminder, (event) => {
+    assertTrustedRenderer(event);
+    return controller.nudgeReminder();
+  });
+  ipcMain.handle(IPC.saveNudgeReminder, (event, fields: { imageFile?: string; detail?: string }) => {
+    assertTrustedRenderer(event);
+    return controller.saveReminder({
+      imageFile: typeof fields?.imageFile === "string" ? fields.imageFile : "",
       detail: typeof fields?.detail === "string" ? fields.detail : "",
     });
   });

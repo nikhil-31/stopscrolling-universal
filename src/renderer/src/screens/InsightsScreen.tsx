@@ -81,8 +81,12 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
     [selectedAppKey, sourceSegments],
   );
   const filteredCategories = useMemo(
-    () => selectedAppKey || selectedVerdict ? buildBreakdowns(filteredSegments).categories : state.snapshot.categories,
-    [selectedAppKey, selectedVerdict, filteredSegments, state.snapshot.categories],
+    () => {
+      if (selectedAppKey || selectedVerdict) return buildBreakdowns(filteredSegments).categories;
+      if (state.snapshot.categories?.length) return state.snapshot.categories;
+      return buildBreakdowns(sourceSegments).categories;
+    },
+    [selectedAppKey, selectedVerdict, filteredSegments, sourceSegments, state.snapshot.categories],
   );
   const tab = normalizeInsightsTab(state.insightsTab);
   const visibleDevices = visibleDevicesForPicker(state.devices, state.hiddenDeviceKeys);

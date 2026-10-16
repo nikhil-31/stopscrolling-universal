@@ -46,7 +46,10 @@ function agentState(patch: Partial<AgentState> = {}): AgentState {
 }
 
 function state(agent: AgentState): AppSnapshot {
-  return { agent } as AppSnapshot;
+  return {
+    agent,
+    settings: { distractionResponse: "popup" },
+  } as AppSnapshot;
 }
 
 beforeEach(() => {
@@ -54,6 +57,9 @@ beforeEach(() => {
     agentReviewAll: vi.fn(),
     agentOverride: vi.fn(),
     openSettings: vi.fn(),
+    previewBlockScreen: vi.fn(),
+    previewDistractionPopup: vi.fn(),
+    updateSettings: vi.fn(),
   } as unknown as Window["stopscrolling"];
 });
 
@@ -84,6 +90,36 @@ describe("AgentScreen", () => {
     expect(page).not.toBeNull();
     await user.click(within(page as HTMLElement).getByRole("button", { name: "Productive" }));
     expect(window.stopscrolling.agentOverride).toHaveBeenCalledWith("web|youtube.com#Intro to Rust", "Productive");
+  });
+
+  it("previews the block screen and popup for a distracting site and page", async () => {
+    const user = userEvent.setup();
+    render(<AgentScreen state={state(agentState())} />);
+
+    const site = screen.getByText("youtube.com").closest(".agent-row") as HTMLElement;
+    await user.click(within(site).getByRole("button", { name: "Block screen for youtube.com" }));
+    await user.click(within(site).getByRole("button", { name: "Popup for youtube.com" }));
+    expect(window.stopscrolling.previewBlockScreen).toHaveBeenCalledTimes(1);
+    expect(window.stopscrolling.previewDistractionPopup).toHaveBeenCalledWith("youtube.com", "");
+    expect(screen.queryByRole("button", { name: "Block screen for Cursor" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show pages for youtube.com" }));
+    const page = screen.getByText("Funny Shorts").closest(".agent-title") as HTMLElement;
+    await user.click(within(page).getByRole("button", { name: "Popup for Funny Shorts" }));
+    expect(window.stopscrolling.previewDistractionPopup).toHaveBeenCalledWith("Funny Shorts", "youtube.com");
+    await user.click(within(page).getByRole("button", { name: "Block screen for Funny Shorts" }));
+    expect(window.stopscrolling.previewBlockScreen).toHaveBeenCalledTimes(2);
+
+    const productive = screen.getByText("Intro to Rust").closest(".agent-title") as HTMLElement;
+    expect(within(productive).queryByRole("button", { name: /Block screen/ })).not.toBeInTheDocument();
+    expect(within(productive).queryByRole("button", { name: /Popup/ })).not.toBeInTheDocument();
+  });
+
+  it("saves a block-screen distraction response", async () => {
+    const user = userEvent.setup();
+    render(<AgentScreen state={state(agentState())} />);
+    await user.click(screen.getByRole("tab", { name: "Block screen" }));
+    expect(window.stopscrolling.updateSettings).toHaveBeenCalledWith({ distractionResponse: "block" });
   });
 
   it("asks for an API key when none is configured", async () => {

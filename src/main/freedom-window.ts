@@ -5,6 +5,8 @@ import { freedomContent, freedomPageUrl } from "./blocking/freedom-page";
 const BACKGROUND = "#3e648c";
 
 let freedomWindow: BrowserWindow | null = null;
+let hiding = false;
+let onUserDismiss: (() => void) | null = null;
 
 function freedomFile() {
   if (process.env.ELECTRON_RENDERER_URL) return `${process.env.ELECTRON_RENDERER_URL}/freedom.html`;
@@ -30,7 +32,8 @@ async function loadFreedom(win: BrowserWindow) {
 }
 
 /** Full-screen message shown when a block fires, instead of focusing the main window. */
-export function showFreedomScreen() {
+export function showFreedomScreen(onDismiss?: () => void) {
+  onUserDismiss = onDismiss ?? null;
   const existing = freedomWindow && !freedomWindow.isDestroyed() ? freedomWindow : null;
   if (existing) {
     placeOnActiveDisplay(existing);
@@ -61,6 +64,13 @@ export function showFreedomScreen() {
   freedomWindow = win;
   win.on("closed", () => {
     if (freedomWindow === win) freedomWindow = null;
+    if (hiding) {
+      hiding = false;
+      return;
+    }
+    const dismiss = onUserDismiss;
+    onUserDismiss = null;
+    dismiss?.();
   });
   win.once("ready-to-show", () => {
     if (win.isDestroyed()) return;
@@ -79,6 +89,8 @@ export function hideFreedomScreen() {
     freedomWindow = null;
     return;
   }
-  freedomWindow.close();
+  hiding = true;
+  const win = freedomWindow;
   freedomWindow = null;
+  win.close();
 }

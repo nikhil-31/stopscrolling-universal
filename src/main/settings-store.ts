@@ -16,6 +16,7 @@ export const defaultSettings = (): AppSettings => ({
   timerBonusSeconds: 0,
   timerBonusDay: "",
   agentSendTitles: true,
+  distractionResponse: "popup",
 });
 
 export function loadSettings(): AppSettings {
@@ -24,6 +25,12 @@ export function loadSettings(): AppSettings {
     const parsed = JSON.parse(readFileSync(settingsPath(), "utf8")) as Partial<AppSettings>;
     const settings = { ...defaultSettings(), ...parsed };
     settings.clockFormat = settings.clockFormat === "12" ? "12" : "24";
+    const response = settings.distractionResponse as string;
+    settings.distractionResponse = response === "off"
+      ? "off"
+      : response === "block" || response === "screen" || response === "both"
+        ? "block"
+        : "popup";
     return settings;
   } catch {
     return defaultSettings();

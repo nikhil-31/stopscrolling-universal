@@ -83,6 +83,138 @@ function BlockedScreenSettings() {
   );
 }
 
+function DistractionReminderSettings() {
+  const [imageFile, setImageFile] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [detail, setDetail] = useState("");
+  const [presets, setPresets] = useState<Array<{ id: string; label: string; imageUrl: string }>>([]);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const load = window.stopscrolling.getNudgeReminder;
+    if (load) {
+      void load().then((reminder) => {
+        setImageFile(reminder.imageFile);
+        setImageUrl(reminder.imageUrl);
+        setDetail(reminder.detail);
+      }).catch(() => {});
+    }
+    const list = window.stopscrolling.listBlockScreenPresets;
+    if (list) void list().then(setPresets).catch(() => {});
+  }, []);
+
+  async function chooseImage() {
+    setError("");
+    const choose = window.stopscrolling.chooseBlockScreenImage;
+    if (!choose) return;
+    const chosen = await choose();
+    if (!chosen) return;
+    if ("error" in chosen) {
+      setError(chosen.error);
+      return;
+    }
+    setImageFile(chosen.imageFile);
+    setImageUrl(chosen.imageUrl);
+  }
+
+  const support = detail.trim() || "This looks distracting";
+
+  return (
+    <Grouped
+      title="Distraction reminder"
+      description="Shown on the card when you start something distracting. A GIF keeps playing."
+    >
+      <div className="nudge-reminder-editor">
+        {error ? <p className="muted" role="alert">{error}</p> : null}
+        <div className="nudge-reminder-preview">
+          {imageUrl ? <img src={imageUrl} alt="" /> : null}
+          <strong>youtube.com</strong>
+          <span>{support}</span>
+        </div>
+        {presets.length ? (
+          <div className="block-screen-gallery" role="listbox" aria-label="Images and GIFs">
+            {presets.map((preset) => {
+              const selected = imageFile === `preset:${preset.id}`;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  role="option"
+                  className={`block-screen-choice${selected ? " is-selected" : ""}`}
+                  aria-selected={selected}
+                  aria-label={preset.label}
+                  onClick={() => {
+                    setImageFile(`preset:${preset.id}`);
+                    setImageUrl(preset.imageUrl);
+                  }}
+                >
+                  <img src={preset.imageUrl} alt="" />
+                  <span>{preset.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+        <div className="block-screen-actions">
+          <Button type="button" size="sm" onClick={() => void chooseImage()}>
+            Choose from your files
+          </Button>
+          {imageFile ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setImageFile("");
+                setImageUrl("");
+              }}
+            >
+              Remove image
+            </Button>
+          ) : null}
+        </div>
+        <TextField
+          label="Support"
+          value={detail}
+          onChange={(event) => setDetail(event.target.value)}
+          placeholder="This looks distracting"
+        />
+      </div>
+      <div className="block-screen-actions">
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          onClick={() => {
+            const save = window.stopscrolling.saveNudgeReminder;
+            if (!save) return;
+            void save({ imageFile, detail }).then(() => setStatus("Distraction reminder saved."));
+          }}
+        >
+          Save reminder
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            setImageFile("");
+            setImageUrl("");
+            setDetail("");
+            const save = window.stopscrolling.saveNudgeReminder;
+            if (!save) return;
+            void save({ imageFile: "", detail: "" }).then(() => setStatus("Using the built-in reminder."));
+          }}
+        >
+          Use built-in reminder
+        </Button>
+      </div>
+      {status ? <p className="muted">{status}</p> : null}
+    </Grouped>
+  );
+}
+
 export function SettingsScreen({ state }: { state: AppSnapshot }) {
   const settings = state.settings;
   const signedIn = Boolean(state.auth?.user);
@@ -103,6 +235,7 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
           <a href="#general">General</a>
           <a href="#appearance">Appearance</a>
           <a href="#blocked-screen">Blocked screen</a>
+          <a href="#distraction-reminder">Distraction reminder</a>
           <a href="#work-hours">Work hours</a>
           <a href="#labels">Labels</a>
           <a href="#calendars">Calendars</a>
@@ -198,6 +331,10 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
 
           <section id="blocked-screen" className="settings-section">
             <BlockedScreenSettings />
+          </section>
+
+          <section id="distraction-reminder" className="settings-section">
+            <DistractionReminderSettings />
           </section>
 
           <section id="work-hours" className="settings-section">

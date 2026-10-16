@@ -2,18 +2,20 @@ import { readFile } from "node:fs/promises";
 import { protocol } from "electron";
 import type { GameAssetCache } from "./game-asset-cache";
 
+const rendererScheme = {
+  privileges: {
+    standard: true,
+    secure: true,
+    supportFetchAPI: true,
+    corsEnabled: true,
+    stream: true,
+  },
+} as const;
+
 export function registerGameAssetScheme() {
   protocol.registerSchemesAsPrivileged([
-    {
-      scheme: "game-asset",
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        corsEnabled: true,
-        stream: true,
-      },
-    },
+    { scheme: "game-asset", ...rendererScheme },
+    { scheme: "app-icon", ...rendererScheme },
   ]);
 }
 

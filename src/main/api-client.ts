@@ -289,12 +289,23 @@ export class StopScrollingAPI {
     return body.summaries ?? [];
   }
 
-  async sessions(params: { day?: string; start?: string; end?: string; time_zone?: string }) {
+  async sessions(params: {
+    day?: string;
+    start?: string;
+    end?: string;
+    time_zone?: string;
+    device_id?: string;
+    limit?: number;
+    order?: "asc" | "desc";
+  }) {
     const search = new URLSearchParams();
     if (params.day) search.set("day", params.day);
     if (params.start) search.set("start", params.start);
     if (params.end) search.set("end", params.end);
     if (params.time_zone) search.set("time_zone", params.time_zone);
+    if (params.device_id) search.set("device_id", params.device_id);
+    if (params.limit) search.set("limit", String(params.limit));
+    if (params.order) search.set("order", params.order);
     const body = await this.request<{ sessions?: ScreenTimeSyncSession[]; results?: ScreenTimeSyncSession[] }>(
       `api/insights/sessions/?${search.toString()}`,
     );
@@ -306,10 +317,14 @@ export class StopScrollingAPI {
     end: string;
     time_zone?: string;
     include_daily_totals?: boolean;
+    bucket?: "day" | "month";
+    device_id?: string;
   }) {
     const search = new URLSearchParams({ start: params.start, end: params.end });
     if (params.time_zone) search.set("time_zone", params.time_zone);
     if (params.include_daily_totals) search.set("include_daily_totals", "true");
+    if (params.bucket) search.set("bucket", params.bucket);
+    if (params.device_id) search.set("device_id", params.device_id);
     return this.request<PeriodSummaryResponse>(`api/insights/summary/?${search.toString()}`);
   }
 

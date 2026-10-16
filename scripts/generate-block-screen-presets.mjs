@@ -128,7 +128,8 @@ function lzw(pixels, minCodeSize) {
     if (next < 4096) {
       table.set(nextPhrase, next);
       next += 1;
-      if (next === 1 << codeSize && codeSize < 12) codeSize += 1;
+      // Pillow widens the code one entry later than the GIF spec's wording.
+      if (next === (1 << codeSize) + 1 && codeSize < 12) codeSize += 1;
     } else {
       reset();
     }

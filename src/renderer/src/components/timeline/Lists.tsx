@@ -14,7 +14,7 @@ import type {
   ScreenTimeDeviceTimeline,
   ScreenTimeTimelineSegment,
 } from "@shared/types";
-import { Boxes, List, Shapes } from "lucide-react";
+import { Boxes, List } from "lucide-react";
 import { CategoryMark } from "../GameMark";
 import { useClockFormat } from "../../clock-format";
 import { useSessionTitle } from "../../session-title";
@@ -174,31 +174,6 @@ export const BreakdownList = memo(function BreakdownList({
         </div>
         <PieChart categories={categories} />
       </Card>
-      <Grouped title="Categories" description="Where your tracked time is concentrated">
-        {categories.length ? categories.map((item) => (
-          <div className="data-row" key={item.category}>
-            <span className="row-main">
-              <span
-                className="category-swatch"
-                style={{ ["--swatch" as string]: colorForCategory(item.category) }}
-              />
-              <span className="row-copy">
-                <span className="row-title">{item.category}</span>
-                <span className="progress-track">
-                  <span
-                    className="progress-fill"
-                    style={{
-                      ["--progress" as string]: `${Math.min(100, item.percentage * 100)}%`,
-                      ["--swatch" as string]: colorForCategory(item.category),
-                    }}
-                  />
-                </span>
-              </span>
-            </span>
-            <span className="row-value">{formatDuration(item.seconds)} · {Math.round(item.percentage * 100)}%</span>
-          </div>
-        )) : <EmptyState title="No categories" body="Category totals will appear here." icon={Shapes} />}
-      </Grouped>
       <Grouped title="Focus" description="Productive, neutral, and distracting time">
         {focus.length ? (
           <div className="activity-app-list">

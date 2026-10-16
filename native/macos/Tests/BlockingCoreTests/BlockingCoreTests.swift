@@ -283,3 +283,231 @@ private func temporaryStore() throws -> RootPolicyStore {
     #expect(snapshot.stillActiveOccurrences(currentUptime: 550).count == 1)
     #expect(snapshot.stillActiveOccurrences(currentUptime: 601).isEmpty)
 }
+
+private func websiteOccurrence(_ domains: [String]) -> BlockingOccurrence {
+    BlockingOccurrence(
+        id: UUID(),
+        startsAt: 0,
+        endsAt: 9_000,
+        mode: .normal,
+        domains: domains,
+        applications: []
+    )
+}
+
+private func flow(
+    hostname: String? = nil,
+    urlHost: String? = nil,
+    address: String? = nil,
+    port: UInt16 = 443,
+    transport: FlowTransport = .tcp,
+    outbound: Data? = nil
+) -> FlowFacts {
+    FlowFacts(
+        hostname: hostname,
+        urlHost: urlHost,
+        remoteAddress: address,
+        port: port,
+        transport: transport,
+        outbound: outbound
+    )
+}
+
+private func clientHello(serverName: String) -> Data {
+    let host = Array(serverName.utf8)
+    var server = Data([0x00])
+    server.append(UInt8(host.count >> 8))
+    server.append(UInt8(host.count & 0xff))
+    server.append(contentsOf: host)
+    var list = Data([UInt8(server.count >> 8), UInt8(server.count & 0xff)])
+    list.append(server)
+    var ext = Data([0x00, 0x00, UInt8(list.count >> 8), UInt8(list.count & 0xff)])
+    ext.append(list)
+    var hello = Data([0x03, 0x03])
+    hello.append(Data(repeating: 0x11, count: 32))
+    hello.append(0x00)
+    hello.append(contentsOf: [0x00, 0x02, 0x00, 0x2f])
+    hello.append(contentsOf: [0x01, 0x00])
+    hello.append(contentsOf: [UInt8(ext.count >> 8), UInt8(ext.count & 0xff)])
+    hello.append(ext)
+    var handshake = Data([0x01, UInt8((hello.count >> 16) & 0xff), UInt8((hello.count >> 8) & 0xff), UInt8(hello.count & 0xff)])
+    handshake.append(hello)
+    var record = Data([0x16, 0x03, 0x01, UInt8(handshake.count >> 8), UInt8(handshake.count & 0xff)])
+    record.append(handshake)
+    return record
+}
+
+private func dnsResponse(question: String, owner: String? = nil, type: UInt16, ttl: UInt32, rdata: [UInt8]) -> Data {
+    func name(_ host: String) -> Data {
+        var encoded = Data()
+        for label in host.split(separator: ".") {
+            let bytes = Array(label.utf8)
+            encoded.append(UInt8(bytes.count))
+            encoded.append(contentsOf: bytes)
+        }
+        encoded.append(0)
+        return encoded
+    }
+    func u16(_ value: UInt16) -> Data { Data([UInt8(value >> 8), UInt8(value & 0xff)]) }
+    func u32(_ value: UInt32) -> Data {
+        Data([
+            UInt8((value >> 24) & 0xff),
+            UInt8((value >> 16) & 0xff),
+            UInt8((value >> 8) & 0xff),
+            UInt8(value & 0xff),
+        ])
+    }
+    var message = Data()
+    message.append(u16(1))
+    message.append(u16(0x8180))
+    message.append(u16(1))
+    message.append(u16(1))
+    message.append(u16(0))
+    message.append(u16(0))
+    message.append(name(question))
+    message.append(u16(type))
+    message.append(u16(1))
+    if let owner {
+        message.append(name(owner))
+    } else {
+        message.append(contentsOf: [0xC0, 0x0C])
+    }
+    message.append(u16(type))
+    message.append(u16(1))
+    message.append(u32(ttl))
+    message.append(u16(UInt16(rdata.count)))
+    message.append(contentsOf: rdata)
+    return message
+}
+
+@Test func hostnameMatchDropsBlockedSiteAndLeavesLookalikes() {
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let memory = BlockedAddressMemory()
+    let blocked = [websiteOccurrence(["example.com"])]
+    #expect(FlowVerdict.decide(flow(hostname: "example.com"), occurrences: blocked, addresses: memory, now: now) == .drop)
+    #expect(FlowVerdict.decide(flow(hostname: "WWW.Example.com."), occurrences: blocked, addresses: memory, now: now) == .drop)
+    #expect(FlowVerdict.decide(flow(hostname: "deep.www.example.com"), occurrences: blocked, addresses: memory, now: now) == .drop)
+    #expect(FlowVerdict.decide(flow(urlHost: "example.com"), occurrences: blocked, addresses: memory, now: now) == .drop)
+    #expect(FlowVerdict.decide(flow(hostname: "notexample.com"), occurrences: blocked, addresses: memory, now: now) == .allow)
+    #expect(FlowVerdict.decide(flow(hostname: "example.com"), occurrences: [], addresses: memory, now: now) == .allow)
+}
+
+@Test func missingHostnamePeeksThenDropsMatchingServerName() {
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let memory = BlockedAddressMemory()
+    let blocked = [websiteOccurrence(["example.com"])]
+    #expect(FlowVerdict.decide(flow(), occurrences: blocked, addresses: memory, now: now) == .peekOutbound)
+    #expect(FlowVerdict.decide(
+        flow(outbound: clientHello(serverName: "www.example.com")),
+        occurrences: blocked,
+        addresses: memory,
+        now: now
+    ) == .drop)
+    #expect(FlowVerdict.decide(
+        flow(outbound: clientHello(serverName: "notexample.com")),
+        occurrences: blocked,
+        addresses: memory,
+        now: now
+    ) == .allow)
+    let http = Data("GET / HTTP/1.1\r\nHost: example.com:443\r\n\r\n".utf8)
+    #expect(FlowVerdict.decide(flow(port: 80, outbound: http), occurrences: blocked, addresses: memory, now: now) == .drop)
+    #expect(FlowVerdict.decide(flow(outbound: Data([0x00, 0x01, 0x02])), occurrences: blocked, addresses: memory, now: now) == .allow)
+}
+
+@Test func dnsAnswersAreRememberedUntilTTLAndStillAllowADifferentServerName() {
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let memory = BlockedAddressMemory()
+    let blocked = [websiteOccurrence(["example.com"])]
+    memory.recordDNS(
+        dnsResponse(question: "example.com", type: 1, ttl: 60, rdata: [1, 2, 3, 4]),
+        domains: ["example.com"],
+        now: now
+    )
+    memory.recordDNS(
+        dnsResponse(question: "example.com", owner: "cdn.net", type: 1, ttl: 60, rdata: [9, 9, 9, 9]),
+        domains: ["example.com"],
+        now: now
+    )
+    memory.recordDNS(
+        dnsResponse(
+            question: "example.com",
+            type: 28,
+            ttl: 60,
+            rdata: [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+        ),
+        domains: ["example.com"],
+        now: now
+    )
+    #expect(FlowVerdict.decide(
+        flow(address: "1.2.3.4", transport: .udp),
+        occurrences: blocked,
+        addresses: memory,
+        now: now
+    ) == .drop)
+    #expect(FlowVerdict.decide(
+        flow(address: "2001:0db8::1", transport: .udp),
+        occurrences: blocked,
+        addresses: memory,
+        now: now
+    ) == .drop)
+    #expect(FlowVerdict.decide(
+        flow(address: "9.9.9.9", transport: .tcp),
+        occurrences: blocked,
+        addresses: memory,
+        now: now
+    ) == .peekOutbound)
+    #expect(FlowVerdict.decide(
+        flow(address: "9.9.9.9", outbound: clientHello(serverName: "other.test")),
+        occurrences: blocked,
+        addresses: memory,
+        now: now
+    ) == .allow)
+    #expect(FlowVerdict.decide(
+        flow(address: "9.9.9.9", outbound: Data([0x16, 0x03, 0x03])),
+        occurrences: blocked,
+        addresses: memory,
+        now: now
+    ) == .drop)
+    #expect(FlowVerdict.decide(
+        flow(address: "1.2.3.4", transport: .udp),
+        occurrences: blocked,
+        addresses: memory,
+        now: now.addingTimeInterval(61)
+    ) == .peekOutbound)
+    #expect(FlowVerdict.decide(
+        flow(address: "1.2.3.4", transport: .udp),
+        occurrences: [],
+        addresses: memory,
+        now: now
+    ) == .allow)
+}
+
+@Test func activeOccurrenceDropsDNSOverHTTPSByName() {
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let memory = BlockedAddressMemory()
+    let blocked = [websiteOccurrence(["example.com"])]
+    #expect(FlowVerdict.decide(
+        flow(hostname: "dns.google", port: 443),
+        occurrences: blocked,
+        addresses: memory,
+        now: now
+    ) == .drop)
+    #expect(FlowVerdict.decide(
+        flow(hostname: "mozilla.cloudflare-dns.com", port: 443),
+        occurrences: blocked,
+        addresses: memory,
+        now: now
+    ) == .drop)
+    #expect(FlowVerdict.decide(
+        flow(hostname: "dns.google", port: 53, transport: .udp),
+        occurrences: blocked,
+        addresses: memory,
+        now: now
+    ) == .allow)
+    #expect(FlowVerdict.decide(
+        flow(hostname: "dns.google", port: 443),
+        occurrences: [],
+        addresses: memory,
+        now: now
+    ) == .allow)
+}

@@ -17,13 +17,23 @@ export interface BlockScreenView extends BlockScreenFields {
   imageUrl: string;
 }
 
+export interface NudgeReminderFields {
+  imageFile: string;
+  detail: string;
+}
+
 export interface BlockScreenStore {
   default: BlockScreenFields;
   sessions: Record<string, BlockScreenFields>;
+  reminder: NudgeReminderFields;
 }
 
 export function emptyBlockScreen(): BlockScreenFields {
   return { imageFile: "", header: "", detail: "" };
+}
+
+export function emptyNudgeReminder(): NudgeReminderFields {
+  return { imageFile: "", detail: "" };
 }
 
 const PRESET_FILE = /^preset:([\w-]+\.(?:png|jpg|jpeg|gif|webp))$/;
@@ -76,6 +86,14 @@ function cleanScreen(value: unknown): BlockScreenFields {
   };
 }
 
+function cleanReminder(value: unknown): NudgeReminderFields {
+  const row = value && typeof value === "object" ? value as Partial<NudgeReminderFields> : {};
+  return {
+    imageFile: typeof row.imageFile === "string" ? acceptedImageFile(row.imageFile) : "",
+    detail: typeof row.detail === "string" ? row.detail : "",
+  };
+}
+
 function storePath(dir: string) {
   return join(dir, "screens.json");
 }
@@ -89,9 +107,9 @@ export function loadBlockScreens(dir: string): BlockScreenStore {
         if (id) sessions[id] = cleanScreen(fields);
       }
     }
-    return { default: cleanScreen(parsed.default), sessions };
+    return { default: cleanScreen(parsed.default), sessions, reminder: cleanReminder(parsed.reminder) };
   } catch {
-    return { default: emptyBlockScreen(), sessions: {} };
+    return { default: emptyBlockScreen(), sessions: {}, reminder: emptyNudgeReminder() };
   }
 }
 
@@ -103,6 +121,7 @@ function writeStore(dir: string, store: BlockScreenStore) {
 function referencedImages(store: BlockScreenStore) {
   const names = new Set<string>();
   if (store.default.imageFile) names.add(store.default.imageFile);
+  if (store.reminder.imageFile) names.add(store.reminder.imageFile);
   for (const screen of Object.values(store.sessions)) {
     if (screen.imageFile) names.add(screen.imageFile);
   }
@@ -160,6 +179,15 @@ export function importBlockScreenImage(dir: string, sourcePath: string) {
   mkdirSync(join(dir, "images"), { recursive: true });
   copyFileSync(sourcePath, join(dir, "images", imageFile));
   return imageFile;
+}
+
+export function saveNudgeReminder(dir: string, fields: NudgeReminderFields) {
+  const store = loadBlockScreens(dir);
+  const previous = store.reminder.imageFile;
+  store.reminder = cleanReminder(fields);
+  writeStore(dir, store);
+  releaseImage(dir, previous, store);
+  return store.reminder;
 }
 
 export function saveDefaultBlockScreen(dir: string, fields: BlockScreenFields) {

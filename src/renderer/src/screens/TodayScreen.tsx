@@ -21,7 +21,6 @@ import { ActivityLineChart } from "../components/today/ActivityLineChart";
 import { ActivityPie } from "../components/today/ActivityPie";
 import { ActivityTimeline } from "../components/today/ActivityTimeline";
 import { AppsWebsitesList, FocusList } from "../components/today/AppsWebsitesList";
-import { CategoriesList } from "../components/today/CategoriesList";
 import { TodayChrome } from "../components/today/TodayChrome";
 
 export function TodayScreen({ state }: { state: AppSnapshot }) {
@@ -130,7 +129,6 @@ export function TodayScreen({ state }: { state: AppSnapshot }) {
           <ActivityTimeline state={state} timelines={filteredTimelines} />
           <div className="activity-split">
             <ActivityPie state={state} categories={filteredCategories} />
-            <CategoriesList state={state} categories={filteredCategories} />
             <FocusList rows={focusRows} selectedKey={selectedVerdict} onSelect={selectVerdict} />
             <AppsWebsitesList
               state={state}

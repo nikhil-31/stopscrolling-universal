@@ -275,6 +275,24 @@ describe("InsightsScreen", () => {
     expect(bars[1]).toHaveStyle({ width: "20%" });
   });
 
+  it("does not show a system icon beside an application name", () => {
+    render(<InsightsScreen state={snapshot({
+      snapshot: {
+        totalSeconds: 3600,
+        sessionCount: 1,
+        timelineSegments: [],
+        listSegments: [],
+        categories: [],
+        apps: [
+          { key: "summary-1", label: "Notes", subtitle: "Productivity", category: "Productivity", seconds: 3000, percentage: 0.8 },
+        ],
+        buckets: [],
+        trackedSecondsByDay: {},
+      },
+    })} />);
+    expect(screen.getByRole("button", { name: "Highlight Notes on the timeline" }).querySelector("img")).toBeNull();
+  });
+
   it("treats a leftover breakdown tab as Overview", () => {
     render(<InsightsScreen state={snapshot({ insightsTab: "breakdown" as unknown as AppSnapshot["insightsTab"] })} />);
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
@@ -287,6 +305,16 @@ describe("InsightsScreen", () => {
     })} />);
     expect(screen.queryByRole("tablist", { name: "Insights devices" })).toBeNull();
     expect(screen.queryByRole("tab", { name: "All devices" })).toBeNull();
+  });
+
+  it("keeps the device picker when other devices are hidden", () => {
+    render(<InsightsScreen state={snapshot({
+      devices: [device({ visibilityKey: "macos|Studio Mac", deviceName: "Studio Mac", devicePlatform: "macos" })],
+      hiddenDeviceKeys: ["ios|iPhone"],
+    })} />);
+    expect(screen.getByRole("tab", { name: "All devices" })).toBeVisible();
+    expect(screen.getByRole("tab", { name: "Studio Mac" })).toBeVisible();
+    expect(screen.queryByRole("tab", { name: "iPhone" })).toBeNull();
   });
 
   it("lets you pick a device when two or more are visible", async () => {

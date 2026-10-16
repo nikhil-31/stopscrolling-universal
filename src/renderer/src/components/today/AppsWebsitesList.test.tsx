@@ -65,4 +65,24 @@ describe("AppsWebsitesList", () => {
       "Highlight Notes on the timeline",
     ]);
   });
+
+  it("does not show a system icon beside an application name", () => {
+    render(<AppsWebsitesList
+      state={{
+        snapshot: {
+          apps: [
+            { key: "app|Cursor", label: "Cursor", subtitle: "Development", category: "Development", seconds: 2400, percentage: 0.5 },
+            { key: "app|Valorant", label: "Valorant", subtitle: "Gaming", category: "Gaming", seconds: 300, percentage: 0.1, assetId: "riot/Jett" },
+          ],
+        },
+      } as AppSnapshot}
+      selectedKey={null}
+      onSelect={vi.fn()}
+      onLabelApp={vi.fn()}
+    />);
+
+    expect(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }).querySelector("img")).toBeNull();
+    expect(screen.getByRole("button", { name: "Highlight Valorant on the timeline" }).querySelector("img"))
+      .toHaveAttribute("src", "game-asset://cache/riot/Jett");
+  });
 });

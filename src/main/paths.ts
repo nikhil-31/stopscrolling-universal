@@ -1,4 +1,5 @@
 import { app } from "electron";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { homedir, hostname } from "node:os";
 
@@ -50,6 +51,10 @@ export function hiddenDevicesPath() {
   return join(userDataDir(), "hidden-devices.json");
 }
 
+export function devicesCachePath() {
+  return join(userDataDir(), "devices.json");
+}
+
 export function localDeviceIdPath() {
   return join(userDataDir(), "local-device-id.txt");
 }
@@ -92,4 +97,20 @@ export function typesafeKeyPath() {
 
 export function deviceName() {
   return hostname() || homedir().split("/").filter(Boolean).pop() || "Desktop";
+}
+
+let cachedComputerName: string | null = null;
+
+/** The name shown in the device picker, such as the Mac computer name. */
+export function localComputerName() {
+  if (cachedComputerName !== null) return cachedComputerName;
+  cachedComputerName = "";
+  if (process.platform === "darwin") {
+    try {
+      cachedComputerName = execFileSync("/usr/sbin/scutil", ["--get", "ComputerName"], { encoding: "utf8" }).trim();
+    } catch {
+      cachedComputerName = "";
+    }
+  }
+  return cachedComputerName;
 }

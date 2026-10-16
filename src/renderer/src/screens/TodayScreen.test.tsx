@@ -160,7 +160,6 @@ describe("TodayScreen app filter", () => {
     const { rerender } = render(<TodayScreen state={snapshot()} />);
     expect(screen.getByRole("button", { name: /^Cursor,/ })).toBeVisible();
     expect(screen.getByRole("button", { name: /^github\.com,/ })).toBeVisible();
-    expect(screen.getByText("Social")).toBeVisible();
     expect(screen.getByTestId("category-pie-chart")).toHaveAttribute("aria-label", expect.stringContaining("Social"));
 
     await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
@@ -169,7 +168,6 @@ describe("TodayScreen app filter", () => {
     expect(screen.getByRole("button", { name: /^Cursor,/ })).toBeVisible();
     expect(screen.queryByRole("button", { name: /^github\.com,/ })).toBeNull();
     expect(screen.queryByTestId("timeline-highlight")).toBeNull();
-    expect(screen.queryByText("Social")).toBeNull();
     expect(screen.getByTestId("category-pie-chart")).toHaveAttribute("aria-label", expect.stringContaining("Development 1h, 100 percent"));
     expect(screen.getByRole("button", { name: "Highlight github.com on the timeline" })).toBeVisible();
 
@@ -182,7 +180,7 @@ describe("TodayScreen app filter", () => {
     rerender(<TodayScreen state={snapshot()} />);
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByRole("button", { name: /^github\.com,/ })).toBeVisible();
-    expect(screen.getByText("Social")).toBeVisible();
+    expect(screen.getByTestId("category-pie-chart")).toHaveAttribute("aria-label", expect.stringContaining("Social"));
   });
 
   it("clears the app filter when the same row is clicked again", async () => {
@@ -193,7 +191,7 @@ describe("TodayScreen app filter", () => {
     await user.click(screen.getByRole("button", { name: "Highlight Cursor on the timeline" }));
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByRole("button", { name: /^github\.com,/ })).toBeVisible();
-    expect(screen.getByText("Social")).toBeVisible();
+    expect(screen.getByTestId("category-pie-chart")).toHaveAttribute("aria-label", expect.stringContaining("Social"));
   });
 });
 

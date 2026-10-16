@@ -108,9 +108,9 @@ export function createSettingsWindow(controller: AppController, parent?: Browser
   }
   const win = new BrowserWindow({
     ...integratedWindowChrome(),
-    width: 560,
+    width: 900,
     height: 720,
-    minWidth: 480,
+    minWidth: 900,
     minHeight: 400,
     title: "Settings",
     parent,

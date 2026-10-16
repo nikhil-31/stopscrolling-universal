@@ -1,4 +1,4 @@
-import { deviceColor, displayNameForDevice } from "@shared/device";
+import { deviceColor } from "@shared/device";
 import { ALL_DEVICES, normalizeInsightsDeviceKey } from "@shared/timeline";
 import type { DeviceListEntry } from "@shared/types";
 
@@ -26,7 +26,9 @@ export function DevicePicker({
   className?: string;
 }) {
   const visibleDevices = visibleDevicesForPicker(devices, hiddenDeviceKeys);
-  if (visibleDevices.length < 2) return null;
+  if (!visibleDevices.length) return null;
+  // A single device needs no picker, unless other devices are hidden and this one is the scope.
+  if (visibleDevices.length < 2 && hiddenDeviceKeys.length === 0) return null;
   const deviceKey = normalizeInsightsDeviceKey(
     value,
     visibleDevices.map((device) => device.visibilityKey),
@@ -45,7 +47,7 @@ export function DevicePicker({
         All devices
       </button>
       {visibleDevices.map((device) => {
-        const label = displayNameForDevice(device.devicePlatform, device.deviceName, visibleDevices);
+        const label = device.nickname.trim() || device.deviceName;
         return (
           <button
             key={device.visibilityKey}

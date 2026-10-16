@@ -754,14 +754,14 @@ a { color: var(--brand); }
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
 .device-picker {
   flex: 1 1 auto;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: flex-end;
   min-width: 0;
   max-width: 100%;
 }
-.device-picker button { min-width: 0; overflow: hidden; }
+.device-picker button { flex: 0 0 auto; }
 .device-picker-all { flex-shrink: 0; }
-.device-picker-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.device-picker-label { white-space: nowrap; }
 .device-picker-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
 .device-picker button[aria-selected="true"] {
   color: var(--text);
@@ -1251,6 +1251,10 @@ a { color: var(--brand); }
 .activity-app-bar span { display: block; height: 100%; background: var(--brand); border-radius: inherit; }
 .activity-app-name { display: flex; align-items: center; gap: 8px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .activity-app-name span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.app-icon { width: 20px; height: 20px; flex: 0 0 auto; object-fit: contain; }
+.activity-app-name .app-icon,
+.blocking-site-chip .app-icon,
+.blocking-dialog-entry-icon .app-icon { width: 16px; height: 16px; border-radius: 4px; }
 .activity-app-time { color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
 .activity-panel .data-card {
   padding: 0;
@@ -2628,6 +2632,33 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
   font-size: 12px;
   letter-spacing: 0.04em;
 }
+.nudge-reminder-editor { display: grid; gap: 12px; }
+.nudge-reminder-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 320px;
+  padding: 14px 14px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+.nudge-reminder-preview img {
+  width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.nudge-reminder-preview strong {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.011em;
+}
+.nudge-reminder-preview span {
+  font-size: 12px;
+  color: var(--verdict-distracting);
+}
 .blocking-create { margin-top: 14px; max-width: none; }
 .blocking-create.form { width: 100%; max-width: none; }
 .blocking-composer { gap: 12px; }
@@ -2805,6 +2836,14 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
   accent-color: var(--brand);
 }
 .blocking-check-row .row-subtitle { margin-top: 1px; }
+.blocking-app-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.blocking-app-identity > span { min-width: 0; }
 .blocking-device-option {
   justify-content: space-between;
 }
@@ -3013,6 +3052,7 @@ html[data-platform="macos"] .settings-nav {
 .agent-verdict-distracting { color: var(--verdict-distracting); background: var(--verdict-distracting-soft); }
 .agent-verdict-unrated { color: var(--text-tertiary); background: var(--surface-subtle); }
 .agent-source { color: var(--text-tertiary); font-size: 11px; }
+.agent-preview { display: flex; gap: 4px; flex: 0 0 auto; }
 .agent-override { display: flex; gap: 4px; }
 .agent-override button { border: 1px solid var(--line); background: transparent; color: var(--text-secondary); border-radius: 999px; padding: 3px 8px; font-size: 12px; cursor: pointer; }
 .agent-override button.active { color: var(--text); border-color: var(--text); font-weight: 600; }

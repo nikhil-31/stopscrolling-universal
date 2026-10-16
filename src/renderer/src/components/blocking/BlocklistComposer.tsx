@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { applicationIconForIdentifier, installedApplicationIdentifier } from "@shared/application-icons";
 import {
   CATEGORY_FILTERS,
   COMMON_FILTERS,
@@ -9,6 +10,7 @@ import {
 } from "@shared/blocking";
 import type { BlocklistWritePayload, InstalledApplication } from "@shared/types";
 import { AppWindow, Check, CircleHelp, Plus, RefreshCw, Search, X } from "lucide-react";
+import { AppIcon } from "../AppIcon";
 import { Button } from "../ui";
 
 type ComposerDraft = ReturnType<typeof decomposeBlocklistEntries>;
@@ -40,12 +42,8 @@ function FilterMark({ selected }: { selected: boolean }) {
   );
 }
 
-function installedApplicationIdentifier(application: InstalledApplication) {
-  return application.signingIdentifier
-    || application.bundleIdentifier
-    || application.packageFamilyName
-    || application.publisherThumbprint
-    || application.executablePath;
+function ApplicationMark({ iconUrl }: { iconUrl?: string | null }) {
+  return <AppIcon iconUrl={iconUrl} fallback={<AppWindow size={16} aria-hidden="true" />} />;
 }
 
 export function BlocklistComposer({
@@ -238,7 +236,7 @@ export function BlocklistComposer({
                 onClick={() => setSelectedApps((current) => current.filter((item) => item.identifier !== app.identifier))}
                 aria-label={`Remove ${app.label || app.identifier}`}
               >
-                <AppWindow size={12} aria-hidden="true" />
+                <ApplicationMark iconUrl={applicationIconForIdentifier(app.identifier, installedApplications ?? [])} />
                 {app.label || app.identifier}
                 <X size={12} aria-hidden="true" />
               </button>
@@ -287,9 +285,12 @@ export function BlocklistComposer({
                               }]
                         ))}
                       />
-                      <span>
-                        <strong>{application.displayName}</strong>
-                        <span className="row-subtitle">{identifier}</span>
+                      <span className="blocking-app-identity">
+                        <ApplicationMark iconUrl={application.iconUrl} />
+                        <span>
+                          <strong>{application.displayName}</strong>
+                          <span className="row-subtitle">{identifier}</span>
+                        </span>
                       </span>
                     </label>
                   );

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { applicationIconForIdentifier } from "@shared/application-icons";
 import { decomposeBlocklistEntries } from "@shared/blocking";
 import type { Blocklist, BlocklistEntry, ClockFormat, InstalledApplication } from "@shared/types";
 import { useClockFormat } from "../../clock-format";
 import { AppWindow, Globe2, Shield, X } from "lucide-react";
+import { AppIcon } from "../AppIcon";
 import { Button, EmptyState, IconButton } from "../ui";
 import { BlocklistComposer } from "./BlocklistComposer";
 
@@ -16,18 +18,29 @@ function formatTimestamp(iso: string, format: ClockFormat) {
   }).format(date);
 }
 
-function EntrySection({ title, entries }: { title: string; entries: BlocklistEntry[] }) {
+function EntrySection({
+  title,
+  entries,
+  applications = [],
+}: {
+  title: string;
+  entries: BlocklistEntry[];
+  applications?: InstalledApplication[];
+}) {
   return (
     <section className="blocking-dialog-section" aria-label={title}>
       <div className="inspector-kicker">{title}</div>
       {entries.map((entry) => {
         const heading = entry.label || entry.identifier;
         const showIdentifier = Boolean(entry.label && entry.label !== entry.identifier);
+        const iconUrl = entry.entry_type === "app"
+          ? applicationIconForIdentifier(entry.identifier, applications)
+          : null;
         const Icon = entry.entry_type === "website" ? Globe2 : AppWindow;
         return (
           <div className="data-row" key={entry.entry_id}>
             <span className="blocking-dialog-entry-icon" aria-hidden="true">
-              <Icon size={13} />
+              <AppIcon iconUrl={iconUrl} fallback={<Icon size={13} />} />
             </span>
             <span className="row-copy">
               <span className="row-title">{heading}</span>
@@ -161,7 +174,7 @@ export function BlocklistDetailDialog({
             ) : (
               <>
                 {websites.length ? <EntrySection title="Websites" entries={websites} /> : null}
-                {apps.length ? <EntrySection title="Apps" entries={apps} /> : null}
+                {apps.length ? <EntrySection title="Apps" entries={apps} applications={installedApplications} /> : null}
               </>
             )}
           </>

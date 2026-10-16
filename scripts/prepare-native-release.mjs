@@ -10,7 +10,6 @@ export const MAC_NATIVE_LAYOUT = [
   "libStopScrollingHostClient.dylib",
   "PrivilegedHelperTools/com.stopscrolling.helper",
   "LaunchDaemons/com.stopscrolling.helper.plist",
-  "SystemExtensions/com.stopscrolling.desktop.network-filter.systemextension",
   "SystemExtensions/com.stopscrolling.desktop.endpoint-security.systemextension",
 ];
 
@@ -37,22 +36,54 @@ function requiredMacArtifact(root, relative) {
   return path;
 }
 
+function profileValue(profilePath, keyPath) {
+  const decoded = execFileSync("/usr/bin/security", ["cms", "-D", "-i", profilePath]);
+  return execFileSync("/usr/bin/plutil", ["-extract", keyPath, "raw", "-o", "-", "-"], { input: decoded })
+    .toString()
+    .trim();
+}
+
+function hostProfile() {
+  const profile = process.env.STOPSCROLLING_MAC_PROVISIONING_PROFILE;
+  if (!profile || !existsSync(profile)) {
+    throw new Error(
+      "STOPSCROLLING_MAC_PROVISIONING_PROFILE must point to the com.stopscrolling.desktop profile; without it macOS refuses to launch a host that can install a system extension",
+    );
+  }
+  const applicationIdentifier = profileValue(profile, "Entitlements.com\\.apple\\.application-identifier");
+  const teamIdentifier = profileValue(profile, "Entitlements.com\\.apple\\.developer\\.team-identifier");
+  if (applicationIdentifier !== `${teamIdentifier}.com.stopscrolling.desktop`) {
+    throw new Error(`Provisioning profile is for ${applicationIdentifier}, expected com.stopscrolling.desktop`);
+  }
+  return { profile, applicationIdentifier, teamIdentifier };
+}
+
 function stageMacNativeDirectory(root) {
   for (const relative of MAC_NATIVE_LAYOUT) {
     const source = requiredMacArtifact(root, relative);
     if (relative.endsWith(".plist")) continue;
     verifyCodesign(source);
   }
+  const { profile, applicationIdentifier, teamIdentifier } = hostProfile();
   const destination = join(output, "macos");
   mkdirSync(destination, { recursive: true });
   for (const entry of readdirSync(root)) {
     cpSync(join(root, entry), join(destination, entry), { recursive: true });
   }
+  rmSync(join(destination, "SystemExtensions", "com.stopscrolling.desktop.network-filter.systemextension"), {
+    recursive: true,
+    force: true,
+  });
+  cpSync(profile, join(destination, "embedded.provisionprofile"));
   const entitlements = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
     '<plist version="1.0">',
     "<dict>",
+    "  <key>com.apple.application-identifier</key>",
+    `  <string>${applicationIdentifier}</string>`,
+    "  <key>com.apple.developer.team-identifier</key>",
+    `  <string>${teamIdentifier}</string>`,
     "  <key>com.apple.security.cs.allow-jit</key>",
     "  <true/>",
     "  <key>com.apple.security.automation.apple-events</key>",
@@ -61,7 +92,7 @@ function stageMacNativeDirectory(root) {
     "  <true/>",
     "  <key>com.apple.security.application-groups</key>",
     "  <array>",
-    "    <string>$(TeamIdentifierPrefix)group.com.stopscrolling.shared</string>",
+    `    <string>${teamIdentifier}.group.com.stopscrolling.shared</string>`,
     "  </array>",
     "</dict>",
     "</plist>",
@@ -84,7 +115,7 @@ if (macArtifact) {
     stageMacNativeDirectory(resolve(macArtifact));
   } else {
     throw new Error(
-      "STOPSCROLLING_MAC_NATIVE_ARTIFACT must be a directory containing the helper, HostClient dylib, and both system extensions",
+      "STOPSCROLLING_MAC_NATIVE_ARTIFACT must be a directory containing the helper, HostClient dylib, and the endpoint-security system extension",
     );
   }
 }

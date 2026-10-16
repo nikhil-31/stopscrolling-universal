@@ -22,6 +22,7 @@ interface AxLib {
   arrayAt: (array: Pointer, idx: number) => Pointer;
   urlString: (url: Pointer) => Pointer;
   stringCString: (cf: Pointer, buffer: Buffer, size: number, encoding: number) => boolean;
+  retain: (cf: Pointer) => Pointer;
   release: (cf: Pointer) => void;
 }
 
@@ -50,6 +51,7 @@ function loadAx(): AxLib | null {
       arrayAt: cf.func("void *CFArrayGetValueAtIndex(void *theArray, long idx)"),
       urlString: cf.func("void *CFURLGetString(void *url)"),
       stringCString: cf.func("bool CFStringGetCString(void *theString, void *buffer, long bufferSize, unsigned int encoding)"),
+      retain: cf.func("void *CFRetain(void *cf)"),
       release: cf.func("void CFRelease(void *cf)"),
     };
     return lib;
@@ -220,15 +222,49 @@ function pressQuitInTree(api: AxLib, element: Pointer, depth: number): boolean {
   return someChild(api, element, (child) => pressQuitInTree(api, child, depth + 1));
 }
 
-const KEY_A = 0x00;
+const KEY_V = 0x09;
 const KEY_L = 0x25;
 const KEY_RETURN = 0x24;
+const KEY_ESCAPE = 0x35;
 const COMMAND = 0x100000;
+
+/** True when the address bar is showing the freedom page, not the blocked site. */
+export function omniboxIsFreedomPage(value: string, pageUrl: string) {
+  const shown = omniboxIdentity(value);
+  const target = omniboxIdentity(pageUrl);
+  return Boolean(shown && target && shown === target);
+}
+
+/** A tab strip item. Other radio buttons in the page are not tabs. */
+export function isBrowserTab(role: string, roleDescription: string) {
+  return (role === "AXRadioButton" || role === "AXTab") && /tab/i.test(roleDescription);
+}
+
+/**
+ * Press Return after the freedom URL is in the address bar.
+ * A successful AXValue write commits even when the bar still shows the blocked host.
+ * A paste commits only once the bar shows the freedom page.
+ */
+export function shouldCommitNavigation(wroteValue: boolean, shown: string, pageUrl: string) {
+  if (wroteValue) return true;
+  return omniboxIsFreedomPage(shown, pageUrl);
+}
+
+function omniboxIdentity(value: string) {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return "";
+  const withScheme = /^[a-z][a-z0-9+.-]*:/.test(trimmed) ? trimmed : `http://${trimmed}`;
+  try {
+    const url = new URL(withScheme);
+    return `${url.host}${url.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return "";
+  }
+}
 
 interface KeyLib {
   create: (source: null, key: number, down: boolean) => Pointer;
   setFlags: (event: Pointer, flags: number) => void;
-  setUnicode: (event: Pointer, length: number, chars: Uint16Array) => void;
   postToPid: (pid: number, event: Pointer) => void;
   release: (event: Pointer) => void;
 }
@@ -247,7 +283,6 @@ function loadKeys(): KeyLib | null {
     keys = {
       create: cg.func("void *CGEventCreateKeyboardEvent(void *source, unsigned short key, bool down)"),
       setFlags: cg.func("void CGEventSetFlags(void *event, uint64_t flags)"),
-      setUnicode: cg.func("void CGEventKeyboardSetUnicodeString(void *event, unsigned long length, unsigned short *chars)"),
       postToPid: cg.func("void CGEventPostToPid(int pid, void *event)"),
       release: cf.func("void CFRelease(void *event)"),
     };
@@ -285,21 +320,95 @@ function chord(lib: KeyLib, pid: number, keyCode: number, flags = 0) {
   return postKey(lib, pid, keyCode, true, flags) && postKey(lib, pid, keyCode, false, flags);
 }
 
-function postText(lib: KeyLib, pid: number, text: string) {
-  const chars = Uint16Array.from(text, (char) => char.charCodeAt(0));
-  const down = lib.create(null, 0, true);
-  const up = lib.create(null, 0, false);
-  if (!down || !up) return false;
-  lib.setUnicode(down, chars.length, chars);
-  lib.setUnicode(up, chars.length, chars);
-  lib.postToPid(pid, down);
-  lib.postToPid(pid, up);
-  lib.release(down);
-  lib.release(up);
-  return true;
+function findAddressBarValue(api: AxLib, element: Pointer, depth: number): string {
+  if (depth > MAX_DEPTH) return "";
+  if (isAddressBar(api, element)) return attrString(api, element, "AXValue");
+  const children = copyValue(api, element, attributeChildren);
+  if (!children) return "";
+  if (Number(api.getTypeId(children)) !== Number(api.arrayTypeId())) {
+    api.release(children);
+    return "";
+  }
+  const count = Number(api.arrayCount(children));
+  let found = "";
+  for (let index = 0; index < count && !found; index += 1) {
+    const child = api.arrayAt(children, index);
+    if (child) found = findAddressBarValue(api, child, depth + 1);
+  }
+  api.release(children);
+  return found;
 }
 
-/** Type a URL into the focused browser. Chrome often ignores AXConfirm on the address field. */
+function readFocusedOmnibox(api: AxLib) {
+  const app = focusedApplication(api);
+  if (!app) return "";
+  try {
+    const focusedEl = copyValue(api, app, "AXFocusedUIElement");
+    if (focusedEl) {
+      const direct = isAddressBar(api, focusedEl) ? attrString(api, focusedEl, "AXValue") : "";
+      api.release(focusedEl);
+      if (direct) return direct;
+    }
+    const window = copyValue(api, app, "AXFocusedWindow");
+    const found = findAddressBarValue(api, window ?? app, 0);
+    if (window) api.release(window);
+    return found;
+  } finally {
+    api.release(app);
+  }
+}
+
+async function pasteOmnibox(lib: KeyLib, pid: number, url: string) {
+  const { clipboard } = await import("electron");
+  const previous = clipboard.readText();
+  clipboard.writeText(url);
+  try {
+    if (!chord(lib, pid, KEY_L, COMMAND)) return false;
+    await sleep(90);
+    if (!chord(lib, pid, KEY_V, COMMAND)) return false;
+    await sleep(80);
+    return true;
+  } finally {
+    clipboard.writeText(previous);
+  }
+}
+
+function setAddressValue(api: AxLib, element: Pointer, url: string) {
+  const attribute = cfString(api, "AXValue");
+  const value = cfString(api, url);
+  const setStatus = api.setAttr(element, attribute, value);
+  api.release(attribute);
+  api.release(value);
+  return setStatus === 0;
+}
+
+function writeAddressInTree(api: AxLib, element: Pointer, depth: number, url: string): boolean {
+  if (depth > MAX_DEPTH) return false;
+  if (isAddressBar(api, element)) return setAddressValue(api, element, url);
+  return someChild(api, element, (child) => writeAddressInTree(api, child, depth + 1, url));
+}
+
+function writeFocusedAddress(api: AxLib, url: string) {
+  const app = focusedApplication(api);
+  if (!app) return false;
+  try {
+    const focusedEl = copyValue(api, app, "AXFocusedUIElement");
+    if (focusedEl && isAddressBar(api, focusedEl)) {
+      const wrote = setAddressValue(api, focusedEl, url);
+      api.release(focusedEl);
+      return wrote;
+    }
+    if (focusedEl) api.release(focusedEl);
+    const window = copyValue(api, app, "AXFocusedWindow");
+    const wrote = writeAddressInTree(api, window ?? app, 0, url);
+    if (window) api.release(window);
+    return wrote;
+  } finally {
+    api.release(app);
+  }
+}
+
+/** Stop the load, write the freedom page into the address bar, and commit it. */
 export async function typeFocusedOmnibox(url: string) {
   const api = loadAx();
   const lib = loadKeys();
@@ -307,18 +416,95 @@ export async function typeFocusedOmnibox(url: string) {
   const pid = focusedPid(api);
   if (!pid) return false;
   try {
+    if (!chord(lib, pid, KEY_ESCAPE)) return false;
+    await sleep(30);
     if (!chord(lib, pid, KEY_L, COMMAND)) return false;
-    await sleep(140);
-    if (!chord(lib, pid, KEY_A, COMMAND)) return false;
-    await sleep(40);
-    for (const char of url) {
-      if (!postText(lib, pid, char)) return false;
+    await sleep(90);
+    const wrote = writeFocusedAddress(api, url);
+    if (shouldCommitNavigation(wrote, readFocusedOmnibox(api), url)) {
+      return chord(lib, pid, KEY_RETURN);
     }
-    await sleep(40);
-    return chord(lib, pid, KEY_RETURN, 0);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (!(await pasteOmnibox(lib, pid, url))) return false;
+      await sleep(40);
+      if (!shouldCommitNavigation(false, readFocusedOmnibox(api), url)) continue;
+      return chord(lib, pid, KEY_RETURN);
+    }
+    return false;
   } catch {
     return false;
   }
+}
+
+function collectTabs(api: AxLib, element: Pointer, depth: number, found: Pointer[]) {
+  if (depth > MAX_DEPTH) return;
+  if (isBrowserTab(attrString(api, element, "AXRole"), attrString(api, element, "AXRoleDescription"))) {
+    const retained = api.retain(element);
+    if (retained) found.push(retained);
+    return;
+  }
+  forEachChild(api, element, (child) => collectTabs(api, child, depth + 1, found));
+}
+
+function readFocusedPageUrl(api: AxLib) {
+  const app = focusedApplication(api);
+  if (!app) return "";
+  const slot = [0];
+  const status = api.getPid(app, slot);
+  api.release(app);
+  const pid = status === 0 ? slot[0] ?? 0 : 0;
+  if (!pid) return "";
+  return readBrowserContext(pid).url;
+}
+
+/** Select each tab in the focused window and redirect the ones that match. */
+export async function redirectFocusedWindowTabs(pageUrl: string, matches: (url: string) => boolean) {
+  const api = loadAx();
+  if (!api || !pageUrl) return false;
+  const app = focusedApplication(api);
+  if (!app) return false;
+  const window = copyValue(api, app, "AXFocusedWindow");
+  const tabs: Pointer[] = [];
+  try {
+    collectTabs(api, window ?? app, 0, tabs);
+    if (!tabs.length) return typeFocusedOmnibox(pageUrl);
+    let moved = false;
+    let sawUrl = false;
+    for (const tab of tabs) {
+      performNamedAction(api, tab, "AXPress");
+      await sleep(80);
+      const url = readFocusedPageUrl(api);
+      if (!url) continue;
+      sawUrl = true;
+      if (!matches(url)) continue;
+      if (await typeFocusedOmnibox(pageUrl)) moved = true;
+    }
+    if (moved) return true;
+    if (!sawUrl) return typeFocusedOmnibox(pageUrl);
+    return false;
+  } catch {
+    return false;
+  } finally {
+    for (const tab of tabs) api.release(tab);
+    if (window) api.release(window);
+    api.release(app);
+  }
+}
+
+/** URL of whichever app is focused, plus that app's name. */
+export function readFocusedBrowserContext(): { title: string; url: string; appName: string } {
+  const api = loadAx();
+  const empty = { title: "", url: "", appName: "" };
+  if (!api) return empty;
+  const app = focusedApplication(api);
+  if (!app) return empty;
+  const appName = attrString(api, app, "AXTitle");
+  const slot = [0];
+  const status = api.getPid(app, slot);
+  api.release(app);
+  const pid = status === 0 ? slot[0] ?? 0 : 0;
+  if (!pid) return { ...empty, appName };
+  return { ...readBrowserContext(pid), appName };
 }
 
 /** Press the focused app's Quit menu item. */

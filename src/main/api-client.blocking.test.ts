@@ -142,6 +142,37 @@ describe("blocking API client", () => {
     expect(fetch.mock.calls[2][0]).toContain("time_zone=America%2FLos_Angeles");
   });
 
+  it("asks for a capped session page and summary buckets", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ buckets: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+    vi.stubGlobal("fetch", fetch);
+    const api = new StopScrollingAPI("https://example.test/", { access: "access", refresh: "refresh" }, () => undefined);
+
+    await api.sessions({
+      start: "2026-01-01T00:00:00.000Z",
+      end: "2027-01-01T00:00:00.000Z",
+      limit: 500,
+      order: "desc",
+    });
+    await api.periodSummary({
+      start: "2026-01-01T00:00:00.000Z",
+      end: "2027-01-01T00:00:00.000Z",
+      bucket: "month",
+    });
+
+    expect(fetch.mock.calls[0][0]).toContain("limit=500");
+    expect(fetch.mock.calls[0][0]).toContain("order=desc");
+    expect(fetch.mock.calls[1][0]).toContain("bucket=month");
+    expect(fetch.mock.calls[1][0]).not.toContain("include_daily_totals");
+  });
+
   it("does not surface HTML error pages as the API message", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response("<!DOCTYPE html><html><body>column missing</body></html>", {
       status: 500,

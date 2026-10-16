@@ -24,6 +24,8 @@ import type {
   ScreenTimeCategoryBreakdown,
   ScreenTimeDeviceTimeline,
   ScreenTimeEntry,
+  PeriodSummaryBucket,
+  PeriodSummaryResponse,
   ScreenTimePeriodBucket,
   ScreenTimeSessionBlock,
   ScreenTimeSnapshot,
@@ -888,6 +890,217 @@ export function buildBreakdowns(segments: ScreenTimeTimelineSegment[], categoryC
     .map((app, colorIndex) => ({ ...app, colorIndex }));
 
   return { total, categories, apps };
+}
+
+export function serverPeriodBuckets(
+  rows: PeriodSummaryBucket[],
+  period: InsightsPeriod,
+  anchor: Date,
+  timeZone = localTimeZone(),
+): ScreenTimePeriodBucket[] {
+  const byDay = new Map<string, PeriodSummaryBucket>();
+  for (const row of rows) {
+    const key = toDateInput(new Date(row.start), timeZone);
+    const existing = byDay.get(key);
+    if (!existing || row.seconds > existing.seconds) byDay.set(key, row);
+  }
+  return fillInsightSlots(period, anchor, timeZone, (slotStart) => {
+    const row = byDay.get(toDateInput(slotStart, timeZone));
+    return {
+      seconds: row?.seconds ?? 0,
+      devices: (row?.devices ?? [])
+        .filter((device) => device.seconds > 0)
+        .map((device) => ({
+          key: deviceKey(device.device_platform, device.device_name),
+          seconds: device.seconds,
+          apps: (device.top_apps ?? [])
+            .filter((app) => app.seconds > 0)
+            .sort((a, b) => b.seconds - a.seconds || a.label.localeCompare(b.label))
+            .slice(0, 3)
+            .map(({ label, seconds }) => ({ label, seconds })),
+        }))
+        .sort((a, b) => a.key.localeCompare(b.key)),
+    };
+  });
+}
+
+/** Chart columns from a summary's per-day totals, without walking every session. */
+export function bucketsFromDailyTotals(
+  totals: Record<string, number>,
+  period: InsightsPeriod,
+  anchor: Date,
+  timeZone = localTimeZone(),
+  devicesByDay: Record<string, Record<string, number>> = {},
+): ScreenTimePeriodBucket[] {
+  return fillInsightSlots(period, anchor, timeZone, (slotStart) => ({
+    seconds: secondsInSlot(totals, period, slotStart, timeZone),
+    devices: devicesInSlot(devicesByDay, period, slotStart, timeZone),
+  }));
+}
+
+function devicesInSlot(
+  devicesByDay: Record<string, Record<string, number>>,
+  period: InsightsPeriod,
+  slotStart: Date,
+  timeZone: string,
+): ScreenTimeBucketDevice[] {
+  const totals = new Map<string, number>();
+  for (const day of dayKeysInSlot(period, slotStart, timeZone)) {
+    for (const [key, seconds] of Object.entries(devicesByDay[day] ?? {})) {
+      if (seconds > 0) totals.set(key, (totals.get(key) ?? 0) + seconds);
+    }
+  }
+  return [...totals.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, seconds]) => ({ key, seconds, apps: [] }));
+}
+
+function dayKeysInSlot(period: InsightsPeriod, slotStart: Date, timeZone: string) {
+  if (period !== "year") return [toDateInput(slotStart, timeZone)];
+  const { year, month } = zonedParts(slotStart, timeZone);
+  const monthLength = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const keys: string[] = [];
+  for (let day = 1; day <= monthLength; day += 1) {
+    keys.push(`${year}-${`${month}`.padStart(2, "0")}-${`${day}`.padStart(2, "0")}`);
+  }
+  return keys;
+}
+
+export function mergePeriodSummaries(parts: Array<PeriodSummaryResponse | null | undefined>): PeriodSummaryResponse | null {
+  const present = parts.filter((part): part is PeriodSummaryResponse => Boolean(part));
+  if (!present.length) return null;
+  if (present.length === 1) return present[0];
+  const days: Record<string, number> = {};
+  const appSeconds = new Map<string, { seconds: number; category: string; app_name: string }>();
+  const categorySeconds = new Map<string, number>();
+  const bucketByStart = new Map<string, PeriodSummaryBucket>();
+  let total = 0;
+  let sessions = 0;
+  let sawBuckets = false;
+  for (const part of present) {
+    total += part.total_seconds ?? 0;
+    sessions += part.session_count ?? 0;
+    for (const [day, seconds] of Object.entries(part.tracked_seconds_by_day ?? {})) {
+      days[day] = (days[day] ?? 0) + seconds;
+    }
+    for (const app of part.apps ?? []) {
+      const name = app.app_name ?? "Unknown";
+      const existing = appSeconds.get(name);
+      appSeconds.set(name, {
+        app_name: name,
+        category: app.category,
+        seconds: (existing?.seconds ?? 0) + app.seconds,
+      });
+    }
+    for (const category of part.categories ?? []) {
+      categorySeconds.set(category.category, (categorySeconds.get(category.category) ?? 0) + category.seconds);
+    }
+    if (Array.isArray(part.buckets)) {
+      sawBuckets = true;
+      for (const bucket of part.buckets) {
+        const existing = bucketByStart.get(bucket.start);
+        if (!existing) {
+          bucketByStart.set(bucket.start, {
+            ...bucket,
+            devices: [...(bucket.devices ?? [])],
+          });
+          continue;
+        }
+        existing.seconds += bucket.seconds;
+        existing.devices = [...(existing.devices ?? []), ...(bucket.devices ?? [])];
+      }
+    }
+  }
+  const apps = [...appSeconds.values()]
+    .sort((a, b) => b.seconds - a.seconds || a.app_name.localeCompare(b.app_name))
+    .map((app) => ({
+      app_name: app.app_name,
+      category: app.category,
+      seconds: app.seconds,
+      percentage: total ? app.seconds / total : 0,
+    }));
+  const categories = [...categorySeconds.entries()]
+    .map(([category, seconds]) => ({
+      category,
+      seconds,
+      percentage: total ? seconds / total : 0,
+    }))
+    .sort((a, b) => b.seconds - a.seconds);
+  return {
+    start: present[0].start,
+    end: present[0].end,
+    total_seconds: total,
+    session_count: sessions,
+    categories,
+    apps,
+    tracked_seconds_by_day: days,
+    ...(sawBuckets ? { buckets: [...bucketByStart.values()] } : {}),
+  };
+}
+
+function fillInsightSlots(
+  period: InsightsPeriod,
+  anchor: Date,
+  timeZone: string,
+  valueForSlot: (slotStart: Date) => { seconds: number; devices: ScreenTimePeriodBucket["devices"] },
+): ScreenTimePeriodBucket[] {
+  return insightBucketSlots(period, anchor, timeZone).map((slot, index) => {
+    const value = valueForSlot(slot.start);
+    const anchorParts = zonedParts(slot.start, timeZone);
+    return {
+      id: `${period}-${index}`,
+      label:
+        period === "year"
+          ? new Intl.DateTimeFormat(undefined, { month: "short", timeZone }).format(slot.start)
+          : period === "month"
+            ? `${anchorParts.day}`
+            : formatDayLabel(slot.start, timeZone),
+      start: slot.start.toISOString(),
+      end: slot.end.toISOString(),
+      seconds: value.seconds,
+      devices: value.devices,
+    };
+  });
+}
+
+function secondsInSlot(
+  totals: Record<string, number>,
+  period: InsightsPeriod,
+  slotStart: Date,
+  timeZone: string,
+) {
+  if (period !== "year") return totals[toDateInput(slotStart, timeZone)] ?? 0;
+  const { year, month } = zonedParts(slotStart, timeZone);
+  const monthLength = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  let seconds = 0;
+  for (let day = 1; day <= monthLength; day += 1) {
+    const key = `${year}-${`${month}`.padStart(2, "0")}-${`${day}`.padStart(2, "0")}`;
+    seconds += totals[key] ?? 0;
+  }
+  return seconds;
+}
+
+function insightBucketSlots(period: InsightsPeriod, anchor: Date, timeZone: string) {
+  const bounds = periodBounds(period, anchor, timeZone);
+  if (period === "year") {
+    const { year } = zonedParts(anchor, timeZone);
+    return Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1;
+      const nextMonth = month === 12 ? 1 : month + 1;
+      const nextYear = month === 12 ? year + 1 : year;
+      return {
+        start: zonedDateTime(year, month, 1, timeZone),
+        end: zonedDateTime(nextYear, nextMonth, 1, timeZone),
+      };
+    });
+  }
+  const count = period === "week"
+    ? 7
+    : new Date(Date.UTC(zonedParts(anchor, timeZone).year, zonedParts(anchor, timeZone).month, 0)).getUTCDate();
+  return Array.from({ length: count }, (_, index) => {
+    const start = addCalendarDays(bounds.start, index, timeZone);
+    return { start, end: addCalendarDays(start, 1, timeZone) };
+  });
 }
 
 export function rankedAppsBySeconds(apps: ScreenTimeAppBreakdown[]) {

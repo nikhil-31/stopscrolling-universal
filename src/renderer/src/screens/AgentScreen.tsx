@@ -1,13 +1,26 @@
 import { useState } from "react";
 import { formatDuration } from "@shared/timeline";
 import type { AgentItem, AgentTitleVerdict, ProductivityVerdict } from "@shared/jev-productivity";
+import type { DistractionResponse } from "@shared/types";
 import type { AppSnapshot } from "@shared/snapshot";
 import { Bot, ChevronDown, ChevronRight, Minus, Sparkles, ThumbsDown, ThumbsUp } from "lucide-react";
-import { Banner, Button, EmptyState, MetricCard, Tabs } from "../components/ui";
+import { Banner, Button, EmptyState, Grouped, MetricCard, Tabs } from "../components/ui";
 
 const VERDICTS: ProductivityVerdict[] = ["Productive", "Neutral", "Distracting"];
 
 type AgentFilter = "all" | "distracting" | "neutral" | "productive" | "unrated";
+
+const RESPONSES: Array<{ value: DistractionResponse; label: string }> = [
+  { value: "off", label: "Don't block" },
+  { value: "popup", label: "Popup" },
+  { value: "block", label: "Block screen" },
+];
+
+function distractionResponse(value: string | undefined): DistractionResponse {
+  if (value === "off") return "off";
+  if (value === "block" || value === "screen" || value === "both") return "block";
+  return "popup";
+}
 
 const FILTERS: Array<{ value: AgentFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -50,6 +63,23 @@ function OverrideControl({ current, onPick }: { current: string | null; onPick: 
   );
 }
 
+function PreviewButtons({ label, site, name }: { label: string; site: string; name: string }) {
+  return (
+    <div className="agent-preview">
+      <Button size="sm" variant="ghost" aria-label={`Block screen for ${name}`} onClick={() => window.stopscrolling.previewBlockScreen()}>
+        Block screen
+      </Button>
+      <Button size="sm" variant="ghost" aria-label={`Popup for ${name}`} onClick={() => window.stopscrolling.previewDistractionPopup(label, site)}>
+        Popup
+      </Button>
+    </div>
+  );
+}
+
+function pageSite(title: string, parentLabel: string) {
+  return title.toLowerCase() === parentLabel.toLowerCase() ? "" : parentLabel;
+}
+
 function AgentRow({ item }: { item: AgentItem }) {
   const [open, setOpen] = useState(false);
   const expandable = item.titles.length > 1;
@@ -68,6 +98,7 @@ function AgentRow({ item }: { item: AgentItem }) {
         <span className="agent-row-time">{formatDuration(item.seconds)}</span>
         <span className={verdictClass(item.verdict)}>{item.verdict ?? "Unrated"}</span>
         {item.source ? <span className="agent-source">{item.source === "user" ? "You" : "JEV"}</span> : null}
+        {item.verdict === "Distracting" ? <PreviewButtons label={item.label} site="" name={item.label} /> : null}
         <OverrideControl current={item.verdict} onPick={(verdict) => window.stopscrolling.agentOverride(item.key, verdict)} />
       </div>
       {open ? (
@@ -77,6 +108,9 @@ function AgentRow({ item }: { item: AgentItem }) {
               <span className="agent-title-label">{title.title}</span>
               <span className="agent-row-time">{formatDuration(title.seconds)}</span>
               <span className={verdictClass(title.verdict)}>{verdictLabel(title)}</span>
+              {title.verdict === "Distracting" ? (
+                <PreviewButtons label={title.title} site={pageSite(title.title, item.label)} name={title.title} />
+              ) : null}
               <OverrideControl current={title.verdict} onPick={(verdict) => window.stopscrolling.agentOverride(title.key, verdict)} />
             </div>
           ))}
@@ -128,6 +162,15 @@ export function AgentScreen({ state }: { state: AppSnapshot }) {
         <div className="agent-bar-segment agent-bar-neutral" style={{ width: `${share(agent.totals.Neutral)}%` }} />
         <div className="agent-bar-segment agent-bar-distracting" style={{ width: `${share(agent.totals.Distracting)}%` }} />
       </div>
+
+      <Grouped title="When Jev rates the front window distracting">
+        <Tabs
+          items={RESPONSES}
+          value={distractionResponse(state.settings.distractionResponse)}
+          onChange={(distractionResponse) => window.stopscrolling.updateSettings({ distractionResponse })}
+          ariaLabel="Distraction response"
+        />
+      </Grouped>
 
       <Tabs items={FILTERS} value={filter} onChange={setFilter} ariaLabel="Filter by verdict" />
 

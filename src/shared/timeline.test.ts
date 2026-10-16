@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockItemShareLabel, blockSegments, buildDeviceSeries, colorForCategory, combineSessionBlocks, continuousActivityEvents, dayAxisHour, dayHourTitle, dayTrackAxis, durationAxisTicks, entriesToTimelines, entryFromSession, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, formatTrackedDuration, highlightRangesForApp, ALL_INSIGHTS_DEVICES, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, weekNumber } from "./timeline";
+import { blockItemShareLabel, blockSegments, bucketsFromDailyTotals, buildDeviceSeries, colorForCategory, combineSessionBlocks, continuousActivityEvents, dayAxisHour, dayHourTitle, dayTrackAxis, durationAxisTicks, entriesToTimelines, entryFromSession, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, formatTrackedDuration, highlightRangesForApp, ALL_INSIGHTS_DEVICES, mergePeriodSummaries, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, serverPeriodBuckets, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, weekNumber } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import { toDateInput } from "./platform";
 import type { ScreenTimeEntry, ScreenTimePeriodBucket, ScreenTimeSessionBlock, ScreenTimeTimelineSegment } from "./types";
@@ -1071,5 +1071,95 @@ describe("Jev category overlay", () => {
       },
     );
     expect(snapshot.categories.map((item) => item.category)).toEqual(["Social"]);
+  });
+});
+
+describe("serverPeriodBuckets", () => {
+  it("fills calendar months and keeps the largest apps first", () => {
+    const buckets = serverPeriodBuckets(
+      [{
+        start: "2026-01-01T00:00:00.000Z",
+        end: "2026-02-01T00:00:00.000Z",
+        seconds: 120,
+        devices: [{
+          device_platform: "macos",
+          device_name: "Mac",
+          seconds: 120,
+          top_apps: [
+            { label: "Notes", seconds: 20 },
+            { label: "Xcode", seconds: 100 },
+          ],
+        }],
+      }],
+      "year",
+      new Date("2026-06-15T12:00:00Z"),
+      "UTC",
+    );
+    const january = new Intl.DateTimeFormat(undefined, { month: "short", timeZone: "UTC" })
+      .format(new Date("2026-01-01T00:00:00Z"));
+    expect(buckets).toHaveLength(12);
+    expect(buckets[0].label).toBe(january);
+    expect(buckets[0].seconds).toBe(120);
+    expect(buckets[1].seconds).toBe(0);
+    expect(buckets[0].devices?.[0].key).toBe("macos|Mac");
+    expect(buckets[0].devices?.[0].apps.map((app) => app.label)).toEqual(["Xcode", "Notes"]);
+  });
+
+  it("sums daily totals into each month of the year", () => {
+    const buckets = bucketsFromDailyTotals(
+      { "2026-01-01": 100, "2026-01-31": 50, "2026-02-02": 7 },
+      "year",
+      new Date("2026-06-15T12:00:00Z"),
+      "UTC",
+    );
+    expect(buckets).toHaveLength(12);
+    expect(buckets[0].seconds).toBe(150);
+    expect(buckets[1].seconds).toBe(7);
+    expect(buckets[2].seconds).toBe(0);
+    const colored = bucketsFromDailyTotals(
+      { "2026-01-01": 100, "2026-01-31": 50 },
+      "year",
+      new Date("2026-06-15T12:00:00Z"),
+      "UTC",
+      {
+        "2026-01-01": { "macos|Studio Mac": 60, "ios|iPhone": 40 },
+        "2026-01-31": { "macos|Studio Mac": 50 },
+      },
+    );
+    expect(colored[0].devices).toEqual([
+      { key: "ios|iPhone", seconds: 40, apps: [] },
+      { key: "macos|Studio Mac", seconds: 110, apps: [] },
+    ]);
+  });
+});
+
+describe("mergePeriodSummaries", () => {
+  it("adds visible devices and drops a failed device", () => {
+    const merged = mergePeriodSummaries([
+      {
+        start: "2026-01-01T00:00:00.000Z",
+        end: "2027-01-01T00:00:00.000Z",
+        total_seconds: 100,
+        session_count: 1,
+        categories: [{ category: "Development", seconds: 100, percentage: 1 }],
+        apps: [{ app_name: "Xcode", category: "Development", seconds: 100, percentage: 1 }],
+        tracked_seconds_by_day: { "2026-01-02": 100 },
+      },
+      null,
+      {
+        start: "2026-01-01T00:00:00.000Z",
+        end: "2027-01-01T00:00:00.000Z",
+        total_seconds: 40,
+        session_count: 2,
+        categories: [{ category: "Development", seconds: 40, percentage: 1 }],
+        apps: [{ app_name: "Xcode", category: "Development", seconds: 15, percentage: 0.3 }, { app_name: "Safari", category: "Browsing", seconds: 25, percentage: 0.7 }],
+        tracked_seconds_by_day: { "2026-01-02": 40 },
+      },
+    ]);
+    expect(merged?.total_seconds).toBe(140);
+    expect(merged?.session_count).toBe(3);
+    expect(merged?.tracked_seconds_by_day?.["2026-01-02"]).toBe(140);
+    expect(merged?.apps.find((app) => app.app_name === "Xcode")?.seconds).toBe(115);
+    expect(merged?.categories.find((category) => category.category === "Development")?.seconds).toBe(140);
   });
 });

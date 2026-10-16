@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { domainMatches } from "@shared/blocking-match";
 import { browserKind, scriptingAppName, websiteHostname, type BrowserKind } from "@shared/browser";
-import { quitFocusedApp, typeFocusedOmnibox } from "../collectors/ax-browser";
+import { quitFocusedApp, redirectFocusedWindowTabs, typeFocusedOmnibox } from "../collectors/ax-browser";
 import { logObservability } from "../logger";
 import { freedomPageUrl } from "./freedom-page";
 
@@ -104,8 +104,19 @@ export async function closeBlockedWebsite(appName: string, bundleID: string, hos
   try {
     await redirectMatchingTabs(kind, name, pageUrl, hosts);
   } catch (error) {
-    if (!(await typeFocusedOmnibox(pageUrl))) throw error;
-    logObservability("Apple Events were denied. Accessibility moved the front tab. Other tabs of this site still need Automation.");
+    const frontOnly = kind === "firefox" || hosts.length === 0;
+    const moved = frontOnly
+      ? await typeFocusedOmnibox(pageUrl)
+      : await redirectFocusedWindowTabs(pageUrl, (url) => {
+        const host = websiteHostname(url);
+        return hosts.some((blocked) => domainMatches(host, blocked));
+      });
+    if (!moved) throw error;
+    logObservability(
+      frontOnly
+        ? "Apple Events were denied. Accessibility moved the front tab."
+        : "Apple Events were denied. Accessibility moved matching tabs in the front window.",
+    );
   }
 }
 

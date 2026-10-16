@@ -55,6 +55,8 @@ const api = {
   setTypesafeApiKey: (key: string) => ipcRenderer.send(IPC.setTypesafeApiKey, key),
   agentReviewAll: () => ipcRenderer.send(IPC.agentReviewAll),
   agentOverride: (key: string, verdict: string) => ipcRenderer.send(IPC.agentOverride, { key, verdict }),
+  previewBlockScreen: () => ipcRenderer.send(IPC.previewBlockScreen),
+  previewDistractionPopup: (label: string, site: string) => ipcRenderer.send(IPC.previewDistractionPopup, { label, site }),
   setDeviceVisible: (key: string, visible: boolean) => ipcRenderer.send(IPC.setDeviceVisible, { key, visible }),
   setDeviceNickname: (deviceID: string, nickname: string) => ipcRenderer.send(IPC.setDeviceNickname, { deviceID, nickname }),
   deleteDevice: (deviceID: string) => ipcRenderer.send(IPC.deleteDevice, deviceID),
@@ -84,6 +86,19 @@ const api = {
   >,
   saveDefaultBlockScreen: (fields: { imageFile: string; header: string; detail: string }) =>
     ipcRenderer.invoke(IPC.saveDefaultBlockScreen, fields),
+  getNudgeReminder: () => ipcRenderer.invoke(IPC.getNudgeReminder) as Promise<{
+    imageFile: string;
+    header: string;
+    detail: string;
+    imageUrl: string;
+  }>,
+  saveNudgeReminder: (fields: { imageFile: string; detail: string }) =>
+    ipcRenderer.invoke(IPC.saveNudgeReminder, fields) as Promise<{
+      imageFile: string;
+      header: string;
+      detail: string;
+      imageUrl: string;
+    }>,
   saveSessionBlockScreen: (input: { scheduleId: string; imageFile: string; header: string; detail: string }) =>
     ipcRenderer.invoke(IPC.saveSessionBlockScreen, input),
   updateBlockingSchedule: (input: import("@shared/types").BlockingScheduleUpdatePayload) => ipcRenderer.send(IPC.updateBlockingSchedule, input),

@@ -21,7 +21,16 @@ final class HostXPCClient: @unchecked Sendable {
         }
     }
 
-    func request(operation: String, body: Data?) throws -> Data {
+    func isReachable(timeout: TimeInterval = 2) -> Bool {
+        do {
+            _ = try request(operation: "status", body: nil, timeout: timeout)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func request(operation: String, body: Data?, timeout: TimeInterval = 15) throws -> Data {
         try queue.sync {
             let connection = try connected()
             let box = ReplyBox()
@@ -29,7 +38,7 @@ final class HostXPCClient: @unchecked Sendable {
                 box.finish(data: nil, error: error)
             } as? StopScrollingHelperXPC
             guard let proxy else { throw HostClientError.disconnected }
-            return try submit(operation: operation, body: body, proxy: proxy, box: box)
+            return try submit(operation: operation, body: body, proxy: proxy, box: box, timeout: timeout)
         }
     }
 
@@ -56,7 +65,7 @@ final class HostXPCClient: @unchecked Sendable {
         return connection
     }
 
-    private func submit(operation: String, body: Data?, proxy: StopScrollingHelperXPC, box: ReplyBox) throws -> Data {
+    private func submit(operation: String, body: Data?, proxy: StopScrollingHelperXPC, box: ReplyBox, timeout: TimeInterval) throws -> Data {
         let finish: @Sendable (Data?, Error?) -> Void = { data, error in
             box.finish(data: data, error: error)
         }
@@ -83,7 +92,7 @@ final class HostXPCClient: @unchecked Sendable {
             throw HostClientError.malformedRequest
         }
 
-        if box.semaphore.wait(timeout: .now() + 15) == .timedOut {
+        if box.semaphore.wait(timeout: .now() + timeout) == .timedOut {
             throw HostClientError.disconnected
         }
         if let replyError = box.error { throw replyError }

@@ -1,5 +1,4 @@
 import Foundation
-import NetworkExtension
 import ServiceManagement
 import SystemExtensions
 
@@ -23,7 +22,6 @@ struct HelperRegistrationFailure: Error {
 
 enum HostActivationError: String, Error {
     case helperRegistrationFailed = "helper-registration-failed"
-    case networkFilterActivationFailed = "network-filter-activation-failed"
     case endpointSecurityActivationFailed = "endpoint-security-activation-failed"
     case userApprovalRequired = "activation-requires-user-approval"
 }
@@ -41,17 +39,13 @@ final class HostActivation: NSObject, OSSystemExtensionRequestDelegate, @uncheck
     func currentSetup() -> HostSetupStatus {
         var status = HostSetupStatus.empty
         status.helperRegistered = SMAppService.daemon(plistName: Self.helperPlistName).status == .enabled
-        status.networkFilterApproved = NEFilterManager.shared().isEnabled
+        status.networkFilterApproved = false
         status.endpointSecurityApproved = endpointSecurityApproved
         return status
     }
 
     func activate() -> HostSetupStatus {
         let helperError = capture { try registerHelper() }
-        let networkError = capture {
-            try activateExtension(Self.networkFilterIdentifier)
-            try enableNetworkFilter()
-        }
         let endpointError = capture {
             try activateExtension(Self.endpointSecurityIdentifier)
             endpointSecurityApproved = true
@@ -60,7 +54,7 @@ final class HostActivation: NSObject, OSSystemExtensionRequestDelegate, @uncheck
         let registrationError = status.helperRegistered
             ? nil
             : (helperError ?? "helper-not-enabled")
-        status.lastError = registrationError ?? networkError ?? endpointError
+        status.lastError = registrationError ?? endpointError
         return status
     }
 
@@ -79,44 +73,35 @@ final class HostActivation: NSObject, OSSystemExtensionRequestDelegate, @uncheck
 
     private func registerHelper() throws {
         let service = SMAppService.daemon(plistName: Self.helperPlistName)
-        if service.status == .enabled { return }
+        if service.status == .enabled, HostXPCClient.shared.isReachable() {
+            return
+        }
+        HostXPCClient.shared.close()
+        // A replaced helper keeps the previous launchd code requirement until the daemon
+        // is unregistered. register() then returns "already registered" and launchd
+        // refuses to spawn the new binary.
+        if service.status == .enabled {
+            unregisterHelper(service)
+        }
         do {
             try service.register()
         } catch {
             let nsError = error as NSError
-            throw HelperRegistrationFailure(detail: "helper-registration-failed \(nsError.domain) \(nsError.code)")
+            if service.status != .enabled {
+                throw HelperRegistrationFailure(detail: "helper-registration-failed \(nsError.domain) \(nsError.code)")
+            }
         }
         if service.status != .enabled {
             throw HostActivationError.userApprovalRequired
         }
     }
 
-    private func enableNetworkFilter() throws {
-        let loadBox = PreferenceBox()
-        let manager = NEFilterManager.shared()
-        manager.loadFromPreferences { error in
-            loadBox.error = error
-            loadBox.semaphore.signal()
+    private func unregisterHelper(_ service: SMAppService) {
+        let box = DispatchSemaphore(value: 0)
+        service.unregister { _ in
+            box.signal()
         }
-        _ = loadBox.semaphore.wait(timeout: .now() + 15)
-        if loadBox.error != nil { throw HostActivationError.networkFilterActivationFailed }
-
-        if manager.providerConfiguration == nil {
-            let configuration = NEFilterProviderConfiguration()
-            configuration.filterSockets = true
-            manager.providerConfiguration = configuration
-        }
-        manager.isEnabled = true
-
-        let saveBox = PreferenceBox()
-        manager.saveToPreferences { error in
-            saveBox.error = error
-            saveBox.semaphore.signal()
-        }
-        _ = saveBox.semaphore.wait(timeout: .now() + 15)
-        if saveBox.error != nil || !manager.isEnabled {
-            throw HostActivationError.networkFilterActivationFailed
-        }
+        _ = box.wait(timeout: .now() + 5)
     }
 
     private func activateExtension(_ identifier: String) throws {
@@ -183,9 +168,4 @@ final class HostActivation: NSObject, OSSystemExtensionRequestDelegate, @uncheck
         self.inFlight = nil
         finish(outcome)
     }
-}
-
-private final class PreferenceBox: @unchecked Sendable {
-    var error: Error?
-    let semaphore = DispatchSemaphore(value: 0)
 }
