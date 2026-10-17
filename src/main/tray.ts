@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { Menu, Tray, nativeImage } from "electron";
 import type { AppController } from "./app-controller";
 import { quitApp } from "./lifecycle";
+import { pinTrayToMenuBarStart, prepareMenuBarLeadingPosition } from "./menu-bar-order";
 import { showMainWindow } from "./windows";
 
 let tray: Tray | null = null;
@@ -23,7 +24,9 @@ function statusBarIcon() {
 
 export function installTray(controller: AppController) {
   if (tray) return tray;
+  prepareMenuBarLeadingPosition();
   tray = new Tray(statusBarIcon());
+  pinTrayToMenuBarStart();
   tray.setIgnoreDoubleClickEvents(true);
   tray.on("click", () => showMainWindow(controller));
   refreshTray(controller);

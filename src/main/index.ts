@@ -1,4 +1,5 @@
-import { app, BrowserWindow, crashReporter } from "electron";
+import { app, BrowserWindow, crashReporter, nativeImage } from "electron";
+import { join } from "node:path";
 import { AppController } from "./app-controller";
 import { installApplicationIconProtocol } from "./application-icon-protocol";
 import { installGameAssetProtocol, registerGameAssetScheme } from "./game-asset-protocol";
@@ -17,9 +18,16 @@ app.on("child-process-gone", (_event, details) => {
 app.setName("Stop Scrolling");
 registerGameAssetScheme();
 
+function applyDevelopmentDockIcon(): void {
+  if (process.platform !== "darwin") return;
+  const image = nativeImage.createFromPath(join(process.cwd(), "build", "icon.png"));
+  if (!image.isEmpty()) app.dock?.setIcon(image);
+}
+
 const controller = new AppController();
 
 app.whenReady().then(async () => {
+  applyDevelopmentDockIcon();
   installGameAssetProtocol(controller.gameAssets);
   installApplicationIconProtocol(() => controller.helper.inventory);
   installIpc(controller);

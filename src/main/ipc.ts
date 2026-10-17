@@ -405,7 +405,6 @@ export function installApplicationMenu(controller: AppController) {
       submenu: [
         { label: "Today", accelerator: "CmdOrCtrl+1", click: () => controller.selectNavigation("today") },
         { label: "Calendar", accelerator: "CmdOrCtrl+2", click: () => controller.selectNavigation("calendar") },
-        { label: "Timesheet", accelerator: "CmdOrCtrl+6", click: () => controller.selectNavigation("timesheet") },
         { label: "Insights", accelerator: "CmdOrCtrl+3", click: () => controller.selectNavigation("insights") },
         { label: "Blocking", accelerator: "CmdOrCtrl+4", click: () => controller.selectNavigation("blocking") },
         { label: "Account", accelerator: "CmdOrCtrl+5", click: () => controller.selectNavigation("account") },

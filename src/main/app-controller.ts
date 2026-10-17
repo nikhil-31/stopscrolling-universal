@@ -515,7 +515,7 @@ export class AppController {
   }
 
   snapshot(): AppSnapshot {
-    if (this.navigation === "leaderboard" || this.navigation === "timer") this.navigation = "today";
+    if (this.navigation === "leaderboard" || this.navigation === "timer" || this.navigation === "timesheet") this.navigation = "today";
     const view = this.dataView();
     return {
       navigation: this.navigation,

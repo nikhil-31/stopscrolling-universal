@@ -290,10 +290,17 @@ a { color: var(--brand); }
   place-items: center;
   width: 30px;
   height: 30px;
-  color: white;
+  color: var(--on-brand);
   background: linear-gradient(140deg, var(--brand), var(--violet));
   border-radius: 10px;
   box-shadow: 0 8px 18px color-mix(in srgb, var(--brand) 24%, transparent);
+}
+.brand-mark-icon {
+  width: 62%;
+  height: 62%;
+  background: currentColor;
+  -webkit-mask: url("./assets/jasmine.png") center / contain no-repeat;
+  mask: url("./assets/jasmine.png") center / contain no-repeat;
 }
 .nav-section {
   padding: 12px 10px 6px;

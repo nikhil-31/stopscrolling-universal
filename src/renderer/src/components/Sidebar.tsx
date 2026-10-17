@@ -8,10 +8,10 @@ import {
   CircleUserRound,
   Sheet,
   Shield,
-  Sparkles,
   SunMedium,
   type LucideIcon,
 } from "lucide-react";
+import { BrandMark } from "./BrandMark";
 import { StatusPill, Tooltip } from "./ui";
 
 const icons: Record<string, LucideIcon> = {
@@ -29,7 +29,7 @@ export function Sidebar({ state }: { state: AppSnapshot }) {
   return (
     <aside className="sidebar" data-testid="sidebar" aria-label="Primary navigation">
       <div className="brand">
-        <span className="brand-mark"><Sparkles size={17} aria-hidden="true" /></span>
+        <BrandMark />
         <span>Stop Scrolling</span>
       </div>
       <div className="nav-section">Tracking</div>

@@ -15,6 +15,7 @@ import {
   Sparkles,
   UserRound,
 } from "lucide-react";
+import { BrandMark } from "../components/BrandMark";
 import {
   Badge,
   Banner,
@@ -35,7 +36,7 @@ export function AccountScreen({ state }: { state: AppSnapshot }) {
       <div className="auth-shell">
         <Card className="auth-card" elevated>
           <div className="auth-brand">
-            <span className="brand-mark"><Sparkles size={20} aria-hidden="true" /></span>
+            <BrandMark />
             <div>
               <h2>{auth.mfaChallenge ? "Verify it’s you" : "Welcome to Stop Scrolling"}</h2>
               <p>{auth.mfaChallenge ? "One more step keeps your timeline secure." : "Your screen time, made intentional."}</p>
