@@ -176,7 +176,9 @@ describe("application chrome", () => {
         })}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Close inspector" }));
+    const dialog = screen.getByRole("dialog", { name: "Writing" });
+    expect(within(dialog).getByText("Notes", { selector: ".session-details-subtitle" })).toBeVisible();
+    await user.click(within(dialog).getByRole("button", { name: "Close session details" }));
     expect(desktop.selectInspector).toHaveBeenCalledWith({ kind: "none" });
   });
 

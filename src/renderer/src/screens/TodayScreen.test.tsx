@@ -173,7 +173,7 @@ describe("TodayScreen app filter", () => {
 
     rerender(<TodayScreen state={snapshot({ todayTab: "eventLog" })} />);
     expect(screen.getByRole("status")).toHaveTextContent("Showing only Cursor");
-    expect(screen.getByText("Cursor")).toBeVisible();
+    expect(screen.getByText("Cursor", { selector: ".row-title" })).toBeVisible();
     expect(screen.queryByText("Safari")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Show all" }));
@@ -211,6 +211,9 @@ describe("TodayScreen focus filter", () => {
       }],
     });
     render(<TodayScreen state={state} />);
+    expect(screen.getByText("1h 20m", { selector: ".metric-value" })).toBeVisible();
+    expect(screen.getByText("75% of tracked time", { selector: ".metric-detail" })).toBeVisible();
+    expect(screen.getByText("25% of tracked time", { selector: ".metric-detail" })).toBeVisible();
     expect(screen.getByRole("region", { name: "Focus" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Highlight Productive on the timeline" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Highlight Distracting on the timeline" })).toBeVisible();

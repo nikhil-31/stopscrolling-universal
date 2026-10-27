@@ -85,4 +85,35 @@ describe("AppsWebsitesList", () => {
     expect(screen.getByRole("button", { name: "Highlight Valorant on the timeline" }).querySelector("img"))
       .toHaveAttribute("src", "game-asset://cache/riot/Jett");
   });
+
+  it("shows the top apps and expands to the full list", async () => {
+    const user = userEvent.setup();
+    const apps = Array.from({ length: 12 }, (_, index) => ({
+      key: `app-${index}`,
+      label: `App ${index}`,
+      subtitle: "Development",
+      category: "Development",
+      seconds: 1200 - index * 60,
+      percentage: 0.1,
+    }));
+    const state = { snapshot: { apps } } as unknown as AppSnapshot;
+    const { rerender } = render(<AppsWebsitesList state={state} selectedKey={null} onSelect={vi.fn()} onLabelApp={vi.fn()} />);
+
+    expect(screen.getAllByRole("button", { name: /^Highlight / })).toHaveLength(8);
+    expect(screen.queryByText("App 8")).toBeNull();
+
+    rerender(<AppsWebsitesList state={state} selectedKey="app-10" onSelect={vi.fn()} onLabelApp={vi.fn()} />);
+    expect(screen.getAllByRole("button", { name: /^Highlight / })).toHaveLength(9);
+    expect(screen.getByText("App 10")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Show all 12" }));
+    expect(screen.getAllByRole("button", { name: /^Highlight / })).toHaveLength(12);
+    await user.click(screen.getByRole("button", { name: "Show less" }));
+    expect(screen.getAllByRole("button", { name: /^Highlight / })).toHaveLength(9);
+  });
+
+  it("has no toggle when every app fits", () => {
+    render(<AppsWebsitesList state={snapshot()} selectedKey={null} onSelect={vi.fn()} onLabelApp={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
+  });
 });

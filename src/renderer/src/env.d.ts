@@ -25,6 +25,8 @@ interface StopScrollingDesktop {
   requestAccessibility: () => void;
   openSettings: () => void;
   openPath: (path: string) => void;
+  /** Opens an http(s) page from a tracked session in the default browser. */
+  openUrl: (url: string) => void;
   selectInspector: (payload: import("@shared/snapshot").InspectorSelection) => void;
   setCommandPalette: (open: boolean) => void;
   updateSettings: (patch: Partial<import("@shared/types").AppSettings>) => void;

@@ -62,9 +62,9 @@ test("main screens and settings render in light and dark themes", async ({}, tes
         isLive: false,
       },
     }));
-    await expect(page.getByRole("complementary", { name: "Session inspector" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Writing product notes" })).toBeVisible();
     await capture(page, "inspector-light-desktop", testInfo);
-    await page.getByRole("button", { name: "Close inspector" }).click();
+    await page.getByRole("button", { name: "Close session details" }).click();
 
     await app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0]?.setSize(960, 640);

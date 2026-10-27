@@ -20,22 +20,25 @@ import {
 import type { AppSnapshot } from "@shared/snapshot";
 import {
     BarChart3,
-    Clock3,
     List,
-    Sparkles,
 } from "lucide-react";
 import { DevicePicker, visibleDevicesForPicker } from "../components/DevicePicker";
-import { BreakdownList, EventLog, SESSION_LOG_PAGE_SIZE, TimelineCard, TrendCard } from "../components/timeline";
-import { Banner, Button, MetricCard, Skeleton, Tabs } from "../components/ui";
+import {
+  BreakdownList,
+  EventLog,
+  SESSION_LOG_PAGE_SIZE,
+  SummaryStats,
+  SummaryStatsSkeleton,
+  TimelineCard,
+  TrendCard,
+} from "../components/timeline";
+import { Banner, Button, Skeleton, Tabs } from "../components/ui";
 
 function InsightsSkeleton() {
   return (
     <div className="insights-skeleton" role="status" aria-live="polite">
       <span className="sr-only">Building your insights…</span>
-      <section className="stats" aria-hidden="true">
-        <Skeleton className="insights-skeleton-metric" />
-        <Skeleton className="insights-skeleton-metric" />
-      </section>
+      <SummaryStatsSkeleton />
       <Skeleton className="insights-skeleton-tabs" />
       <div className="stack" aria-hidden="true">
         <Skeleton className="insights-skeleton-chart" />
@@ -137,21 +140,12 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
       </header>
       {state.loadingEntries ? <InsightsSkeleton /> : (
         <>
-          <section className="stats">
-            <MetricCard
-              label="Tracked time"
-              value={formatDuration(trackedSeconds)}
-              detail={trackedDetail}
-              icon={Clock3}
-            />
-            <MetricCard
-              label="Leading app/website"
-              value={topApp ? formatDuration(topApp.seconds) : "None"}
-              detail={topApp ? `${topApp.label} · ${percentLabel(topApp.percentage)}` : "No app data yet"}
-              icon={Sparkles}
-              tone="orange"
-            />
-          </section>
+          <SummaryStats
+            trackedSeconds={trackedSeconds}
+            trackedDetail={trackedDetail}
+            focus={focusRows}
+            topApp={topApp}
+          />
           {selectedApp || selectedVerdict ? (
             <div className="insights-filter-banner">
               <Banner
@@ -162,15 +156,17 @@ export function InsightsScreen({ state }: { state: AppSnapshot }) {
             </div>
           ) : null}
 
-          <Tabs
-            ariaLabel="Insights views"
-            value={tab}
-            onChange={(next) => window.stopscrolling.setInsightsTab(next)}
-            items={[
-              { value: "overview", label: "Overview", icon: BarChart3 },
-              { value: "sessions", label: "Sessions", icon: List },
-            ]}
-          />
+          <div className="tabs-bar">
+            <Tabs
+              ariaLabel="Insights views"
+              value={tab}
+              onChange={(next) => window.stopscrolling.setInsightsTab(next)}
+              items={[
+                { value: "overview", label: "Overview", icon: BarChart3 },
+                { value: "sessions", label: "Sessions", icon: List },
+              ]}
+            />
+          </div>
 
           {tab === "overview" ? (
             <div className="stack">

@@ -1,7 +1,7 @@
 import { formatHourMinute, suggestLabel, unlabeledBlocks } from "@shared/calendar-workspace";
 import type { AppSnapshot } from "@shared/snapshot";
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSessionTitle } from "../../session-title";
 import { Button, IconButton, TextField } from "../ui";
 import type { CalendarPrompt } from "./types";
@@ -15,10 +15,28 @@ export function CalendarDialogs({
   prompt: CalendarPrompt;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const open = prompt !== null;
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      closeRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    const first = dialogRef.current?.querySelector<HTMLElement>("input, select, textarea, button:not(.calendar-dialog-close)");
+    first?.focus();
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   if (!prompt) return null;
   return (
     <div className="calendar-dialog-scrim" onClick={onClose}>
-      <div className="calendar-dialog" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+      <div ref={dialogRef} className="calendar-dialog" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <IconButton className="calendar-dialog-close" label="Close" icon={X} onClick={onClose} />
         {prompt.kind === "label" ? <LabelPrompt key={`${prompt.start}-${prompt.assignmentId ?? prompt.blockId ?? ""}`} state={state} prompt={prompt} onClose={onClose} /> : null}
         {prompt.kind === "app-label" ? <AppLabelPrompt key={prompt.appKey} state={state} prompt={prompt} onClose={onClose} /> : null}

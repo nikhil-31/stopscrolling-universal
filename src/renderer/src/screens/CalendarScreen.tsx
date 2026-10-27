@@ -19,7 +19,7 @@ export function CalendarScreen({ state }: { state: AppSnapshot }) {
 
   return (
     <div className="calendar-page" data-testid="calendar-page">
-      <CalendarChrome state={state} />
+      <CalendarChrome state={state} shortcuts={prompt === null} />
       <div className={`calendar-day-layout ${wide ? "calendar-week-layout" : ""}`}>
         {state.calendarView === "day" ? <DayBoard state={state} /> : null}
         {week ? <WeekBoard state={state} onSuggest={(block) => setPrompt(suggestionPrompt(state, block))} /> : null}

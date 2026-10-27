@@ -216,12 +216,12 @@ describe("InsightsScreen", () => {
     expect(screen.getByText("Apps & websites")).toBeVisible();
     expect(screen.getAllByText("Notes").length).toBeGreaterThan(0);
     expect(screen.getByText("100%")).toBeVisible();
-    expect(screen.getByText("Leading app/website")).toBeVisible();
+    expect(screen.getByText("Top app or website")).toBeVisible();
     expect(screen.queryByText("Average session")).toBeNull();
     expect(screen.queryByText("Leading category")).toBeNull();
   });
 
-  it("shows the highest-time app as the leading app/website", () => {
+  it("shows the highest-time app as the top app or website", () => {
     render(<InsightsScreen state={snapshot({
       snapshot: {
         totalSeconds: 3000,
@@ -237,9 +237,9 @@ describe("InsightsScreen", () => {
         trackedSecondsByDay: {},
       },
     })} />);
-    expect(screen.getByText("Leading app/website")).toBeVisible();
-    expect(screen.getByText("40m", { selector: ".metric-value" })).toBeVisible();
-    expect(screen.getByText("Cursor · 80%", { selector: ".metric-detail" })).toBeVisible();
+    expect(screen.getByText("Top app or website")).toBeVisible();
+    expect(screen.getByText("Cursor", { selector: ".metric-value-text" })).toBeVisible();
+    expect(screen.getByText("40m · 80%", { selector: ".metric-detail" })).toBeVisible();
     expect(screen.queryByText("Average session")).toBeNull();
     expect(screen.queryByText("Leading category")).toBeNull();
     expect(screen.queryByText("Productivity", { selector: ".metric-value" })).toBeNull();
@@ -396,7 +396,7 @@ describe("InsightsScreen", () => {
 
     rerender(<InsightsScreen state={snapshot({ ...dayFilterState(), insightsTab: "sessions" })} />);
     expect(screen.getByRole("status")).toHaveTextContent("Showing only Cursor");
-    expect(screen.getByText("Cursor")).toBeVisible();
+    expect(screen.getByText("Cursor", { selector: ".row-title" })).toBeVisible();
     expect(screen.queryByText("Safari")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Show all" }));
@@ -417,6 +417,10 @@ describe("InsightsScreen", () => {
       ...day,
       snapshot: day.snapshot ? { ...day.snapshot, listSegments, timelineSegments: listSegments } : undefined,
     })} />);
+    expect(screen.getByText("1h", { selector: ".metric-value" })).toBeVisible();
+    expect(screen.getByText("75% of tracked time", { selector: ".metric-detail" })).toBeVisible();
+    expect(screen.getByText("20m", { selector: ".metric-value" })).toBeVisible();
+    expect(screen.getByText("25% of tracked time", { selector: ".metric-detail" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Highlight Productive on the timeline" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Highlight Distracting on the timeline" })).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Highlight Productive on the timeline" }));
@@ -617,4 +621,3 @@ describe("Insights session log pagination", () => {
     expect(screen.getByRole("button", { name: /Log 30/ })).toBeVisible();
   });
 });
-

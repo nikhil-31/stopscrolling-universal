@@ -113,6 +113,16 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.openPath, (_event, path: string) => {
     void shell.showItemInFolder(path);
   });
+  ipcMain.on(IPC.openUrl, (_event, url: unknown) => {
+    // Session URLs come from tracked browser tabs; only hand web pages to the browser.
+    if (typeof url !== "string") return;
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") void shell.openExternal(parsed.toString());
+    } catch {
+      // Not a URL.
+    }
+  });
   ipcMain.on(IPC.selectInspector, (_event, payload) => {
     controller.selectInspector(payload);
   });

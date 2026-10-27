@@ -3,8 +3,8 @@ import { formatFullDate, formatWeekRange, mondayWeekDays } from "@shared/calenda
 import { effectiveTimeZone, toDateInput, zonedDateTime, zonedParts } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
 import { formatMonthLabel } from "@shared/timeline";
-import { CalendarClock, ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
-import { useState } from "react";
+import { ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { IconButton, Tooltip } from "../ui";
 
 const views: CalendarView[] = ["day", "week", "month"];
@@ -12,11 +12,14 @@ const views: CalendarView[] = ["day", "week", "month"];
 export function CalendarChrome({
   state,
   title: pageTitle,
+  shortcuts = false,
 }: {
   state: AppSnapshot;
   title?: string;
+  shortcuts?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
   const anchor = new Date(state.calendarAnchor);
   const week = state.calendarView === "week";
   const month = state.calendarView === "month";
@@ -30,6 +33,45 @@ export function CalendarChrome({
   const stepLabel = week ? "week" : month ? "month" : "day";
   const allDay = state.calendarEvents.filter((event) => event.isAllDay);
   const awayFromToday = !viewIncludesToday(state.calendarView, anchor, new Date(state.calendarMonth), timeZone);
+  const step = (delta: -1 | 1) => (
+    month ? shiftMonth(new Date(state.calendarMonth), delta, timeZone) : shiftAnchor(anchor, (week ? 7 : 1) * delta)
+  );
+  const stepRef = useRef(step);
+  stepRef.current = step;
+
+  useEffect(() => {
+    if (!shortcuts) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || isTyping(event.target)) return;
+      const key = event.key.toLowerCase();
+      if (key === "arrowleft") stepRef.current(-1);
+      else if (key === "arrowright") stepRef.current(1);
+      else if (key === "t") jumpToToday();
+      else if (key === "d") window.stopscrolling.setCalendarView("day");
+      else if (key === "w") window.stopscrolling.setCalendarView("week");
+      else if (key === "m") window.stopscrolling.setCalendarView("month");
+      else return;
+      event.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [shortcuts]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    const onPointer = (event: MouseEvent) => {
+      if (!moreRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onPointer);
+    };
+  }, [menuOpen]);
 
   return (
     <header className="calendar-chrome">
@@ -44,28 +86,24 @@ export function CalendarChrome({
       </h2>
       <div className="calendar-chrome-controls">
         <div className="calendar-chrome-nav">
-          <IconButton
-            label={`Previous ${stepLabel}`}
-            icon={ChevronLeft}
-            onClick={() => month ? shiftMonth(new Date(state.calendarMonth), -1, timeZone) : shiftAnchor(anchor, week ? -7 : -1)}
-          />
-          <Tooltip label="Jump to today">
-            <IconButton
-              label="Jump to today"
-              icon={CalendarClock}
-              dot={awayFromToday}
-              onClick={() => {
-                const now = new Date().toISOString();
-                window.stopscrolling.setCalendarAnchor(now);
-                window.stopscrolling.setCalendarMonth(now);
-              }}
-            />
+          <Tooltip label={shortcuts ? `Previous ${stepLabel} (←)` : `Previous ${stepLabel}`}>
+            <IconButton label={`Previous ${stepLabel}`} icon={ChevronLeft} onClick={() => step(-1)} />
           </Tooltip>
-          <IconButton
-            label={`Next ${stepLabel}`}
-            icon={ChevronRight}
-            onClick={() => month ? shiftMonth(new Date(state.calendarMonth), 1, timeZone) : shiftAnchor(anchor, week ? 7 : 1)}
-          />
+          <Tooltip label={shortcuts ? "Jump to today (T)" : "Jump to today"}>
+            <button
+              type="button"
+              className="calendar-today-button"
+              aria-label="Jump to today"
+              disabled={!awayFromToday}
+              onClick={jumpToToday}
+            >
+              Today
+              {awayFromToday ? <span className="icon-button-dot" aria-hidden="true" /> : null}
+            </button>
+          </Tooltip>
+          <Tooltip label={shortcuts ? `Next ${stepLabel} (→)` : `Next ${stepLabel}`}>
+            <IconButton label={`Next ${stepLabel}`} icon={ChevronRight} onClick={() => step(1)} />
+          </Tooltip>
         </div>
         <div className="seg calendar-view-switch" aria-label="Calendar view">
           {views.map((view) => (
@@ -73,15 +111,18 @@ export function CalendarChrome({
               key={view}
               className={state.calendarView === view ? "active" : ""}
               aria-pressed={state.calendarView === view}
+              title={shortcuts ? `${view[0].toUpperCase() + view.slice(1)} (${view[0].toUpperCase()})` : undefined}
               onClick={() => window.stopscrolling.setCalendarView(view)}
             >
               {view[0].toUpperCase() + view.slice(1)}
             </button>
           ))}
-          <div className="calendar-more">
+          <div className="calendar-more" ref={moreRef}>
             <IconButton
               label="More calendar options"
               icon={Ellipsis}
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
               onClick={() => setMenuOpen((open) => !open)}
             />
             {menuOpen ? (
@@ -115,6 +156,17 @@ export function CalendarChrome({
       </div>
     </header>
   );
+}
+
+function jumpToToday() {
+  const now = new Date().toISOString();
+  window.stopscrolling.setCalendarAnchor(now);
+  window.stopscrolling.setCalendarMonth(now);
+}
+
+function isTyping(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
 function viewIncludesToday(view: CalendarView, anchor: Date, month: Date, timeZone: string) {

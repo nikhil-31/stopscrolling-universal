@@ -6,7 +6,7 @@ import { defaultWorkspace } from "@shared/calendar-workspace";
 import { toDateInput } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
-import { dayBoardScrollTop } from "../components/calendar/DayBoard";
+import { dayBoardScrollTop, layoutOverlaps } from "../components/calendar/DayBoard";
 import { SessionTitleProvider } from "../session-title";
 import { CalendarScreen } from "./CalendarScreen";
 
@@ -622,6 +622,105 @@ describe("CalendarScreen", () => {
         headerHeight: 32,
       }));
     });
+  });
+});
+
+describe("CalendarScreen navigation and scanning", () => {
+  const studio = timeline({
+    id: "macos|Studio Mac",
+    deviceName: "Studio Mac",
+    devicePlatform: "macos",
+    blocks: [block({ id: "focus", title: "Xcode", deviceName: "Studio Mac", devicePlatform: "macos" })],
+  });
+
+  it("names the summary after the day instead of a placeholder", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(noon);
+    render(<CalendarScreen state={snapshot()} />);
+    const summary = screen.getByRole("complementary", { name: "Day summary" });
+    expect(within(summary).getByText("Today")).toBeVisible();
+    expect(within(summary).getByText("Devices")).toBeVisible();
+    expect(summary).not.toHaveTextContent(">>");
+  });
+
+  it("shows all-day events in a strip above the day grid", () => {
+    render(<CalendarScreen state={snapshot({
+      calendarEvents: [{
+        id: "holiday",
+        title: "Company offsite",
+        start: new Date(2026, 8, 12).toISOString(),
+        end: new Date(2026, 8, 13).toISOString(),
+        calendarName: "Work",
+        isAllDay: true,
+        colorHex: null,
+        provider: "google",
+      }],
+    })} />);
+    expect(screen.getByText("All day")).toBeVisible();
+    expect(document.querySelector(".day-board-allday")).toHaveTextContent("Company offsite");
+  });
+
+  it("says when a day has no tracked activity", () => {
+    render(<CalendarScreen state={snapshot({ calendarAnchor: new Date(2026, 0, 5, 12).toISOString() })} />);
+    expect(screen.getByText("No activity recorded")).toBeVisible();
+  });
+
+  it("opens a day from the week header and shows each day's total", () => {
+    render(<CalendarScreen state={snapshot({ calendarView: "week", timelines: [studio] })} />);
+    const saturday = screen.getByRole("button", { name: /Open Saturday 12/ });
+    expect(saturday).toHaveTextContent("1 hr");
+    fireEvent.click(saturday);
+    expect(desktop.setCalendarView).toHaveBeenCalledWith("day");
+    expect(toDateInput(new Date(desktop.setCalendarAnchor.mock.calls[0][0]))).toBe("2026-09-12");
+  });
+
+  it("opens a day from the month date and tints busier days", () => {
+    render(<CalendarScreen state={snapshot({ calendarView: "month", timelines: [studio] })} />);
+    const saturday = screen.getByTestId("calendar-month-day-2026-09-12");
+    expect(saturday.querySelector(".calendar-month-total")).toHaveTextContent("1 hr");
+    expect(saturday.style.getPropertyValue("--cell-intensity")).toBe("14%");
+    expect(screen.getByTestId("calendar-month-day-2026-09-13").style.getPropertyValue("--cell-intensity")).toBe("0%");
+    fireEvent.click(within(saturday).getByRole("button", { name: /^Open / }));
+    expect(desktop.setCalendarView).toHaveBeenCalledWith("day");
+    expect(toDateInput(new Date(desktop.setCalendarAnchor.mock.calls[0][0]))).toBe("2026-09-12");
+  });
+
+  it("steps and switches views from the keyboard but not while a dialog is open", () => {
+    render(<CalendarScreen state={snapshot()} />);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(toDateInput(new Date(desktop.setCalendarAnchor.mock.calls[0][0]))).toBe("2026-09-13");
+    fireEvent.keyDown(window, { key: "w" });
+    expect(desktop.setCalendarView).toHaveBeenCalledWith("week");
+    fireEvent.keyDown(window, { key: "w", metaKey: true });
+    expect(desktop.setCalendarView).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("layoutOverlaps", () => {
+  const event = (id: string, startHour: number, endHour: number) => ({
+    id,
+    title: id,
+    start: new Date(2026, 8, 12, startHour).toISOString(),
+    end: new Date(2026, 8, 12, endHour).toISOString(),
+    calendarName: "Work",
+    isAllDay: false,
+    colorHex: null,
+    provider: "google" as const,
+  });
+
+  it("puts overlapping events side by side and leaves separate ones full width", () => {
+    const placed = layoutOverlaps([event("a", 9, 11), event("b", 10, 12), event("c", 13, 14)]);
+    const byId = Object.fromEntries(placed.map((item) => [item.event.id, item]));
+    expect(byId.a).toMatchObject({ column: 0, columns: 2 });
+    expect(byId.b).toMatchObject({ column: 1, columns: 2 });
+    expect(byId.c).toMatchObject({ column: 0, columns: 1 });
+  });
+
+  it("reuses a freed column inside the same cluster", () => {
+    const placed = layoutOverlaps([event("long", 9, 13), event("early", 9, 10), event("late", 11, 12)]);
+    const byId = Object.fromEntries(placed.map((item) => [item.event.id, item]));
+    expect(byId.early.column).toBe(byId.late.column);
+    expect(byId.long.columns).toBe(2);
   });
 });
 

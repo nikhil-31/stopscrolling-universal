@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CalendarView } from "@shared/calendar-workspace";
 import type { AppSnapshot } from "@shared/snapshot";
 import { CalendarChrome } from "./CalendarChrome";
@@ -12,7 +12,7 @@ function snapshot(view: CalendarView, when: Date): AppSnapshot {
     calendarAnchor: when.toISOString(),
     calendarMonth: when.toISOString(),
     calendarEvents: [],
-  } as AppSnapshot;
+  } as unknown as AppSnapshot;
 }
 
 function jumpDot() {
@@ -43,5 +43,61 @@ describe("CalendarChrome jump to today", () => {
 
     rerender(<CalendarChrome state={snapshot("month", now)} />);
     expect(jumpDot()).toBeNull();
+  });
+});
+
+describe("CalendarChrome shortcuts and menu", () => {
+  const desktop = {
+    setCalendarAnchor: vi.fn(),
+    setCalendarMonth: vi.fn(),
+    setCalendarView: vi.fn(),
+    openSettings: vi.fn(),
+  };
+  const day = new Date(2020, 0, 15, 12);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.stopscrolling = desktop as unknown as Window["stopscrolling"];
+  });
+
+  function chromeState(view: CalendarView) {
+    return { ...snapshot(view, day), settings: { showGoogleCalendarEvents: true } } as unknown as AppSnapshot;
+  }
+
+  it("ignores keys unless shortcuts are on", () => {
+    render(<CalendarChrome state={chromeState("day")} />);
+    fireEvent.keyDown(window, { key: "m" });
+    expect(desktop.setCalendarView).not.toHaveBeenCalled();
+  });
+
+  it("maps arrows, T, D, W and M", () => {
+    render(<CalendarChrome state={chromeState("week")} shortcuts />);
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(new Date(desktop.setCalendarAnchor.mock.calls[0][0]).getDate()).toBe(8);
+    fireEvent.keyDown(window, { key: "t" });
+    expect(new Date(desktop.setCalendarAnchor.mock.calls[1][0]).toDateString()).toBe(new Date().toDateString());
+    for (const [key, view] of [["d", "day"], ["w", "week"], ["m", "month"]] as const) {
+      fireEvent.keyDown(window, { key });
+      expect(desktop.setCalendarView).toHaveBeenLastCalledWith(view);
+    }
+  });
+
+  it("ignores keys typed into a field", () => {
+    render(<><input aria-label="Search" /><CalendarChrome state={chromeState("day")} shortcuts /></>);
+    fireEvent.keyDown(screen.getByLabelText("Search"), { key: "m" });
+    expect(desktop.setCalendarView).not.toHaveBeenCalled();
+  });
+
+  it("closes the more menu on Escape and outside click", () => {
+    render(<CalendarChrome state={chromeState("day")} />);
+    const trigger = screen.getByRole("button", { name: "More calendar options" });
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menu")).toBeVisible();
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+    fireEvent.click(trigger);
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 });

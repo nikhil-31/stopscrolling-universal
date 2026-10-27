@@ -19,7 +19,7 @@ import { CategoryMark } from "../GameMark";
 import { useClockFormat } from "../../clock-format";
 import { useSessionTitle } from "../../session-title";
 import { Card, EmptyState, Grouped } from "../ui";
-import { AppsWebsitesShareRow } from "../today/AppsWebsitesList";
+import { AppsWebsitesShareRow, FOCUS_COLORS } from "../today/AppsWebsitesList";
 import { PieChart } from "./Charts";
 
 export const SESSION_LOG_PAGE_SIZE = 30;
@@ -165,33 +165,36 @@ export const BreakdownList = memo(function BreakdownList({
 }) {
   return (
     <div className="breakdown-layout">
-      <Card className="data-card">
-        <div className="data-card-header">
-          <div>
-            <h3 className="data-card-title">Time by category</h3>
-            <div className="data-card-subtitle">Your activity mix</div>
+      <div className="breakdown-column">
+        <Grouped title="Focus" description="Productive, neutral, and distracting time">
+          {focus.length ? (
+            <div className="activity-app-list">
+              {focus.map((item) => {
+                const selected = selectedVerdict === item.key;
+                return (
+                  <div key={item.key} className={`activity-app-row ${selected ? "is-selected" : ""}`}>
+                    <AppsWebsitesShareRow
+                      app={item}
+                      selected={selected}
+                      onSelect={() => onSelectVerdict?.(selected ? null : item.key)}
+                      color={FOCUS_COLORS[item.key]}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : <EmptyState title="No focus data" body="Productive and distracting totals will appear here." />}
+        </Grouped>
+        <Card className="data-card">
+          <div className="data-card-header">
+            <div>
+              <h3 className="data-card-title">Time by category</h3>
+              <div className="data-card-subtitle">Your activity mix</div>
+            </div>
           </div>
-        </div>
-        <PieChart categories={categories} />
-      </Card>
-      <Grouped title="Focus" description="Productive, neutral, and distracting time">
-        {focus.length ? (
-          <div className="activity-app-list">
-            {focus.map((item) => {
-              const selected = selectedVerdict === item.key;
-              return (
-                <div key={item.key} className={`activity-app-row ${selected ? "is-selected" : ""}`}>
-                  <AppsWebsitesShareRow
-                    app={item}
-                    selected={selected}
-                    onSelect={() => onSelectVerdict?.(selected ? null : item.key)}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        ) : <EmptyState title="No focus data" body="Productive and distracting totals will appear here." />}
-      </Grouped>
+          <PieChart categories={categories} />
+        </Card>
+      </div>
       <Grouped title="Apps & websites" description="Your most-used destinations">
         {apps.length ? (
           <div className="activity-app-list">
@@ -206,6 +209,7 @@ export const BreakdownList = memo(function BreakdownList({
                     app={item}
                     selected={selected}
                     onSelect={() => onSelectApp?.(selected ? null : item.key)}
+                    color={colorForCategory(item.category)}
                   />
                 </div>
               );

@@ -21,7 +21,7 @@ export function SummarySidebar({
   return (
     <aside className="calendar-summary" aria-label="Day summary">
       <header className="calendar-summary-head">
-        <strong>{`>> Summary · Day - ${isToday ? "Today" : "Selected"}`}</strong>
+        <strong>{isToday ? "Today" : shortDate(new Date(state.calendarAnchor), timeZone)}</strong>
         <IconButton label="Edit work hours target" icon={Settings2} onClick={onEditTarget} />
       </header>
 
@@ -45,6 +45,7 @@ export function SummarySidebar({
       </section>
 
       <section className="calendar-summary-card">
+        <h3 className="calendar-summary-title">Devices</h3>
         {totalDeviceSeconds > 0 ? (
           <>
             <div className="calendar-productivity-track" aria-hidden="true">
@@ -74,4 +75,8 @@ export function SummarySidebar({
       </section>
     </aside>
   );
+}
+
+function shortDate(date: Date, timeZone: string) {
+  return new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric", timeZone }).format(date);
 }

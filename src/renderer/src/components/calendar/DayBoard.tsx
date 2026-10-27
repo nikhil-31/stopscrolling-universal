@@ -5,7 +5,7 @@ import { effectiveTimeZone, endOfDay, startOfDay } from "@shared/platform";
 import { combineSessionBlocks, formatClock, hourLabelWithPeriod } from "@shared/timeline";
 import { useClockFormat } from "../../clock-format";
 import { useSessionTitle } from "../../session-title";
-import type { ForegroundContext, ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
+import type { CalendarOverlayEvent, ForegroundContext, ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { SessionHoverCard } from "../timeline/SessionHoverCard";
 
@@ -25,7 +25,8 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
   const timelines = state.timelines.length ? state.timelines : [emptyTimeline(dayStart, dayEnd)];
   const manyDevices = timelines.length > 1;
   const blocks = timelines.flatMap((timeline) => timeline.blocks);
-  const events = state.calendarEvents.filter((event) => !event.isAllDay);
+  const events = layoutOverlaps(state.calendarEvents.filter((event) => !event.isAllDay));
+  const allDay = state.calendarEvents.filter((event) => event.isAllDay);
   const now = Date.now();
   const isToday = now >= dayStart.getTime() && now < dayEnd.getTime();
   const nowY = ((now - dayStart.getTime()) / (dayEnd.getTime() - dayStart.getTime())) * DAY_BOARD_HEIGHT;
@@ -77,6 +78,23 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
           <span key={timeline.id}>{manyDevices ? deviceLabel(timeline, state.devices) : "Time Entries"}</span>
         ))}
         <span>Calendar</span>
+        {allDay.length ? (
+          <>
+            <span className="day-board-allday-label">All day</span>
+            <div className="day-board-allday" style={{ gridColumn: "2 / -1" }}>
+              {allDay.map((event) => (
+                <span
+                  key={event.id}
+                  className="calendar-allday-chip"
+                  style={{ ["--block-color" as string]: event.colorHex || "#1fb894" }}
+                  title={`${event.title} · ${event.calendarName}`}
+                >
+                  {event.title}
+                </span>
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
       <div className="day-board-body" style={{ height: DAY_BOARD_HEIGHT, gridTemplateColumns, minWidth: gridMinWidth }}>
         <div className="day-board-hours" aria-hidden="true">
@@ -93,6 +111,11 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
             data-testid={`calendar-device-column-${timeline.id}`}
             aria-label={manyDevices ? `Time entries · ${deviceLabel(timeline, state.devices)}` : "Time Entries"}
           >
+            {!timeline.blocks.length ? (
+              <div className="day-board-empty" style={{ top: emptyTop(isToday, nowY, firstEntryTop) }}>
+                {isToday ? "Nothing tracked yet today" : "No activity recorded"}
+              </div>
+            ) : null}
             {combineSessionBlocks(timeline.blocks).map((block) => {
               const live = isLocalLiveBlock(block, timeline, state, now);
               const style = placeDayBlock(block.start, block.end, dayStart, dayEnd);
@@ -129,8 +152,13 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
           );
         })}
         <div className="day-board-col day-board-calendar">
-          {events.map((event, index) => {
-            const style = placeDayBlock(event.start, event.end, dayStart, dayEnd);
+          {events.map(({ event, column, columns }, index) => {
+            const style = {
+              ...placeDayBlock(event.start, event.end, dayStart, dayEnd),
+              left: `calc(${(column / columns) * 100}% + 6px)`,
+              width: `calc(${100 / columns}% - ${columns > 1 ? 8 : 12}px)`,
+              right: "auto",
+            };
             const color = event.colorHex || (index % 2 === 0 ? "#1fb894" : "#2de2e2");
             return (
               <div
@@ -147,11 +175,43 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
             );
           })}
         </div>
-        {isToday ? <div className="day-board-now" style={{ top: nowY }} /> : null}
+        {isToday ? <div className="day-board-now" style={{ top: nowY }} data-time={formatClock(new Date(now), clockFormat)} /> : null}
       </div>
       {hover ? <SessionHoverCard block={hover.block} x={hover.x} y={hover.y} /> : null}
     </div>
   );
+}
+
+function emptyTop(isToday: boolean, nowY: number, firstEntryTop: number | null) {
+  return isToday ? Math.max(8, nowY - 40) : firstEntryTop ?? DAY_HOUR_HEIGHT * 9;
+}
+
+export function layoutOverlaps(events: CalendarOverlayEvent[]) {
+  const sorted = [...events].sort((a, b) => (
+    new Date(a.start).getTime() - new Date(b.start).getTime() || new Date(b.end).getTime() - new Date(a.end).getTime()
+  ));
+  const placed: Array<{ event: CalendarOverlayEvent; column: number; columns: number }> = [];
+  let cluster: typeof placed = [];
+  let columnEnds: number[] = [];
+  let clusterEnd = -Infinity;
+  const flush = () => {
+    for (const item of cluster) item.columns = columnEnds.length;
+    placed.push(...cluster);
+    cluster = [];
+    columnEnds = [];
+  };
+  for (const event of sorted) {
+    const start = new Date(event.start).getTime();
+    const end = new Date(event.end).getTime();
+    if (start >= clusterEnd) flush();
+    let column = columnEnds.findIndex((columnEnd) => columnEnd <= start);
+    if (column === -1) column = columnEnds.push(end) - 1;
+    else columnEnds[column] = end;
+    cluster.push({ event, column, columns: 1 });
+    clusterEnd = Math.max(clusterEnd, end);
+  }
+  flush();
+  return placed;
 }
 
 function deviceLabel(timeline: ScreenTimeDeviceTimeline, devices: AppSnapshot["devices"]) {

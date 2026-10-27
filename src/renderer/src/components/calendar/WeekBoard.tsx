@@ -1,4 +1,4 @@
-import { clipInterval, hourLabel24, mondayWeekDays } from "@shared/calendar-workspace";
+import { clipInterval, formatHourMinute, hourLabel24, mondayWeekDays } from "@shared/calendar-workspace";
 import { deviceColor, deviceKey, displayNameForDevice } from "@shared/device";
 import { effectiveTimeZone, endOfDay, startOfDay, toDateInput } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
@@ -15,6 +15,7 @@ import {
   isLocalLiveBlock,
   placeDayBlock,
 } from "./DayBoard";
+import { openDay } from "./navigation";
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const HOUR_COL = 52;
@@ -104,15 +105,20 @@ export function WeekBoard({
         {days.map((day) => {
           const key = toDateInput(day, timeZone);
           const isToday = key === todayKey;
+          const seconds = dayTrackedSeconds(day, state.timelines, timeZone);
           return (
-            <div
+            <button
               key={key}
+              type="button"
               className={`week-day-head ${isToday ? "is-today" : ""}`}
               style={{ gridColumn: `span ${timelines.length}` }}
+              aria-label={`Open ${weekdayName(day, timeZone)} ${dayNumber(day, timeZone)}`}
+              onClick={() => openDay(day)}
             >
               <span className="week-day-name">{weekdayName(day, timeZone)}</span>
               <span className="week-day-number">{dayNumber(day, timeZone)}</span>
-            </div>
+              <span className="week-day-total">{seconds > 0 ? formatHourMinute(seconds) : "—"}</span>
+            </button>
           );
         })}
         {manyDevices ? <span className="week-device-gutter" /> : null}
@@ -190,7 +196,7 @@ export function WeekBoard({
             })}
           </div>
         ))}
-        {weekHasToday ? <div className="day-board-now" style={{ top: nowY }} /> : null}
+        {weekHasToday ? <div className="day-board-now" style={{ top: nowY }} data-time={formatClock(new Date(now), clockFormat)} /> : null}
       </div>
       {hover ? <SessionHoverCard block={hover.block} x={hover.x} y={hover.y} /> : null}
     </div>
@@ -222,6 +228,21 @@ function dayDeviceColumn(
     dayStartColumn,
     items,
   };
+}
+
+function dayTrackedSeconds(day: Date, timelines: ScreenTimeDeviceTimeline[], timeZone: string) {
+  const dayStart = startOfDay(day, timeZone);
+  const dayEnd = endOfDay(day, timeZone);
+  let total = 0;
+  for (const timeline of timelines) {
+    for (const block of timeline.blocks) {
+      for (const item of block.items) {
+        const clipped = clipInterval(item.start, item.end, dayStart, dayEnd);
+        if (clipped) total += (clipped[1] - clipped[0]) / 1000;
+      }
+    }
+  }
+  return total;
 }
 
 function emptyWeekTimeline(): ScreenTimeDeviceTimeline {

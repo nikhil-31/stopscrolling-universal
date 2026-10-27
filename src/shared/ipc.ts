@@ -23,6 +23,7 @@ export const IPC = {
   requestAccessibility: "app:request-accessibility",
   openSettings: "app:open-settings",
   openPath: "app:open-path",
+  openUrl: "app:open-url",
   selectInspector: "app:select-inspector",
   commandPalette: "app:command-palette",
   updateSettings: "app:update-settings",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   clockLabel,
@@ -11,11 +11,22 @@ import {
   WEEKDAYS,
 } from "@shared/blocking";
 import { formatFullDate } from "@shared/calendar-workspace";
-import { appShareBarPercent, blockItemShareLabel, continuousActivityEvents, cumulativeActivityTotals, formatClock, formatDuration, formatTrackedDuration, percentLabel } from "@shared/timeline";
+import {
+  appShareBarPercent,
+  blockItemShareLabel,
+  colorForCategory,
+  continuousActivityEvents,
+  cumulativeActivityTotals,
+  formatClock,
+  formatDuration,
+  formatTrackedDuration,
+  itemBreakdownKey,
+  percentLabel,
+} from "@shared/timeline";
 import { displayNameForDevice } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
-import type { BlockingSchedule, ScreenTimeSessionBlock } from "@shared/types";
-import { Clock3, Globe2, Laptop2, Shield, X } from "lucide-react";
+import type { BlockingSchedule, ScreenTimeSessionBlock, ScreenTimeTimelineSegment } from "@shared/types";
+import { Check, Clock3, Copy, ExternalLink, Globe2, Laptop2, Shield, X } from "lucide-react";
 import { useClockFormat } from "../clock-format";
 import { useSessionTitle } from "../session-title";
 import { SessionModal, SessionModalBody } from "./blocking/SessionModal";
@@ -244,6 +255,110 @@ function ScheduleInspector({
   );
 }
 
+function useEscapeToClose() {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      closeInspector();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+}
+
+/** Shared frame for a tracked session: fixed header with the close button, scrolling body. */
+function SessionDialog({
+  title,
+  subtitle,
+  meta,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  meta: ReactNode;
+  children: ReactNode;
+}) {
+  useEscapeToClose();
+  return (
+    <div className="calendar-dialog-scrim" onClick={closeInspector}>
+      <div
+        className="calendar-dialog session-details-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="session-details-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="session-details-head">
+          <div className="inspector-kicker">Session details</div>
+          <h2 id="session-details-title">{title}</h2>
+          {subtitle ? <p className="session-details-subtitle">{subtitle}</p> : null}
+          <div className="inspector-meta">{meta}</div>
+          <IconButton
+            className="calendar-dialog-close"
+            label="Close session details"
+            icon={X}
+            onClick={closeInspector}
+          />
+        </header>
+        <div className="session-details-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function SessionSummary({ seconds, start, end }: { seconds: number; start: string; end: string }) {
+  const clockFormat = useClockFormat();
+  return (
+    <div className="session-details-summary">
+      <div className="session-details-stat">
+        <span className="small muted">Tracked</span>
+        <strong>{formatDuration(seconds)}</strong>
+      </div>
+      <span className="session-details-when">
+        <Clock3 size={12} aria-hidden="true" />
+        <span>{formatFullDate(new Date(start))} · {formatClock(start, clockFormat)} – {formatClock(end, clockFormat)}</span>
+      </span>
+    </div>
+  );
+}
+
+const VERDICT_TONES = { Productive: "success", Neutral: "neutral", Distracting: "warning" } as const;
+
+function VerdictBadge({ verdict }: { verdict: ScreenTimeTimelineSegment["verdict"] }) {
+  if (!verdict || verdict === "Unrated") return null;
+  return <Badge tone={VERDICT_TONES[verdict]} dot>{verdict}</Badge>;
+}
+
+/** Each slice of the session laid out on its own clock, colored by category. */
+function SessionStrip({ block }: { block: ScreenTimeSessionBlock }) {
+  const clockFormat = useClockFormat();
+  const start = Date.parse(block.start);
+  const span = Math.max(1, Date.parse(block.end) - start);
+  return (
+    <div className="session-strip-wrap">
+      <div className="session-strip" aria-hidden="true">
+        {block.items.map((item) => {
+          const left = ((Date.parse(item.start) - start) / span) * 100;
+          const width = ((Date.parse(item.end) - Date.parse(item.start)) / span) * 100;
+          return (
+            <span
+              key={item.id}
+              className="session-strip-slice"
+              title={`${item.title} · ${formatTrackedDuration(item.durationSeconds)}`}
+              style={{ left: `${Math.max(0, left)}%`, width: `${Math.max(0.6, width)}%`, background: colorForCategory(item.category) }}
+            />
+          );
+        })}
+      </div>
+      <div className="session-strip-axis" aria-hidden="true">
+        <span>{formatClock(block.start, clockFormat)}</span>
+        <span>{formatClock(block.end, clockFormat)}</span>
+      </div>
+    </div>
+  );
+}
+
 function SessionDetailsModal({
   block,
   devices,
@@ -256,86 +371,130 @@ function SessionDetailsModal({
   const events = continuousActivityEvents(block);
   const totals = cumulativeActivityTotals(block);
   const totalSeconds = totals.reduce((sum, item) => sum + item.seconds, 0);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      closeInspector();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  const categoryByKey = new Map(block.items.map((item) => [itemBreakdownKey(item), item.category]));
+  const categoryById = new Map(block.items.map((item) => [item.id, item.category]));
 
   return (
-    <div className="calendar-dialog-scrim" onClick={closeInspector}>
-      <div
-        className="calendar-dialog session-details-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="session-details-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <IconButton
-          className="calendar-dialog-close"
-          label="Close session details"
-          icon={X}
-          onClick={closeInspector}
-        />
-        <div className="inspector-kicker">Session details</div>
-        <h2 id="session-details-title">{title}</h2>
-        <div className="inspector-meta">
+    <SessionDialog
+      title={title}
+      meta={(
+        <>
           <Badge tone="accent">{block.category}</Badge>
           <Badge><Laptop2 size={11} aria-hidden="true" />{displayNameForDevice(block.devicePlatform, block.deviceName, devices)}</Badge>
-        </div>
-        <div className="inspector-duration session-details-summary">
-          <span className="small muted">Tracked</span>
-          <strong>{formatDuration(totalSeconds)}</strong>
-          <span className="small muted">
-            {formatFullDate(new Date(block.start))} · {formatClock(block.start, clockFormat)} – {formatClock(block.end, clockFormat)}
-          </span>
-        </div>
-        {totals.length ? (
-          <section aria-label="Apps and websites">
-            <div className="inspector-kicker">Apps & websites</div>
-            <div className="activity-app-list session-details-totals">
-              {totals.map((item) => {
-                const share = totalSeconds > 0 ? item.seconds / totalSeconds : 0;
-                return (
-                  <div className="activity-app-row" key={item.key}>
-                    <div className="activity-app-main">
-                      <span className="activity-app-pct">{percentLabel(share)}</span>
-                      <span className="activity-app-bar" aria-hidden="true">
-                        <span style={{ width: `${appShareBarPercent(share)}%` }} />
-                      </span>
-                      <span className="activity-app-name">{item.name}</span>
-                      <span className="activity-app-time">{formatTrackedDuration(item.seconds)}</span>
-                    </div>
+        </>
+      )}
+    >
+      <SessionSummary seconds={totalSeconds} start={block.start} end={block.end} />
+      {block.items.length ? <SessionStrip block={block} /> : null}
+      {totals.length ? (
+        <section className="session-details-section" aria-label="Apps and websites">
+          <div className="inspector-kicker">Apps & websites</div>
+          <div className="activity-app-list session-details-totals">
+            {totals.map((item) => {
+              const share = totalSeconds > 0 ? item.seconds / totalSeconds : 0;
+              return (
+                <div className="activity-app-row" key={item.key}>
+                  <div
+                    className="activity-app-main"
+                    style={{ "--bar-color": colorForCategory(categoryByKey.get(item.key) ?? "") } as CSSProperties}
+                  >
+                    <span className="activity-app-pct">{percentLabel(share)}</span>
+                    <span className="activity-app-bar" aria-hidden="true">
+                      <span style={{ width: `${appShareBarPercent(share)}%` }} />
+                    </span>
+                    <span className="activity-app-name">{item.name}</span>
+                    <span className="activity-app-time">{formatTrackedDuration(item.seconds)}</span>
                   </div>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
-        <section aria-label="Activity">
-          <div className="inspector-kicker">Activity · {events.length}</div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+      <section className="session-details-section" aria-label="Activity">
+        <div className="inspector-kicker">Activity · {events.length}</div>
+        <ol className="session-activity">
           {events.map((item) => (
-            <div className="data-row" key={item.id}>
+            <li className="session-activity-row" key={item.id}>
+              <span
+                className="session-activity-dot"
+                aria-hidden="true"
+                style={{ background: colorForCategory(categoryById.get(item.id.split(":")[0]) ?? "") }}
+              />
               <span className="row-copy">
                 <span className="row-title">{item.title}</span>
                 <span className="row-subtitle">
                   {formatClock(item.start, clockFormat)} – {formatClock(item.end, clockFormat)}
-                  {item.appName ? ` · ${item.appName}` : ""}
+                  {item.appName && item.appName !== item.title ? ` · ${item.appName}` : ""}
                 </span>
               </span>
               <span className="row-value">
                 {formatTrackedDuration(item.durationSeconds)} · {blockItemShareLabel(item.durationSeconds, block.durationSeconds)}
               </span>
-            </div>
+            </li>
           ))}
-        </section>
-      </div>
-    </div>
+        </ol>
+      </section>
+    </SessionDialog>
+  );
+}
+
+function SegmentDetailsModal({
+  segment,
+  devices,
+}: {
+  segment: ScreenTimeTimelineSegment;
+  devices: AppSnapshot["devices"];
+}) {
+  const [copied, setCopied] = useState(false);
+  const seconds = (Date.parse(segment.end) - Date.parse(segment.start)) / 1000;
+  const pageTitle = segment.subtitle && segment.subtitle !== segment.label ? segment.subtitle : "";
+
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(segment.url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard access can be refused; the URL stays selectable.
+    }
+  }
+
+  return (
+    <SessionDialog
+      title={segment.label}
+      subtitle={pageTitle || undefined}
+      meta={(
+        <>
+          <Badge tone="accent">{segment.category}</Badge>
+          <VerdictBadge verdict={segment.verdict} />
+          <Badge><Laptop2 size={11} aria-hidden="true" />{displayNameForDevice(segment.devicePlatform, segment.deviceName, devices)}</Badge>
+          {segment.isLive ? <Badge tone="danger" dot>Live</Badge> : null}
+        </>
+      )}
+    >
+      <SessionSummary seconds={seconds} start={segment.start} end={segment.end} />
+      <dl className="session-details-facts">
+        {segment.appName ? (
+          <div>
+            <dt>App</dt>
+            <dd>{segment.appName}</dd>
+          </div>
+        ) : null}
+        {segment.url ? (
+          <div>
+            <dt><Globe2 size={11} aria-hidden="true" /> URL</dt>
+            <dd className="session-details-url">
+              <span className="inspector-url" title={segment.url}>{segment.url}</span>
+              <span className="session-details-url-actions">
+                <IconButton label={copied ? "Copied" : "Copy URL"} icon={copied ? Check : Copy} onClick={() => void copyUrl()} />
+                <IconButton label="Open in browser" icon={ExternalLink} onClick={() => window.stopscrolling.openUrl(segment.url)} />
+              </span>
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+    </SessionDialog>
   );
 }
 
@@ -346,46 +505,12 @@ export function Inspector({
   state: AppSnapshot;
   onEditSchedule?: (schedule: BlockingSchedule) => void;
 }) {
-  const clockFormat = useClockFormat();
   if (state.inspector.kind === "none") return null;
   if (state.inspector.kind === "schedule" && state.inspector.schedule) {
     return <ScheduleInspector schedule={state.inspector.schedule} state={state} onEdit={onEditSchedule} />;
   }
   if (state.inspector.kind === "segment" && state.inspector.segment) {
-    const segment = state.inspector.segment;
-    const duration = (new Date(segment.end).getTime() - new Date(segment.start).getTime()) / 1000;
-    return (
-      <aside className="inspector" aria-label="Session inspector">
-        <IconButton
-          className="inspector-close"
-          label="Close inspector"
-          icon={X}
-          onClick={closeInspector}
-        />
-        <div className="inspector-kicker">Session details</div>
-        <h2>{segment.label}</h2>
-        <p className="muted">{segment.appName}</p>
-        <div className="inspector-meta">
-          <Badge tone="accent">{segment.category}</Badge>
-          <Badge><Laptop2 size={11} aria-hidden="true" />{displayNameForDevice(segment.devicePlatform, segment.deviceName, state.devices)}</Badge>
-          {segment.isLive ? <Badge tone="danger" dot>Live</Badge> : null}
-        </div>
-        <div className="inspector-duration">
-          <span className="small muted">Time tracked</span>
-          <strong>{formatDuration(duration)}</strong>
-          <span className="small muted">
-            <Clock3 size={11} aria-hidden="true" />{" "}
-            {formatClock(segment.start, clockFormat)} – {formatClock(segment.end, clockFormat)}
-          </span>
-        </div>
-        {segment.url ? (
-          <div>
-            <div className="inspector-kicker"><Globe2 size={11} aria-hidden="true" /> URL</div>
-            <p className="inspector-url" title={segment.url}>{segment.url}</p>
-          </div>
-        ) : null}
-      </aside>
-    );
+    return <SegmentDetailsModal segment={state.inspector.segment} devices={state.devices} />;
   }
   if (state.inspector.kind === "block" && state.inspector.block) {
     return <SessionDetailsModal block={state.inspector.block} devices={state.devices} />;

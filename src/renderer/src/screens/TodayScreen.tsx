@@ -16,7 +16,7 @@ import type { ScreenTimeAppBreakdown } from "@shared/types";
 import { Banner, Button, Tabs } from "../components/ui";
 import { CalendarDialogs } from "../components/calendar/CalendarDialogs";
 import type { CalendarPrompt } from "../components/calendar/types";
-import { EventLog } from "../components/timeline";
+import { EventLog, SummaryStats } from "../components/timeline";
 import { ActivityLineChart } from "../components/today/ActivityLineChart";
 import { ActivityPie } from "../components/today/ActivityPie";
 import { ActivityTimeline } from "../components/today/ActivityTimeline";
@@ -113,23 +113,34 @@ export function TodayScreen({ state }: { state: AppSnapshot }) {
         </div>
       ) : null}
 
-      <Tabs
-        ariaLabel="Today views"
-        value={tab}
-        onChange={(next) => window.stopscrolling.setTodayTab(next)}
-        items={[
-          { value: "timeline", label: "Timeline" },
-          { value: "eventLog", label: "Event Log" },
-        ]}
+      <SummaryStats
+        trackedSeconds={selectedApp ? selectedApp.seconds : state.snapshot.totalSeconds}
+        trackedDetail={selectedApp ? `Across this day · ${selectedApp.label}` : "Across this day"}
+        focus={focusRows}
+        topApp={apps[0]}
       />
+
+      <div className="tabs-bar">
+        <Tabs
+          ariaLabel="Today views"
+          value={tab}
+          onChange={(next) => window.stopscrolling.setTodayTab(next)}
+          items={[
+            { value: "timeline", label: "Timeline" },
+            { value: "eventLog", label: "Event Log" },
+          ]}
+        />
+      </div>
 
       {tab === "timeline" ? (
         <div className="activity-board">
           <ActivityLineChart state={state} buckets={lineBuckets} />
           <ActivityTimeline state={state} timelines={filteredTimelines} />
           <div className="activity-split">
-            <ActivityPie state={state} categories={filteredCategories} />
-            <FocusList rows={focusRows} selectedKey={selectedVerdict} onSelect={selectVerdict} />
+            <div className="activity-split-column">
+              <FocusList rows={focusRows} selectedKey={selectedVerdict} onSelect={selectVerdict} />
+              <ActivityPie state={state} categories={filteredCategories} />
+            </div>
             <AppsWebsitesList
               state={state}
               selectedKey={selectedAppKey}

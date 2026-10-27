@@ -1,10 +1,11 @@
 import { websiteHostname } from "@shared/browser";
-import { clipInterval, formatHourMinute, mondayMonthGridDays } from "@shared/calendar-workspace";
+import { clipInterval, formatFullDate, formatHourMinute, mondayMonthGridDays } from "@shared/calendar-workspace";
 import { deviceColor, deviceKey } from "@shared/device";
 import { effectiveTimeZone, endOfDay, startOfDay, startOfMonth, toDateInput } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
 import { formatMonthLabel, itemBreakdownKey } from "@shared/timeline";
 import type { ScreenTimeSessionBlock } from "@shared/types";
+import { openDay } from "./navigation";
 
 const VISIBLE_CHIPS = 4;
 
@@ -23,6 +24,11 @@ export function MonthBoard({ state }: { state: AppSnapshot }) {
   const monthKey = toDateInput(startOfMonth(month, timeZone), timeZone).slice(0, 7);
   const todayKey = toDateInput(new Date(), timeZone);
   const weekdays = days.slice(0, 7).map((day) => weekdayName(day, timeZone));
+  const cells = days.map((day) => {
+    const chips = chipsForDay(day, state, timeZone);
+    return { day, chips, seconds: chips.reduce((sum, chip) => sum + chip.seconds, 0) };
+  });
+  const busiest = Math.max(0, ...cells.map((cell) => cell.seconds));
 
   return (
     <div className="calendar-month-board" data-testid="calendar-month-board">
@@ -30,9 +36,9 @@ export function MonthBoard({ state }: { state: AppSnapshot }) {
         {weekdays.map((label) => (
           <div key={label} className="calendar-month-weekday">{label}</div>
         ))}
-        {days.map((day) => {
+        {cells.map(({ day, chips, seconds }) => {
           const key = toDateInput(day, timeZone);
-          const chips = chipsForDay(day, state, timeZone);
+          const intensity = busiest > 0 ? Math.round((seconds / busiest) * 14) : 0;
           const visible = chips.slice(0, VISIBLE_CHIPS);
           const hidden = chips.length - visible.length;
           return (
@@ -40,8 +46,19 @@ export function MonthBoard({ state }: { state: AppSnapshot }) {
               key={key}
               className={`calendar-month-cell ${key.startsWith(monthKey) ? "" : "is-outside"} ${key === todayKey ? "is-today" : ""}`}
               data-testid={`calendar-month-day-${key}`}
+              style={{ ["--cell-intensity" as string]: `${intensity}%` }}
             >
-              <span className="calendar-month-date">{dayNumber(day, timeZone)}</span>
+              <div className="calendar-month-cell-head">
+                <button
+                  type="button"
+                  className="calendar-month-date"
+                  aria-label={`Open ${formatFullDate(day)}`}
+                  onClick={() => openDay(day)}
+                >
+                  {dayNumber(day, timeZone)}
+                </button>
+                {seconds > 0 ? <span className="calendar-month-total">{formatHourMinute(seconds)}</span> : null}
+              </div>
               {visible.map((chip) => (
                 <button
                   key={chip.key}
@@ -113,13 +130,6 @@ function leadingDevice(deviceSeconds: Map<string, number>) {
     }
   }
   return key;
-}
-
-function openDay(day: Date) {
-  const iso = day.toISOString();
-  window.stopscrolling.setCalendarAnchor(iso);
-  window.stopscrolling.setCalendarMonth(iso);
-  window.stopscrolling.setCalendarView("day");
 }
 
 function weekdayName(date: Date, timeZone: string) {

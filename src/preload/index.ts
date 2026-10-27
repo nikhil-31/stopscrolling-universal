@@ -48,6 +48,7 @@ const api = {
   requestAccessibility: () => ipcRenderer.send(IPC.requestAccessibility),
   openSettings: () => ipcRenderer.send(IPC.openSettings),
   openPath: (path: string) => ipcRenderer.send(IPC.openPath, path),
+  openUrl: (url: string) => ipcRenderer.send(IPC.openUrl, url),
   selectInspector: (payload: InspectorSelection) => ipcRenderer.send(IPC.selectInspector, payload),
   setCommandPalette: (open: boolean) => ipcRenderer.send(IPC.commandPalette, open),
   updateSettings: (patch: Partial<AppSettings>) => ipcRenderer.send(IPC.updateSettings, patch),
