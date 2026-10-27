@@ -232,7 +232,6 @@ button { cursor: pointer; }
 .palette button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 10px 16px; }
 .palette button:hover { background: var(--accent-soft); }
 
-.settings-page { padding: 24px; max-width: 640px; }
 .heatmap-legend { display: flex; gap: 4px; }
 .empty { padding: 32px; text-align: center; color: var(--muted); }
 .device-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }

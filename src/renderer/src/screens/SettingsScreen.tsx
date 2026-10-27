@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { effectiveTimeZone, localTimeZoneLabel } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
 import {
@@ -16,12 +16,63 @@ import {
   Badge,
   Banner,
   Button,
-  Grouped,
   TextField,
   Toggle,
 } from "../components/ui";
 import { GameMark } from "../components/GameMark";
 import { BlockScreenEditor, emptyBlockScreenDraft, type BlockScreenDraft } from "../components/blocking/BlockScreenEditor";
+
+function SettingsGroup({
+  title,
+  description,
+  action,
+  children,
+}: {
+  title?: string;
+  description?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="settings-group">
+      {title ? (
+        <header className="settings-group-heading">
+          <div>
+            <h3 className="settings-group-title">{title}</h3>
+            {description ? <p className="settings-group-description">{description}</p> : null}
+          </div>
+          {action ? <div className="settings-group-action">{action}</div> : null}
+        </header>
+      ) : null}
+      <div className="settings-group-body">{children}</div>
+    </section>
+  );
+}
+
+function SettingRow({
+  label,
+  description,
+  icon,
+  testId,
+  children,
+}: {
+  label: ReactNode;
+  description?: ReactNode;
+  icon?: ReactNode;
+  testId?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="settings-row" data-testid={testId}>
+      {icon ? <span className="settings-row-icon">{icon}</span> : null}
+      <div className="settings-row-copy">
+        <strong>{label}</strong>
+        {description ? <span>{description}</span> : null}
+      </div>
+      {children ? <div className="settings-row-control">{children}</div> : null}
+    </div>
+  );
+}
 
 function BlockedScreenSettings() {
   const [screenDraft, setScreenDraft] = useState<BlockScreenDraft>(emptyBlockScreenDraft);
@@ -41,7 +92,7 @@ function BlockedScreenSettings() {
   }, []);
 
   return (
-    <Grouped
+    <SettingsGroup
       title="Blocked screen"
       description="Shown for every session that does not set its own image, header, and detail."
     >
@@ -79,7 +130,7 @@ function BlockedScreenSettings() {
         </Button>
       </div>
       {status ? <p className="muted">{status}</p> : null}
-    </Grouped>
+    </SettingsGroup>
   );
 }
 
@@ -121,7 +172,7 @@ function DistractionReminderSettings() {
   const support = detail.trim() || "This looks distracting";
 
   return (
-    <Grouped
+    <SettingsGroup
       title="Distraction reminder"
       description="Shown on the card when you start something distracting. A GIF keeps playing."
     >
@@ -211,363 +262,378 @@ function DistractionReminderSettings() {
         </Button>
       </div>
       {status ? <p className="muted">{status}</p> : null}
-    </Grouped>
+    </SettingsGroup>
   );
 }
 
-export function SettingsScreen({ state }: { state: AppSnapshot }) {
+
+type SettingsPane = "general" | "appearance" | "blocking" | "calendar" | "games" | "sync" | "diagnostics";
+
+const PANES: Array<{ id: SettingsPane; label: string }> = [
+  { id: "general", label: "General" },
+  { id: "appearance", label: "Appearance" },
+  { id: "blocking", label: "Blocking" },
+  { id: "calendar", label: "Calendar" },
+  { id: "games", label: "Games" },
+  { id: "sync", label: "Sync" },
+  { id: "diagnostics", label: "Diagnostics" },
+];
+
+function GeneralPane({ state }: { state: AppSnapshot }) {
   const settings = state.settings;
   const signedIn = Boolean(state.auth?.user);
   const timeZones = Intl.supportedValuesOf("timeZone");
   const selectedZone = state.auth?.user?.time_zone ?? "";
+  return (
+    <>
+      <SettingsGroup>
+        <SettingRow
+          label="Time zone"
+          description={signedIn
+            ? "Days, calendars, and insights use this zone. Recorded sessions keep the computer’s zone."
+            : "Sign in to save a time zone on your account."}
+        >
+          <select
+            aria-label="Time zone"
+            data-testid="settings-time-zone"
+            value={selectedZone}
+            disabled={!signedIn}
+            onChange={(event) => window.stopscrolling.setTimeZone(event.target.value)}
+          >
+            <option value="">Same as this computer ({localTimeZoneLabel(effectiveTimeZone())})</option>
+            {timeZones.map((zone) => (
+              <option key={zone} value={zone}>{zone}</option>
+            ))}
+          </select>
+        </SettingRow>
+        <SettingRow label="Clock" description="Hour labels on the activity trend, timelines, and calendar.">
+          <select
+            aria-label="Clock"
+            data-testid="settings-clock-format"
+            value={settings.clockFormat === "12" ? "12" : "24"}
+            onChange={(event) => window.stopscrolling.updateSettings({
+              clockFormat: event.target.value === "12" ? "12" : "24",
+            })}
+          >
+            <option value="24">24-hour</option>
+            <option value="12">12-hour</option>
+          </select>
+        </SettingRow>
+        <SettingRow label="Daily work target" description="Hours used on the Calendar summary.">
+          <input
+            aria-label="Daily work target (hours)"
+            className="settings-number"
+            type="number"
+            min={1}
+            max={16}
+            step={0.5}
+            value={String(Math.round((settings.dailyWorkTargetSeconds / 3600) * 10) / 10)}
+            onChange={(event) => {
+              const parsed = Number(event.target.value);
+              if (!Number.isFinite(parsed) || parsed <= 0) return;
+              window.stopscrolling.updateSettings({ dailyWorkTargetSeconds: Math.round(parsed * 3600) });
+            }}
+          />
+        </SettingRow>
+      </SettingsGroup>
+      <SettingsGroup title="System">
+        <Toggle
+          label="Launch at login"
+          description="Starts with your computer and stays in the menu bar until you choose Quit."
+          checked={settings.launchAtLogin}
+          onChange={(launchAtLogin) => window.stopscrolling.updateSettings({ launchAtLogin })}
+          testId="settings-launch-at-login"
+        />
+        {state.capabilities.platform === "macos" ? (
+          <Toggle
+            label="Desktop widget"
+            description="Shows the time panel on your desktop. It uses the same productive, neutral, and distracting totals as the main window."
+            checked={settings.desktopWidgetVisible}
+            onChange={(desktopWidgetVisible) => window.stopscrolling.updateSettings({ desktopWidgetVisible })}
+            testId="settings-desktop-widget"
+          />
+        ) : null}
+        {state.capabilities.platform === "macos" ? (
+          <SettingRow
+            label="Accessibility"
+            description={state.capabilities.urlCaptureNote}
+            icon={<Hand size={16} aria-hidden="true" />}
+            testId="settings-accessibility"
+          >
+            {state.capabilities.accessibilityGranted ? (
+              <Badge tone="success">Granted</Badge>
+            ) : (
+              <Button size="sm" onClick={() => window.stopscrolling.requestAccessibility()}>
+                Grant access
+              </Button>
+            )}
+          </SettingRow>
+        ) : null}
+      </SettingsGroup>
+    </>
+  );
+}
+
+function AppearancePane({ state }: { state: AppSnapshot }) {
+  const appearance = state.settings.appearance;
+  return (
+    <SettingsGroup title="Theme">
+      <div className="appearance-grid" data-testid="settings-appearance-picker">
+        {([
+          { value: "system", label: "System", icon: Monitor },
+          { value: "light", label: "Light", icon: Sun },
+          { value: "dark", label: "Dark", icon: Moon },
+        ] as const).map(({ value, label, icon: Icon }) => (
+          <button
+            key={value}
+            className={`appearance-option ${appearance === value ? "is-selected" : ""}`}
+            aria-pressed={appearance === value}
+            onClick={() => window.stopscrolling.updateSettings({ appearance: value })}
+          >
+            <div className={`appearance-preview preview-${value}`} />
+            <Icon size={13} aria-hidden="true" /> {label}
+          </button>
+        ))}
+      </div>
+    </SettingsGroup>
+  );
+}
+
+function CalendarPane({ state }: { state: AppSnapshot }) {
+  const settings = state.settings;
+  return (
+    <>
+      <SettingsGroup
+        title="Google Calendar"
+        description="Place commitments alongside tracked activity."
+        action={<Badge tone={state.googleCalendarConnected ? "success" : "neutral"} dot>{state.googleCalendarConnected ? "Connected" : "Not connected"}</Badge>}
+      >
+        <SettingRow
+          label="Google Calendar"
+          description={state.googleCalendarStatus}
+          icon={<CalendarDays size={16} aria-hidden="true" />}
+        >
+          {state.googleCalendarConnected ? (
+            <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.googleDisconnect()}>Disconnect</Button>
+          ) : (
+            <Button size="sm" variant="primary" onClick={() => window.stopscrolling.googleConnect()}>Connect</Button>
+          )}
+        </SettingRow>
+        <Toggle
+          label="Show Google Calendar events"
+          description="Overlay timed events on the Calendar day view."
+          checked={settings.showGoogleCalendarEvents}
+          onChange={(showGoogleCalendarEvents) => window.stopscrolling.updateSettings({ showGoogleCalendarEvents })}
+          testId="settings-show-google-calendar-events"
+        />
+        <div className="settings-row settings-row-stacked">
+          <TextField
+            label="Google OAuth client ID"
+            placeholder="Client ID from Google Cloud Console"
+            value={settings.googleClientId}
+            onChange={(event) => window.stopscrolling.updateSettings({ googleClientId: event.target.value })}
+            hint="Stored locally and used only for calendar authorization."
+          />
+        </div>
+        <p className="settings-footnote">Apple Calendar / EventKit is not available in the cross-platform Electron client.</p>
+      </SettingsGroup>
+      <SettingsGroup title="Labels" description="Names and colors applied to reviewed time on Calendar.">
+        {state.calendarWorkspace.labels.map((label) => (
+          <SettingRow
+            key={label.id}
+            label={label.name}
+            icon={<span className="calendar-legend-dot" style={{ background: label.color }} />}
+          >
+            <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.deleteCalendarLabel(label.id)}>Delete</Button>
+          </SettingRow>
+        ))}
+        <div className="form-actions">
+          <Button
+            size="sm"
+            onClick={() => window.stopscrolling.upsertCalendarLabel({
+              name: "New label",
+              color: "#1fb894",
+              bucket: "other",
+              countsTowardWork: true,
+            })}
+          >
+            Add label
+          </Button>
+        </div>
+      </SettingsGroup>
+    </>
+  );
+}
+
+function GamesPane({ state }: { state: AppSnapshot }) {
   const [riotId, setRiotId] = useState("");
   const riot = state.gameAccounts?.riot ?? null;
   const steam = state.gameAccounts?.steam ?? null;
   const gameStatus = state.gameAccountsStatus ?? "Link a Riot ID or Steam account to upload matches.";
   return (
-    <div className="settings-page">
-      <header className="settings-header">
-        <h1>Settings</h1>
-        <p>Personalize how Stop Scrolling tracks, looks, and connects.</p>
-      </header>
-      <div className="settings-layout">
-        <nav className="settings-nav" aria-label="Settings sections">
-          <a href="#general">General</a>
-          <a href="#appearance">Appearance</a>
-          <a href="#blocked-screen">Blocked screen</a>
-          <a href="#distraction-reminder">Distraction reminder</a>
-          <a href="#work-hours">Work hours</a>
-          <a href="#labels">Labels</a>
-          <a href="#calendars">Calendars</a>
-          <a href="#games">Games</a>
-          <a href="#backend">Sync</a>
-          <a href="#diagnostics">Diagnostics</a>
-        </nav>
-        <div>
-          <section id="general" className="settings-section">
-            <Grouped title="General" description="Time zone and system access">
-              <label className="field">
-                <span className="field-label">Time zone</span>
-                <select
-                  data-testid="settings-time-zone"
-                  value={selectedZone}
-                  disabled={!signedIn}
-                  onChange={(event) => window.stopscrolling.setTimeZone(event.target.value)}
-                >
-                  <option value="">Same as this computer ({localTimeZoneLabel(effectiveTimeZone())})</option>
-                  {timeZones.map((zone) => (
-                    <option key={zone} value={zone}>{zone}</option>
-                  ))}
-                </select>
-                <span className="field-hint">
-                  {signedIn
-                    ? "Days, calendars, and insights use this zone. Recorded sessions keep the computer’s zone."
-                    : "Sign in to save a time zone on your account."}
-                </span>
-              </label>
-              <label className="field">
-                <span className="field-label">Clock</span>
-                <select
-                  data-testid="settings-clock-format"
-                  value={settings.clockFormat === "12" ? "12" : "24"}
-                  onChange={(event) => window.stopscrolling.updateSettings({
-                    clockFormat: event.target.value === "12" ? "12" : "24",
-                  })}
-                >
-                  <option value="24">24-hour</option>
-                  <option value="12">12-hour</option>
-                </select>
-                <span className="field-hint">Hour labels on the activity trend, timelines, and calendar.</span>
-              </label>
-              <div className="setting-row">
-                <Toggle
-                  label="Launch at login"
-                  description="Starts with your computer and stays in the menu bar until you choose Quit."
-                  checked={settings.launchAtLogin}
-                  onChange={(launchAtLogin) => window.stopscrolling.updateSettings({ launchAtLogin })}
-                  testId="settings-launch-at-login"
-                />
-              </div>
-              {state.capabilities.platform === "macos" ? (
-                <div className="setting-row">
-                  <Toggle
-                    label="Desktop widget"
-                    description="Shows the time panel on your desktop. It uses the same productive, neutral, and distracting totals as the main window."
-                    checked={settings.desktopWidgetVisible}
-                    onChange={(desktopWidgetVisible) => window.stopscrolling.updateSettings({ desktopWidgetVisible })}
-                    testId="settings-desktop-widget"
-                  />
-                </div>
-              ) : null}
-              {state.capabilities.platform === "macos" ? (
-                <div className="connection-row" data-testid="settings-accessibility">
-                  <Hand size={17} aria-hidden="true" />
-                  <div className="connection-copy">
-                    <strong>Accessibility</strong>
-                    <span>{state.capabilities.urlCaptureNote}</span>
-                  </div>
-                  {state.capabilities.accessibilityGranted ? (
-                    <Badge tone="success">Granted</Badge>
-                  ) : (
-                    <Button size="sm" onClick={() => window.stopscrolling.requestAccessibility()}>
-                      Grant access
-                    </Button>
-                  )}
-                </div>
-              ) : null}
-            </Grouped>
-          </section>
+    <SettingsGroup
+      title="Accounts"
+      description="Upload League matches and Steam play sessions with your screen time."
+      action={<Badge tone={riot || steam ? "success" : "neutral"} dot>{riot || steam ? "Linked" : "Not linked"}</Badge>}
+    >
+      <SettingRow
+        label="Riot"
+        description={riot ? `${riot.gameName}#${riot.tagLine}` : "League of Legends matches"}
+        icon={<GameMark platform="riot" />}
+      >
+        {riot ? (
+          <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.disconnectRiot()}>Disconnect</Button>
+        ) : null}
+      </SettingRow>
+      {riot ? null : (
+        <form
+          className="settings-row settings-riot-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            window.stopscrolling.linkRiot(riotId);
+          }}
+        >
+          <TextField
+            label="Riot ID"
+            placeholder="Name#TAG"
+            value={riotId}
+            onChange={(event) => setRiotId(event.target.value)}
+            data-testid="settings-riot-id"
+          />
+          <Button type="submit" size="sm" variant="primary" disabled={!riotId.trim()} data-testid="settings-riot-link">
+            Link
+          </Button>
+        </form>
+      )}
+      <SettingRow
+        label="Steam"
+        description={steam ? (steam.personaName || steam.steamId64) : "Play sessions for linked games"}
+        icon={<GameMark platform="steam" />}
+      >
+        {steam ? (
+          <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.disconnectSteam()}>Disconnect</Button>
+        ) : (
+          <Button size="sm" variant="primary" onClick={() => window.stopscrolling.connectSteam()} data-testid="settings-steam-connect">
+            Connect
+          </Button>
+        )}
+      </SettingRow>
+      <p className="settings-footnote">{gameStatus}</p>
+    </SettingsGroup>
+  );
+}
 
-          <section id="appearance" className="settings-section">
-            <Grouped title="Appearance" description="Choose how the interface feels">
-              <div className="appearance-grid" data-testid="settings-appearance-picker">
-                {([
-                  { value: "system", label: "System", icon: Monitor },
-                  { value: "light", label: "Light", icon: Sun },
-                  { value: "dark", label: "Dark", icon: Moon },
-                ] as const).map(({ value, label, icon: Icon }) => (
-                  <button
-                    key={value}
-                    className={`appearance-option ${settings.appearance === value ? "is-selected" : ""}`}
-                    aria-pressed={settings.appearance === value}
-                    onClick={() => window.stopscrolling.updateSettings({ appearance: value })}
-                  >
-                    <div className={`appearance-preview preview-${value}`} />
-                    <Icon size={13} aria-hidden="true" /> {label}
-                  </button>
-                ))}
-              </div>
-            </Grouped>
-          </section>
-
-          <section id="blocked-screen" className="settings-section">
-            <BlockedScreenSettings />
-          </section>
-
-          <section id="distraction-reminder" className="settings-section">
-            <DistractionReminderSettings />
-          </section>
-
-          <section id="work-hours" className="settings-section">
-            <Grouped title="Work hours" description="Daily target used on the Calendar summary">
-              <TextField
-                label="Daily work target (hours)"
-                type="number"
-                min={1}
-                max={16}
-                step={0.5}
-                value={String(Math.round((settings.dailyWorkTargetSeconds / 3600) * 10) / 10)}
-                onChange={(event) => {
-                  const parsed = Number(event.target.value);
-                  if (!Number.isFinite(parsed) || parsed <= 0) return;
-                  window.stopscrolling.updateSettings({ dailyWorkTargetSeconds: Math.round(parsed * 3600) });
-                }}
-              />
-            </Grouped>
-          </section>
-
-          <section id="labels" className="settings-section">
-            <Grouped title="Labels" description="Names and colors applied to reviewed time on Calendar">
-              <div className="calendar-label-picks">
-                {state.calendarWorkspace.labels.map((label) => (
-                  <div key={label.id} className="calendar-label-manage">
-                    <span className="calendar-legend-dot" style={{ background: label.color }} />
-                    <span>{label.name}</span>
-                    <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.deleteCalendarLabel(label.id)}>Delete</Button>
-                  </div>
-                ))}
-              </div>
-              <div className="form-actions">
-                <Button
-                  size="sm"
-                  onClick={() => window.stopscrolling.upsertCalendarLabel({
-                    name: "New label",
-                    color: "#1fb894",
-                    bucket: "other",
-                    countsTowardWork: true,
-                  })}
-                >
-                  Add label
-                </Button>
-              </div>
-            </Grouped>
-          </section>
-
-          <section id="calendars" className="settings-section">
-            <Grouped
-              title="Calendar"
-              description="Place commitments alongside tracked activity"
-              action={<Badge tone={state.googleCalendarConnected ? "success" : "neutral"} dot>{state.googleCalendarConnected ? "Connected" : "Not connected"}</Badge>}
-            >
-              <div className="setting-row">
-                <Toggle
-                  label="Show Google Calendar events"
-                  description="Overlay timed events on the Calendar day view."
-                  checked={settings.showGoogleCalendarEvents}
-                  onChange={(showGoogleCalendarEvents) => window.stopscrolling.updateSettings({ showGoogleCalendarEvents })}
-                  testId="settings-show-google-calendar-events"
-                />
-              </div>
-              <div className="setting-row">
-                <TextField
-                  label="Google OAuth client ID"
-                  placeholder="Client ID from Google Cloud Console"
-                  value={settings.googleClientId}
-                  onChange={(event) => window.stopscrolling.updateSettings({ googleClientId: event.target.value })}
-                  hint="Stored locally and used only for calendar authorization."
-                />
-              </div>
-              <div className="connection-row">
-                <CalendarDays size={17} aria-hidden="true" />
-                <div className="connection-copy">
-                  <strong>Google Calendar</strong>
-                  <span>{state.googleCalendarStatus}</span>
-                </div>
-                {state.googleCalendarConnected ? (
-                  <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.googleDisconnect()}>Disconnect</Button>
-                ) : (
-                  <Button size="sm" variant="primary" onClick={() => window.stopscrolling.googleConnect()}>Connect</Button>
-                )}
-              </div>
-              <p className="small muted">Apple Calendar / EventKit is not available in the cross-platform Electron client.</p>
-            </Grouped>
-          </section>
-
-          <section id="games" className="settings-section">
-            <Grouped
-              title="Games"
-              description="Upload League matches and Steam play sessions with your screen time"
-              action={<Badge tone={riot || steam ? "success" : "neutral"} dot>{riot || steam ? "Linked" : "Not linked"}</Badge>}
-            >
-              <div className="connection-row">
-                <GameMark platform="riot" />
-                <div className="connection-copy">
-                  <strong>Riot</strong>
-                  <span>{riot ? `${riot.gameName}#${riot.tagLine}` : "League of Legends matches"}</span>
-                </div>
-                {riot ? (
-                  <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.disconnectRiot()}>Disconnect</Button>
-                ) : null}
-              </div>
-              {riot ? null : (
-                <form
-                  className="setting-row"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    window.stopscrolling.linkRiot(riotId);
-                  }}
-                >
-                  <TextField
-                    label="Riot ID"
-                    placeholder="Name#TAG"
-                    value={riotId}
-                    onChange={(event) => setRiotId(event.target.value)}
-                    data-testid="settings-riot-id"
-                  />
-                  <Button type="submit" size="sm" variant="primary" disabled={!riotId.trim()} data-testid="settings-riot-link">
-                    Link
-                  </Button>
-                </form>
-              )}
-              <div className="connection-row">
-                <GameMark platform="steam" />
-                <div className="connection-copy">
-                  <strong>Steam</strong>
-                  <span>{steam ? (steam.personaName || steam.steamId64) : "Play sessions for linked games"}</span>
-                </div>
-                {steam ? (
-                  <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.disconnectSteam()}>Disconnect</Button>
-                ) : (
-                  <Button size="sm" variant="primary" onClick={() => window.stopscrolling.connectSteam()} data-testid="settings-steam-connect">
-                    Connect
-                  </Button>
-                )}
-              </div>
-              <p className="small muted">{gameStatus}</p>
-            </Grouped>
-          </section>
-
-          <section id="backend" className="settings-section">
-            <Grouped
-              title="Backend sync"
-              description="Securely upload sessions and retrieve device timelines"
-              action={<Badge tone={state.auth.user && settings.syncEnabled ? "success" : "warning"} dot>{state.auth.user && settings.syncEnabled ? "Ready" : "Needs attention"}</Badge>}
-            >
-              <div className="setting-row">
-                <Toggle
-                  label="Sync events to backend"
-                  description="Upload completed sessions from the encrypted local outbox."
-                  checked={settings.syncEnabled}
-                  onChange={(syncEnabled) => window.stopscrolling.updateSettings({ syncEnabled })}
-                  testId="settings-backend-sync-enabled"
-                />
-              </div>
-              <div className="setting-row">
-                <TextField
-                  label="API base URL"
-                  value={settings.apiBaseUrl}
-                  onChange={(event) => window.stopscrolling.updateSettings({ apiBaseUrl: event.target.value })}
-                  data-testid="settings-backend-api-url"
-                />
-              </div>
-              <div className="setting-row">
-                <Toggle
-                  label="Send window titles to Jev"
-                  description="Lets the Agent tell pages apart, such as a lecture and a short on the same site. Titles are sent to your account, which asks Jev and saves the ratings."
-                  checked={settings.agentSendTitles}
-                  onChange={(agentSendTitles) => window.stopscrolling.updateSettings({ agentSendTitles })}
-                  testId="settings-agent-send-titles"
-                />
-              </div>
-              {settings.apiBaseUrl.trim().toLowerCase().startsWith("http://") ? (
-                <div data-testid="settings-backend-http-warning">
-                  <Banner tone="warning">HTTP is suitable for local development only. Use HTTPS in production.</Banner>
-                </div>
-              ) : null}
-              {!state.auth.user ? (
-                <Banner tone="warning">Sign in from Account before enabling cloud sync.</Banner>
-              ) : (
-                <div className="connection-row">
-                  <Cloud size={17} aria-hidden="true" />
-                  <div className="connection-copy">
-                    <strong>Signed in</strong>
-                    <span>{state.auth.user.email}</span>
-                  </div>
-                  <Badge tone="success">Authenticated</Badge>
-                </div>
-              )}
-              <div className="form-actions">
-                <Button icon={RefreshCw} data-testid="settings-sync-all-unsynced" onClick={() => window.stopscrolling.syncAll()}>
-                  Sync unsynced
-                </Button>
-                <Button variant="ghost" icon={Cloud} data-testid="settings-pull-from-server" onClick={() => window.stopscrolling.pullFromServer()}>
-                  Pull from server
-                </Button>
-              </div>
-            </Grouped>
-          </section>
-
-          <section id="diagnostics" className="settings-section">
-            <Grouped title="Diagnostics" description="Inspect local logs when something feels off">
-              <Banner>{state.capabilities.urlCaptureNote}</Banner>
-              <div className="setting-row">
-                <div className="path-row">
-                  <FileText size={15} aria-hidden="true" />
-                  <span className="path-value" title={state.logs.network}>{state.logs.network}</span>
-                  <Button size="sm" variant="ghost" icon={ExternalLink} onClick={() => window.stopscrolling.openPath(state.logs.network)}>Open</Button>
-                </div>
-              </div>
-              <div className="setting-row">
-                <div className="path-row">
-                  <FileText size={15} aria-hidden="true" />
-                  <span className="path-value" title={state.logs.observability}>{state.logs.observability}</span>
-                  <Button size="sm" variant="ghost" icon={ExternalLink} onClick={() => window.stopscrolling.openPath(state.logs.observability)}>Open</Button>
-                </div>
-              </div>
-            </Grouped>
-          </section>
+function SyncPane({ state }: { state: AppSnapshot }) {
+  const settings = state.settings;
+  return (
+    <>
+      <SettingsGroup
+        title="Backend sync"
+        description="Securely upload sessions and retrieve device timelines."
+        action={<Badge tone={state.auth.user && settings.syncEnabled ? "success" : "warning"} dot>{state.auth.user && settings.syncEnabled ? "Ready" : "Needs attention"}</Badge>}
+      >
+        {!state.auth.user ? (
+          <Banner tone="warning">Sign in from Account before enabling cloud sync.</Banner>
+        ) : (
+          <SettingRow label="Signed in" description={state.auth.user.email} icon={<Cloud size={16} aria-hidden="true" />}>
+            <Badge tone="success">Authenticated</Badge>
+          </SettingRow>
+        )}
+        <Toggle
+          label="Sync events to backend"
+          description="Upload completed sessions from the encrypted local outbox."
+          checked={settings.syncEnabled}
+          onChange={(syncEnabled) => window.stopscrolling.updateSettings({ syncEnabled })}
+          testId="settings-backend-sync-enabled"
+        />
+        <div className="settings-row settings-row-stacked">
+          <TextField
+            label="API base URL"
+            value={settings.apiBaseUrl}
+            onChange={(event) => window.stopscrolling.updateSettings({ apiBaseUrl: event.target.value })}
+            data-testid="settings-backend-api-url"
+          />
         </div>
-      </div>
+        {settings.apiBaseUrl.trim().toLowerCase().startsWith("http://") ? (
+          <div data-testid="settings-backend-http-warning">
+            <Banner tone="warning">HTTP is suitable for local development only. Use HTTPS in production.</Banner>
+          </div>
+        ) : null}
+        <div className="form-actions">
+          <Button icon={RefreshCw} data-testid="settings-sync-all-unsynced" onClick={() => window.stopscrolling.syncAll()}>
+            Sync unsynced
+          </Button>
+          <Button variant="ghost" icon={Cloud} data-testid="settings-pull-from-server" onClick={() => window.stopscrolling.pullFromServer()}>
+            Pull from server
+          </Button>
+        </div>
+      </SettingsGroup>
+      <SettingsGroup title="Privacy">
+        <Toggle
+          label="Send window titles to Jev"
+          description="Lets the Agent tell pages apart, such as a lecture and a short on the same site. Titles are sent to your account, which asks Jev and saves the ratings."
+          checked={settings.agentSendTitles}
+          onChange={(agentSendTitles) => window.stopscrolling.updateSettings({ agentSendTitles })}
+          testId="settings-agent-send-titles"
+        />
+      </SettingsGroup>
+    </>
+  );
+}
+
+function DiagnosticsPane({ state }: { state: AppSnapshot }) {
+  return (
+    <SettingsGroup title="Logs" description="Inspect local logs when something feels off.">
+      <Banner>{state.capabilities.urlCaptureNote}</Banner>
+      {[state.logs.network, state.logs.observability].map((path) => (
+        <SettingRow
+          key={path}
+          label={<span className="path-value" title={path}>{path}</span>}
+          icon={<FileText size={15} aria-hidden="true" />}
+        >
+          <Button size="sm" variant="ghost" icon={ExternalLink} onClick={() => window.stopscrolling.openPath(path)}>Open</Button>
+        </SettingRow>
+      ))}
+    </SettingsGroup>
+  );
+}
+
+export function SettingsScreen({ state }: { state: AppSnapshot }) {
+  const [pane, setPane] = useState<SettingsPane>("general");
+  const current = PANES.find((item) => item.id === pane) ?? PANES[0];
+  return (
+    <div className="settings-shell">
+      <nav className="settings-sidebar" aria-label="Settings sections">
+        <h1>Settings</h1>
+        {PANES.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            aria-current={pane === id ? "page" : undefined}
+            data-testid={`settings-nav-${id}`}
+            onClick={() => setPane(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+      <main className="settings-pane">
+        <div className="settings-pane-inner">
+          <h2 className="settings-pane-title">{current.label}</h2>
+          {pane === "general" ? <GeneralPane state={state} /> : null}
+          {pane === "appearance" ? <AppearancePane state={state} /> : null}
+          {pane === "blocking" ? (
+            <>
+              <BlockedScreenSettings />
+              <DistractionReminderSettings />
+            </>
+          ) : null}
+          {pane === "calendar" ? <CalendarPane state={state} /> : null}
+          {pane === "games" ? <GamesPane state={state} /> : null}
+          {pane === "sync" ? <SyncPane state={state} /> : null}
+          {pane === "diagnostics" ? <DiagnosticsPane state={state} /> : null}
+        </div>
+      </main>
     </div>
   );
 }

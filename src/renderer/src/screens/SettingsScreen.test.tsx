@@ -95,6 +95,7 @@ describe("Settings time zone", () => {
   it("toggles whether window titles are sent to Jev", async () => {
     const userEvents = userEvent.setup();
     render(<SettingsScreen state={snapshot(true)} />);
+    await userEvents.click(screen.getByTestId("settings-nav-sync"));
     await userEvents.click(screen.getByTestId("settings-agent-send-titles"));
     expect(window.stopscrolling.updateSettings).toHaveBeenCalledWith({ agentSendTitles: false });
   });
@@ -105,8 +106,10 @@ describe("Settings time zone", () => {
     expect(screen.getByText("Sign in to save a time zone on your account.")).toBeVisible();
   });
 
-  it("shows separate marks for Riot and Steam", () => {
+  it("shows separate marks for Riot and Steam", async () => {
+    const userEvents = userEvent.setup();
     render(<SettingsScreen state={snapshot(true)} />);
+    await userEvents.click(screen.getByTestId("settings-nav-games"));
     expect(screen.getByTestId("settings-riot-mark")).toBeVisible();
     expect(screen.getByTestId("settings-steam-mark")).toBeVisible();
   });
@@ -114,8 +117,19 @@ describe("Settings time zone", () => {
   it("links a Riot ID", async () => {
     const userEvents = userEvent.setup();
     render(<SettingsScreen state={snapshot(true)} />);
+    await userEvents.click(screen.getByTestId("settings-nav-games"));
     await userEvents.type(screen.getByTestId("settings-riot-id"), "Player#NA1");
     await userEvents.click(screen.getByTestId("settings-riot-link"));
     expect(window.stopscrolling.linkRiot).toHaveBeenCalledWith("Player#NA1");
+  });
+
+  it("shows one pane at a time", async () => {
+    const userEvents = userEvent.setup();
+    render(<SettingsScreen state={snapshot(true)} />);
+    expect(screen.getByRole("heading", { name: "General" })).toBeVisible();
+    await userEvents.click(screen.getByTestId("settings-nav-diagnostics"));
+    expect(screen.getByRole("heading", { name: "Diagnostics" })).toBeVisible();
+    expect(screen.getByTestId("settings-nav-diagnostics")).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByTestId("settings-time-zone")).not.toBeInTheDocument();
   });
 });
