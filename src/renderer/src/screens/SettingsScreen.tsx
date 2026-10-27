@@ -289,6 +289,17 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
                 />
               </div>
               {state.capabilities.platform === "macos" ? (
+                <div className="setting-row">
+                  <Toggle
+                    label="Desktop widget"
+                    description="Shows the time panel on your desktop. It uses the same productive, neutral, and distracting totals as the main window."
+                    checked={settings.desktopWidgetVisible}
+                    onChange={(desktopWidgetVisible) => window.stopscrolling.updateSettings({ desktopWidgetVisible })}
+                    testId="settings-desktop-widget"
+                  />
+                </div>
+              ) : null}
+              {state.capabilities.platform === "macos" ? (
                 <div className="connection-row" data-testid="settings-accessibility">
                   <Hand size={17} aria-hidden="true" />
                   <div className="connection-copy">
@@ -500,35 +511,14 @@ export function SettingsScreen({ state }: { state: AppSnapshot }) {
                 />
               </div>
               <div className="setting-row">
-                <TextField
-                  label="Typesafe API key"
-                  type="password"
-                  autoComplete="off"
-                  placeholder={state.typesafeApiKeyConfigured ? "Key saved — paste to replace" : "Paste your Typesafe key"}
-                  onChange={(event) => {
-                    const value = event.target.value.trim();
-                    if (value) window.stopscrolling.setTypesafeApiKey(value);
-                  }}
-                  hint="Stored encrypted on this device. Jev classifies unknown apps and websites, and rates them as productive, neutral, or distracting."
-                  data-testid="settings-typesafe-api-key"
-                />
-              </div>
-              <div className="setting-row">
                 <Toggle
                   label="Send window titles to Jev"
-                  description="Lets the Agent tell pages apart, such as a lecture and a short on the same site. Titles leave this device."
+                  description="Lets the Agent tell pages apart, such as a lecture and a short on the same site. Titles are sent to your account, which asks Jev and saves the ratings."
                   checked={settings.agentSendTitles}
                   onChange={(agentSendTitles) => window.stopscrolling.updateSettings({ agentSendTitles })}
                   testId="settings-agent-send-titles"
                 />
               </div>
-              {state.typesafeApiKeyConfigured ? (
-                <div className="form-actions">
-                  <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.setTypesafeApiKey("")}>
-                    Remove Typesafe key
-                  </Button>
-                </div>
-              ) : null}
               {settings.apiBaseUrl.trim().toLowerCase().startsWith("http://") ? (
                 <div data-testid="settings-backend-http-warning">
                   <Banner tone="warning">HTTP is suitable for local development only. Use HTTPS in production.</Banner>

@@ -17,6 +17,7 @@ import { TimesheetScreen } from "./screens/TimesheetScreen";
 import { LeaderboardScreen } from "./screens/LeaderboardScreen";
 import { TimerScreen } from "./screens/TimerScreen";
 import { TodayScreen } from "./screens/TodayScreen";
+import { TrendScreen } from "./screens/TrendScreen";
 
 const InsightsScreen = lazy(() => import("./screens/InsightsScreen").then((module) => ({ default: module.InsightsScreen })));
 
@@ -72,6 +73,7 @@ export function App() {
                   <InsightsScreen state={state} />
                 </Suspense>
               )}
+              {state.navigation === "trend" && <TrendScreen state={state} />}
               {state.navigation === "blocking" && (
                 <BlockingScreen
                   state={state}

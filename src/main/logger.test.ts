@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,7 +12,7 @@ vi.mock("./paths", () => ({
   observabilityLogPath: () => join(directory, "observability.log"),
 }));
 
-import { logCrash, sanitizeCrashText } from "./logger";
+import { logCrash, logObservability, sanitizeCrashText } from "./logger";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -46,5 +46,16 @@ describe("crash log", () => {
 describe("sanitizeCrashText", () => {
   it("collapses whitespace and limits length", () => {
     expect(sanitizeCrashText("a\n\tb  c", 3)).toBe("a b");
+  });
+});
+
+describe("log rotation", () => {
+  it("moves a log past 5 MB aside and starts a new one", () => {
+    const log = join(directory, "observability.log");
+    logObservability("x".repeat(5 * 1024 * 1024));
+    logObservability("after rotation");
+    expect(existsSync(`${log}.1`)).toBe(true);
+    expect(statSync(`${log}.1`).size).toBeGreaterThan(5 * 1024 * 1024);
+    expect(readFileSync(log, "utf8").trim()).toMatch(/after rotation$/);
   });
 });

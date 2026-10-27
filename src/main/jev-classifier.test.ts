@@ -1,121 +1,96 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { JEV_ENDPOINT } from "@shared/jev";
+import { describe, expect, it, vi } from "vitest";
 import { JevClassifier } from "./jev-classifier";
+import type { JevRatingKind, JevRatingRequestItem, JevServerRating } from "./jev-ratings";
 
-function jsonResponse(body: unknown, ok = true): Response {
+vi.mock("./logger", () => ({ logObservability: vi.fn() }));
+
+function rating(key: string, patch: Partial<JevServerRating> = {}): JevServerRating {
   return {
-    ok,
-    json: async () => body,
-  } as Response;
+    key,
+    breakdown_key: key,
+    status: "ready",
+    value: "Social",
+    confidence: 0.92,
+    model: "jev-latest",
+    source: "jev",
+    rated_at: "2026-10-27T09:00:00.000Z",
+    ...patch,
+  };
 }
 
+function fakeApi(answer: (item: JevRatingRequestItem) => JevServerRating = (item) => rating(item.key)) {
+  return {
+    requestJevRatings: vi.fn(async (_kind: JevRatingKind, _priority: "live" | "background", items: JevRatingRequestItem[]) => ({
+      enabled: true,
+      ratings: items.map(answer),
+    })),
+    overrideJevVerdict: vi.fn(),
+  };
+}
+
+const input = { key: "web|teamblind.com", appName: "Google Chrome", bundleID: "com.google.Chrome", url: "https://www.teamblind.com/post?token=secret" };
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 describe("JevClassifier", () => {
-  const dirs: string[] = [];
-
-  afterEach(() => {
-    for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
-    dirs.length = 0;
-    vi.restoreAllMocks();
-  });
-
-  function cachePath() {
-    const dir = mkdtempSync(join(tmpdir(), "jev-cache-"));
-    dirs.push(dir);
-    return join(dir, "jev-categories.json");
-  }
-
-  it("caches a confident Choice and coalesces duplicate in-flight keys", async () => {
-    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () =>
-      jsonResponse({
-        model: "jev-1.13.0",
-        answers: { category: { type: "choice", choice: "Social", confidence: 0.94 } },
-      }),
-    );
+  it("asks the server for a category with the hostname only", async () => {
+    const api = fakeApi();
     const onResolved = vi.fn();
-    const path = cachePath();
-    const classifier = new JevClassifier({
-      getApiKey: () => "test-key",
-      cachePath: path,
-      fetch,
-      now: () => new Date("2026-09-20T00:00:00.000Z"),
-      onResolved,
-    });
-    const input = {
-      key: "web|teamblind.com",
-      appName: "Google Chrome",
-      bundleID: "com.google.Chrome",
-      url: "https://www.teamblind.com/post?token=secret",
-    };
+    const classifier = new JevClassifier({ api, enabled: () => true, onResolved });
     classifier.enqueue(input);
     classifier.enqueue(input);
-    await vi.waitFor(() => expect(onResolved).toHaveBeenCalledTimes(1));
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch.mock.calls[0]?.[0]).toBe(JEV_ENDPOINT);
-    const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
-    expect(body.state).toEqual({
-      appName: "Google Chrome",
-      bundleID: "com.google.Chrome",
-      host: "teamblind.com",
-    });
+    await flush();
+    expect(api.requestJevRatings).toHaveBeenCalledTimes(1);
+    const [kind, priority, items] = api.requestJevRatings.mock.calls[0];
+    expect([kind, priority]).toEqual(["category", "live"]);
+    expect(items[0]).toMatchObject({ key: "web|teamblind.com", host: "teamblind.com", title: "" });
+    expect(JSON.stringify(items)).not.toContain("token=secret");
     expect(classifier.lookup("web|teamblind.com")?.category).toBe("Social");
-    expect(JSON.parse(readFileSync(path, "utf8"))["web|teamblind.com"].category).toBe("Social");
+    expect(onResolved).toHaveBeenCalledTimes(1);
   });
 
-  it("does not notify on low-confidence answers and skips the API when the key is missing", async () => {
-    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () =>
-      jsonResponse({
-        answers: { category: { type: "choice", choice: "Social", confidence: 0.4 } },
-      }),
-    );
+  it("keeps a low-confidence answer without acting on it", async () => {
     const onResolved = vi.fn();
-    const withKey = new JevClassifier({
-      getApiKey: () => "test-key",
-      cachePath: cachePath(),
-      fetch,
+    const classifier = new JevClassifier({
+      api: fakeApi((item) => rating(item.key, { confidence: 0.4 })),
+      enabled: () => true,
       onResolved,
     });
-    withKey.enqueue({
-      key: "web|example.com",
-      appName: "Google Chrome",
-      bundleID: "com.google.Chrome",
-      url: "https://example.com",
-    });
-    await vi.waitFor(() => expect(withKey.lookup("web|example.com")?.confidence).toBe(0.4));
+    classifier.enqueue(input);
+    await flush();
+    expect(classifier.lookup("web|teamblind.com")?.confidence).toBe(0.4);
     expect(onResolved).not.toHaveBeenCalled();
-
-    const unusedFetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>();
-    const withoutKey = new JevClassifier({
-      getApiKey: () => null,
-      cachePath: cachePath(),
-      fetch: unusedFetch,
-    });
-    withoutKey.enqueue({
-      key: "app|Valorant",
-      appName: "VALORANT",
-      bundleID: "com.riotgames.valorant",
-      url: "",
-    });
-    expect(unusedFetch).not.toHaveBeenCalled();
   });
 
-  it("does not retry immediately after a network failure", async () => {
-    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => {
-      throw new Error("offline");
-    });
-    const classifier = new JevClassifier({
-      getApiKey: () => "test-key",
-      cachePath: cachePath(),
-      fetch,
-      cooldownMs: 60_000,
-      now: () => new Date("2026-09-20T00:00:00.000Z"),
-    });
-    const input = { key: "app|Valorant", appName: "VALORANT", bundleID: "com.riotgames.valorant", url: "" };
+  it("sends nothing while signed out", async () => {
+    const api = fakeApi();
+    new JevClassifier({ api, enabled: () => false }).enqueue(input);
+    await flush();
+    expect(api.requestJevRatings).not.toHaveBeenCalled();
+  });
+
+  it("asks again after a failed request but not while the server is still working", async () => {
+    const api = fakeApi((item) => rating(item.key, { status: "pending", value: "", confidence: null }));
+    api.requestJevRatings.mockRejectedValueOnce(new Error("offline"));
+    const classifier = new JevClassifier({ api, enabled: () => true });
     classifier.enqueue(input);
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await flush();
     classifier.enqueue(input);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    await flush();
+    classifier.enqueue(input);
+    await flush();
+    expect(api.requestJevRatings).toHaveBeenCalledTimes(2);
+  });
+
+  it("loads categories from the server and notifies for confident ones", () => {
+    const onResolved = vi.fn();
+    const classifier = new JevClassifier({ api: fakeApi(), enabled: () => true, onResolved });
+    classifier.hydrate({
+      "app|Steam": { category: "Gaming", confidence: 0.95, model: "jev-latest", at: "x" },
+      "app|Odd": { category: "Gaming", confidence: 0.3, model: "jev-latest", at: "x" },
+    });
+    expect(Object.keys(classifier.cache)).toEqual(["app|Steam", "app|Odd"]);
+    expect(onResolved).toHaveBeenCalledTimes(1);
+    classifier.clear();
+    expect(classifier.cache).toEqual({});
   });
 });

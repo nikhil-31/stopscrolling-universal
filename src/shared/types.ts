@@ -1,4 +1,4 @@
-export type NavigationItem = "today" | "timer" | "calendar" | "timesheet" | "insights" | "blocking" | "leaderboard" | "account" | "agent";
+export type NavigationItem = "today" | "timer" | "calendar" | "timesheet" | "insights" | "trend" | "blocking" | "leaderboard" | "account" | "agent";
 
 export type InsightsPeriod = "day" | "week" | "month" | "year";
 export type InsightsTab = "overview" | "sessions";
@@ -362,6 +362,8 @@ export interface AppSettings {
   agentSendTitles: boolean;
   /** What to open when Jev rates the front window distracting. */
   distractionResponse: DistractionResponse;
+  /** When true on macOS, the desktop time panel stays on screen. */
+  desktopWidgetVisible: boolean;
 }
 
 export type DistractionResponse = "off" | "popup" | "block";

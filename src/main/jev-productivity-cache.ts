@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import type { ProductivityCache } from "@shared/jev-productivity";
 
 export function loadProductivityCache(path: string): ProductivityCache {
@@ -11,9 +10,4 @@ export function loadProductivityCache(path: string): ProductivityCache {
   } catch {
     return {};
   }
-}
-
-export function saveProductivityCache(path: string, cache: ProductivityCache) {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(cache), "utf8");
 }

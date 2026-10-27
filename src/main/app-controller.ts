@@ -1,4 +1,6 @@
 import { BrowserWindow } from "electron";
+import { hideDesktopWidget, sendDesktopWidgetState, showDesktopWidget } from "./desktop-widget-window";
+import { publishNativeWidget, publishTrendWidget, type TrendWidgetSummary } from "./native-widget-store";
 import { hideFreedomScreen, showFreedomScreen } from "./freedom-window";
 import { DistractionNudge, foregroundBlocked, foregroundVerdict } from "./distraction-nudge";
 import { hideNudgeCard, showNudgeCard } from "./nudge-window";
@@ -49,7 +51,8 @@ import {
 } from "@shared/calendar-workspace";
 import { publishGameAssets } from "@shared/game-assets";
 import { withMatchLines, withMatchSnapshot } from "@shared/game-match";
-import { deviceKey, resolvedDeviceName, withComputedOnline } from "@shared/device";
+import { desktopWidgetSummary, type DesktopWidgetSummary } from "@shared/desktop-widget";
+import { deviceColorIndex, deviceKey, resolvedDeviceName, withComputedOnline } from "@shared/device";
 import { overlayCategory } from "@shared/jev";
 import { acceptedProductivityVerdict, buildAgentView, classifiesFocus, ensureLiveEntryVisible, JEV_PRODUCTIVITY_CRITERIA, productivityInputsFromSegments, type ProductivityVerdict } from "@shared/jev-productivity";
 import { IPC } from "@shared/ipc";
@@ -77,6 +80,7 @@ import {
   appBreakdownKey,
   bucketsFromDailyTotals,
   mergePeriodSummaries,
+  formatPeriod,
   periodBounds,
   rankedAppsBySeconds,
   serverPeriodBuckets,
@@ -85,7 +89,10 @@ import {
   startOfMonth,
   todayPeriodBounds,
   trackedSecondsByDay,
+  trendComparisonWindow,
+  trendComparisonsFromDailyTotals,
 } from "@shared/timeline";
+import type { TrendComparisons } from "@shared/timeline";
 import type {
   AppSettings,
   CalendarOverlayEvent,
@@ -121,7 +128,7 @@ import { deviceName as localDeviceName, gameAssetPath, gameMatchPath, hiddenDevi
 import { loadSettings, saveSettings } from "./settings-store";
 import { loadTimesheetSummaries, saveTimesheetSummaries } from "./timesheet-summary-store";
 import { clearTokens, loadSessionUser, loadTokens, saveSessionUser, saveTokens } from "./token-store";
-import { clearTypesafeApiKey, hasTypesafeApiKey, saveTypesafeApiKey } from "./typesafe-key-store";
+import { migrateLocalJevRatings } from "./jev-ratings";
 import { ScreenTimeTracker } from "./tracker";
 
 function loadHiddenKeys(): Set<string> {
@@ -149,7 +156,8 @@ const defaultAuth = (): AuthUiState => ({
   backupCode: "",
   useBackupCode: false,
   loading: false,
-  statusMessage: "Sign in or create an account to sync screen time with the backend.",
+  statusMessage: "Sign in to sync your screen time across your devices.",
+  statusTone: "info",
   user: null,
   mfaChallenge: null,
 });
@@ -165,6 +173,10 @@ const defaultLeaderboard = (): LeaderboardUiState => ({
 });
 
 const BROADCAST_COALESCE_MS = 16;
+/** How often the widgets are rebuilt while every app window is hidden. */
+const HIDDEN_WIDGET_REFRESH_MS = 60_000;
+/** Matches the WidgetKit reload limit in native-widget-store. */
+const NATIVE_WIDGET_SYNC_MS = 60_000;
 const LIVE_SESSION_RESOLUTION_MS = 15_000;
 const SLOW_SNAPSHOT_MS = 50;
 const PREFETCH_DELAY_MS = 3_000;
@@ -176,6 +188,10 @@ const TIMESHEET_SUMMARY_BATCH = 200;
 
 function usesCalendarRange(navigation: NavigationItem) {
   return navigation === "calendar" || navigation === "timesheet";
+}
+
+function usesInsightWindow(navigation: NavigationItem) {
+  return navigation === "insights" || navigation === "trend";
 }
 
 function rangeCacheKey(
@@ -243,6 +259,7 @@ interface SnapshotDataView {
   snapshot: AppSnapshot["snapshot"];
   timelines: AppSnapshot["timelines"];
   calendarDayStats: CalendarDayStats;
+  trendComparisons: TrendComparisons | null;
 }
 
 const EMPTY_CALENDAR_STATS: CalendarDayStats = {
@@ -302,6 +319,10 @@ export class AppController {
   private localInsightJob = 0;
   private localInsightJobKey = "";
   private insightChartPending = false;
+  private trendComparisonPending = false;
+  private trendComparisonInflight = "";
+  private trendComparisonRevision = 0;
+  private trendComparisonMiss: { key: string; totals: Record<string, number> } | null = null;
   private observedDevices: DeviceRow[] = [];
   private deviceIndexStarted = false;
   google = new GoogleCalendarService();
@@ -343,6 +364,12 @@ export class AppController {
   private dataVersion = 0;
   private sentDataVersion = new Map<number, number>();
   private broadcastTimer: NodeJS.Timeout | null = null;
+  private hiddenWidgetTimer: NodeJS.Timeout | null = null;
+  private hiddenWidgetRefreshAt = -Infinity;
+  /** The minute timeline refresh was skipped while hidden; run it when a window shows. */
+  private timelineRefreshDeferred = false;
+  private cachedWidgetSummary: DesktopWidgetSummary | null = null;
+  private cachedWidgetVersion = -1;
   private insightsOpenedAt: number | null = null;
   private summaryCache = new Map<string, PeriodSummaryResponse>();
   private prefetchTimer: NodeJS.Timeout | null = null;
@@ -355,8 +382,10 @@ export class AppController {
   private lastPolicySignature: string | null = null;
   private usingLocalEnforcement = false;
   private askedForAccessibility = false;
-  private blockWatchTimer: NodeJS.Timeout | null = null;
-  private classifierWatchTimer: NodeJS.Timeout | null = null;
+  /** One 250 ms timer serves both browser watches so each tick reads the focused tab once. */
+  private browserWatchTimer: NodeJS.Timeout | null = null;
+  private blockWatchOn = false;
+  private classifierWatchOn = false;
   private latestForeground: ActivitySnapshot | null = null;
   private blockingRefreshGeneration = 0;
   private blockingListsTask: Promise<{
@@ -454,7 +483,7 @@ export class AppController {
       const user = loadSessionUser();
       if (user) {
         this.auth.user = user;
-        this.auth.statusMessage = `Signed in as ${user.email}`;
+        this.setAuthStatus(`Signed in as ${user.email}`);
       }
     }
     await this.restoreSession();
@@ -488,6 +517,24 @@ export class AppController {
     win.webContents.once("did-finish-load", () => {
       win.webContents.send(IPC.state, this.stateFor(contentsId));
     });
+    // Hidden windows are skipped by broadcasts; catch up the moment one is visible again.
+    const caughtUp = () => {
+      this.broadcast();
+      if (this.timelineRefreshDeferred) {
+        this.timelineRefreshDeferred = false;
+        void this.refreshVisibleRange();
+      }
+    };
+    win.on("show", caughtUp);
+    win.on("restore", caughtUp);
+  }
+
+  /** True when a renderer window is on screen and wants state pushed to it. */
+  private anyWindowVisible() {
+    for (const win of this.windows) {
+      if (!win.isDestroyed() && win.isVisible() && !win.isMinimized()) return true;
+    }
+    return false;
   }
 
   /** Full state for one renderer; later broadcasts may send it patches against this version. */
@@ -510,13 +557,15 @@ export class AppController {
     if (usesTodayWindow(this.navigation)) {
       return todayPeriodBounds("day", this.todayDay, zone);
     }
-    if (this.navigation === "insights") return periodBounds(this.insightsPeriod, this.insightsAnchor, zone);
+    if (usesInsightWindow(this.navigation)) return periodBounds(this.insightsPeriod, this.insightsAnchor, zone);
     return periodBounds("day", this.todayDay, zone);
   }
 
   snapshot(): AppSnapshot {
     if (this.navigation === "leaderboard" || this.navigation === "timer" || this.navigation === "timesheet") this.navigation = "today";
     const view = this.dataView();
+    const ratingAvailable = Boolean(this.auth.user && this.settings.syncEnabled && this.tracker.jevSync.enabled);
+    const googleConnected = this.google.connected();
     return {
       navigation: this.navigation,
       statusMessage: this.statusMessage,
@@ -527,7 +576,6 @@ export class AppController {
       isAuthenticated: Boolean(this.auth.user),
       auth: this.auth,
       settings: this.settings,
-      typesafeApiKeyConfigured: hasTypesafeApiKey(),
       todayDay: this.todayDay.toISOString(),
       todayTab: this.todayTab,
       todayPeriod: "day",
@@ -546,17 +594,18 @@ export class AppController {
       insightsAnchor: this.insightsAnchor.toISOString(),
       insightsTab: normalizeInsightsTab(this.insightsTab),
       insightsDeviceKey: view.insightsDeviceKey,
+      trendComparisons: view.trendComparisons,
       snapshot: view.snapshot,
       timelines: view.timelines,
-      loadingEntries: this.tracker.loadingEntries || this.insightChartPending,
+      loadingEntries: this.tracker.loadingEntries || this.insightChartPending || (this.navigation === "trend" && this.trendComparisonPending),
       entriesUnavailableReason: this.tracker.entriesUnavailableReason,
       devices: view.devices,
       hiddenDeviceKeys: [...this.hiddenDeviceKeys],
       inspector: this.inspector,
       capabilities: this.tracker.capabilities(),
       calendarEvents: this.settings.showGoogleCalendarEvents ? this.calendarEvents : [],
-      googleCalendarConnected: this.google.connected(),
-      googleCalendarStatus: this.google.connected()
+      googleCalendarConnected: googleConnected,
+      googleCalendarStatus: googleConnected
         ? "Showing Google Calendar events"
         : "Google Calendar not connected",
       gameAccounts: this.gameSync.accountView(),
@@ -567,14 +616,29 @@ export class AppController {
       },
       leaderboard: this.leaderboard,
       blocking: this.blocking,
-      agent: buildAgentView(this.agentSegments(view.snapshot.timelineSegments), this.tracker.productivityAgent.cache, {
-        reviewing: this.tracker.productivityAgent.reviewing,
-        progress: this.tracker.productivityAgent.progress,
-        keyConfigured: hasTypesafeApiKey(),
-      }),
+      agent: this.agentView(view.snapshot.timelineSegments, ratingAvailable),
       commandPaletteOpen: this.commandPaletteOpen,
       dataVersion: view.version,
     };
+  }
+
+  private agentCache: { deps: unknown[]; view: AppSnapshot["agent"] } | null = null;
+
+  /** Agent screen view, rebuilt only when its segments, verdicts or review progress change. */
+  private agentView(cached: ScreenTimeTimelineSegment[], ratingAvailable: boolean): AppSnapshot["agent"] {
+    const agent = this.tracker.productivityAgent;
+    const segments = this.agentSegments(cached);
+    const deps = [segments, agent.cache, agent.reviewing, agent.progress.done, agent.progress.total, ratingAvailable];
+    if (this.agentCache && this.agentCache.deps.every((value, index) => Object.is(value, deps[index]))) {
+      return this.agentCache.view;
+    }
+    const view = buildAgentView(segments, agent.cache, {
+      reviewing: agent.reviewing,
+      progress: agent.progress,
+      ratingAvailable,
+    });
+    this.agentCache = { deps, view };
+    return view;
   }
 
   /** Today's segments, including the session that is open right now. */
@@ -638,6 +702,7 @@ export class AppController {
       this.serverSummary,
       this.serverSummaryRange,
       this.localInsightRollup,
+      this.trendComparisonRevision,
       this.observedDevices,
       this.tracker.categoryCache(),
       this.tracker.productivityAgent.cache,
@@ -664,24 +729,25 @@ export class AppController {
     return view;
   }
 
-  private buildDataView(zone: string): Omit<SnapshotDataView, "version"> {
+  private buildDataView(zone: string, navigation: NavigationItem = this.navigation): Omit<SnapshotDataView, "version"> {
     const devices = this.deviceEntries();
     const registeredKeys = new Set(devices.map((device) => device.visibilityKey));
     const localKey = deviceKey(currentDevicePlatform(), localDeviceName());
-    const period = this.navigation === "insights" ? this.insightsPeriod : "day";
-    const calendarRange = usesCalendarRange(this.navigation);
+    const period = usesInsightWindow(navigation) ? this.insightsPeriod : "day";
+    const calendarRange = usesCalendarRange(navigation);
     const anchor =
-      this.navigation === "insights"
+      usesInsightWindow(navigation)
         ? this.insightsAnchor
         : calendarRange
           ? this.calendarAnchor
           : this.todayDay;
     const todayBounds = todayPeriodBounds("day", this.todayDay, zone);
-    const todayWindow = usesTodayWindow(this.navigation);
+    const todayWindow = usesTodayWindow(navigation);
+    const live = navigation === this.navigation;
     const snapshotBounds = todayWindow
       ? todayBounds
       : periodBounds(period, anchor, zone);
-    const insightRange = this.navigation === "insights" && period !== "day";
+    const insightRange = usesInsightWindow(navigation) && period !== "day";
     const mergedEntries = mergeEntries(
       this.tracker.mergedEntries(),
       insightRange ? [] : this.tracker.history.overlapping(snapshotBounds.start, snapshotBounds.end),
@@ -697,20 +763,20 @@ export class AppController {
       .map((device) => device.visibilityKey);
     const insightsDeviceKey = normalizeInsightsDeviceKey(this.insightsDeviceKey, visibleDeviceKeys);
     const todayDeviceKey = normalizeInsightsDeviceKey(this.todayDeviceKey, visibleDeviceKeys);
-    const deviceKeyForNav = this.navigation === "insights"
+    const deviceKeyForNav = usesInsightWindow(navigation)
       ? insightsDeviceKey
-      : this.navigation === "today"
+      : navigation === "today"
         ? todayDeviceKey
         : ALL_DEVICES;
-    const deviceScoped = (this.navigation === "insights" || this.navigation === "today") && (
+    const deviceScoped = (usesInsightWindow(navigation) || navigation === "today") && (
       deviceKeyForNav !== ALL_DEVICES || this.hiddenDeviceKeys.size > 0
     );
-    const entries = this.navigation === "insights" || this.navigation === "today"
+    const entries = usesInsightWindow(navigation) || navigation === "today"
       ? filterEntriesForInsights(allEntries, deviceKeyForNav, this.hiddenDeviceKeys)
       : allEntries;
-    const serverSummary = deviceScoped && !this.usesInsightBuckets()
+    const serverSummary = deviceScoped && !this.usesInsightBuckets(navigation)
       ? undefined
-      : this.mappedServerSummary(snapshotBounds);
+      : this.mappedServerSummary(snapshotBounds, navigation);
     const categoryCache = this.tracker.categoryCache();
     const productivityCache = this.tracker.productivityAgent.cache;
     const matches = this.gameSync.matches();
@@ -720,9 +786,9 @@ export class AppController {
     const dailyTotals = serverSummary?.trackedSecondsByDay;
     const hasDailyTotals = Boolean(dailyTotals && Object.keys(dailyTotals).length > 0);
     const localRollup = insightRange && !summaryBuckets && !hasDailyTotals
-      ? this.localInsightChart(snapshotBounds, zone)
+      ? this.localInsightChart(snapshotBounds, zone, !live)
       : null;
-    if (!insightRange || summaryBuckets || hasDailyTotals || localRollup) this.insightChartPending = false;
+    if (live && (!insightRange || summaryBuckets || hasDailyTotals || localRollup)) this.insightChartPending = false;
     const useSummaryChart = Boolean(insightRange && (summaryBuckets || hasDailyTotals || localRollup));
     const listEntries = insightRange && entries.length > INSIGHTS_PREVIEW_LIMIT
       ? entries.slice(entries.length - INSIGHTS_PREVIEW_LIMIT)
@@ -780,7 +846,7 @@ export class AppController {
       : calendarRange && this.calendarView === "month"
         ? mondayMonthGridBounds(this.calendarMonth, zone)
         : snapshotBounds;
-    const timelines = this.navigation === "insights" && period !== "day"
+    const timelines = usesInsightWindow(navigation) && period !== "day"
       ? []
       : withMatchLines(
           filterTimelinesForInsights(
@@ -819,6 +885,7 @@ export class AppController {
       snapshot: published.snapshot,
       timelines: published.timelines,
       calendarDayStats,
+      trendComparisons: this.trendComparisonsFor(zone, insightsDeviceKey),
     };
   }
 
@@ -832,12 +899,19 @@ export class AppController {
   }
 
   private flushBroadcast() {
+    if (!this.anyWindowVisible()) {
+      this.refreshWidgetsWhileHidden();
+      return;
+    }
     const snap = this.snapshot();
     this.reportInsightsReady(snap);
+    const widget = this.desktopWidgetStateFrom(snap);
+    sendDesktopWidgetState(widget);
+    this.syncNativeWidget();
     const version = snap.dataVersion ?? 0;
     let patch: AppStatePatch | null = null;
     for (const win of this.windows) {
-      if (win.isDestroyed()) continue;
+      if (win.isDestroyed() || !win.isVisible() || win.isMinimized()) continue;
       const contents = win.webContents;
       if (this.sentDataVersion.get(contents.id) === version) {
         patch ??= toStatePatch(snap);
@@ -849,6 +923,25 @@ export class AppController {
     }
   }
 
+  /**
+   * With every app window hidden only the widgets show state, so rebuild for them at most
+   * once a minute. A change inside that window is picked up by a trailing refresh.
+   */
+  private refreshWidgetsWhileHidden() {
+    const wait = this.hiddenWidgetRefreshAt + HIDDEN_WIDGET_REFRESH_MS - Date.now();
+    if (wait > 0) {
+      this.hiddenWidgetTimer ??= setTimeout(() => {
+        this.hiddenWidgetTimer = null;
+        this.broadcast();
+      }, wait);
+      return;
+    }
+    this.hiddenWidgetRefreshAt = Date.now();
+    const snap = this.snapshot();
+    sendDesktopWidgetState(this.desktopWidgetStateFrom(snap));
+    this.syncNativeWidget();
+  }
+
   private reportInsightsReady(snap: AppSnapshot) {
     if (this.insightsOpenedAt === null) return;
     if (snap.navigation !== "insights") {
@@ -858,6 +951,166 @@ export class AppController {
     if (snap.loadingEntries) return;
     logObservability(`Insights (${snap.insightsPeriod}) ready ${(performance.now() - this.insightsOpenedAt).toFixed(0)}ms after opening`);
     this.insightsOpenedAt = null;
+  }
+
+  /** Shows or hides the macOS panel. It only renders the snapshot already published for the main window. */
+  syncDesktopWidget() {
+    if (process.platform !== "darwin" || process.env.STOPSCROLLING_UI_TEST === "1") {
+      hideDesktopWidget();
+      return;
+    }
+    const state = this.desktopWidgetState();
+    this.syncNativeWidget();
+    if (this.settings.desktopWidgetVisible) {
+      showDesktopWidget();
+      sendDesktopWidgetState(state);
+    } else hideDesktopWidget();
+  }
+
+  /** Writes today's summary for the native widget. It uses verdicts already on the snapshot. */
+  private syncNativeWidget() {
+    if (process.platform !== "darwin") return;
+    if (process.env.STOPSCROLLING_UI_TEST === "1" || process.env.VITEST === "true") return;
+    // WidgetKit reloads at most once a minute, so rebuilding its summaries more often is wasted.
+    const wait = this.nativeWidgetSyncedAt + NATIVE_WIDGET_SYNC_MS - Date.now();
+    if (wait > 0) {
+      this.nativeWidgetTimer ??= setTimeout(() => {
+        this.nativeWidgetTimer = null;
+        this.syncNativeWidget();
+      }, wait);
+      return;
+    }
+    this.nativeWidgetSyncedAt = Date.now();
+    try {
+      const today = this.todayNativeSummary();
+      const trend = this.insightTrendSummary();
+      if (today === this.publishedNativeSummary && trend === this.publishedTrendSummary) return;
+      publishNativeWidget(today);
+      publishTrendWidget(trend);
+      this.publishedNativeSummary = today;
+      this.publishedTrendSummary = trend;
+    } catch (error) {
+      logObservability(`Native widget publish failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private nativeWidgetTimer: NodeJS.Timeout | null = null;
+  private nativeWidgetSyncedAt = -Infinity;
+  private publishedNativeSummary: DesktopWidgetSummary | null = null;
+  private publishedTrendSummary: TrendWidgetSummary | null = null;
+  private cachedNativeSummary: DesktopWidgetSummary | null = null;
+  private cachedNativeVersion = -1;
+  private cachedNativeDay = -1;
+  private cachedTrendSummary: TrendWidgetSummary | null = null;
+  private cachedTrendVersion = -1;
+  private cachedTrendKey = "";
+
+  /** Current calendar day in the user's time zone, not whichever screen is open. */
+  private todayNativeSummary(): DesktopWidgetSummary {
+    const day = this.todayDay.getTime();
+    const version = this.dataCache?.view.version ?? this.dataVersion;
+    if (this.cachedNativeSummary && this.cachedNativeVersion === version && this.cachedNativeDay === day) {
+      return this.cachedNativeSummary;
+    }
+    const summary = usesTodayWindow(this.navigation)
+      ? desktopWidgetSummary(this.dataView().snapshot)
+      : desktopWidgetSummary(this.todaySnapshotFromEntries());
+    this.cachedNativeSummary = summary;
+    this.cachedNativeVersion = version;
+    this.cachedNativeDay = day;
+    return summary;
+  }
+
+  /**
+   * Insights activity trend for the saved period, even when another screen is open.
+   * A temporary app or verdict filter on the Insights screen is not part of this snapshot.
+   */
+  private insightTrendSummary(): TrendWidgetSummary {
+    const zone = this.effectiveTimeZone();
+    const version = this.dataCache?.view.version ?? this.dataVersion;
+    const key = `${this.insightsPeriod}|${this.insightsAnchor.getTime()}|${this.insightsDeviceKey}|${[...this.hiddenDeviceKeys].sort().join("\n")}|${this.localInsightRollup?.key ?? ""}`;
+    if (this.cachedTrendSummary && this.cachedTrendVersion === version && this.cachedTrendKey === key) {
+      return this.cachedTrendSummary;
+    }
+    const snapshot = usesInsightWindow(this.navigation)
+      ? this.dataView().snapshot
+      : this.buildDataView(zone, "insights").snapshot;
+    const devices = this.deviceEntries();
+    const order = new Map(devices.map((device, index) => [device.visibilityKey, index]));
+    const summary: TrendWidgetSummary = {
+      period: this.insightsPeriod,
+      title: formatPeriod(this.insightsPeriod, this.insightsAnchor, zone),
+      buckets: snapshot.buckets.map((bucket) => ({
+        id: bucket.id,
+        label: bucket.label,
+        seconds: bucket.seconds,
+        devices: [...(bucket.devices ?? [])]
+          .filter((share) => share.seconds > 0)
+          .sort((a, b) => (order.get(a.key) ?? devices.length) - (order.get(b.key) ?? devices.length))
+          .map((share) => ({
+            key: share.key,
+            seconds: share.seconds,
+            colorIndex: deviceColorIndex(share.key, devices.find((device) => device.visibilityKey === share.key)?.colorIndex),
+          })),
+      })),
+      top: rankedAppsBySeconds(snapshot.apps).map((app) => ({
+        key: app.key,
+        label: app.label,
+        seconds: app.seconds,
+      })),
+    };
+    this.cachedTrendSummary = summary;
+    this.cachedTrendVersion = version;
+    this.cachedTrendKey = key;
+    return summary;
+  }
+
+  private todaySnapshotFromEntries() {
+    const zone = this.effectiveTimeZone();
+    const bounds = todayPeriodBounds("day", this.todayDay, zone);
+    const devices = this.deviceEntries();
+    const registeredKeys = new Set(devices.map((device) => device.visibilityKey));
+    const localKey = deviceKey(currentDevicePlatform(), localDeviceName());
+    const merged = mergeEntries(
+      this.tracker.mergedEntries(),
+      this.tracker.history.overlapping(bounds.start, bounds.end),
+    );
+    const allEntries = this.auth.user && registeredKeys.size
+      ? merged.filter((entry) => {
+        const key = deviceKey(entry.platform, entry.deviceName);
+        return registeredKeys.has(key) || key === localKey;
+      })
+      : merged;
+    const visibleDeviceKeys = devices
+      .filter((device) => !this.hiddenDeviceKeys.has(device.visibilityKey))
+      .map((device) => device.visibilityKey);
+    const todayDeviceKey = normalizeInsightsDeviceKey(this.todayDeviceKey, visibleDeviceKeys);
+    return snapshotFromRange(
+      filterEntriesForInsights(allEntries, todayDeviceKey, this.hiddenDeviceKeys),
+      bounds,
+      undefined,
+      undefined,
+      this.tracker.categoryCache(),
+      zone,
+      this.tracker.productivityAgent.cache,
+    );
+  }
+
+  desktopWidgetState() {
+    return this.desktopWidgetStateFrom(this.snapshot());
+  }
+
+  private desktopWidgetStateFrom(snap: AppSnapshot) {
+    const version = snap.dataVersion ?? 0;
+    if (!this.cachedWidgetSummary || this.cachedWidgetVersion !== version) {
+      this.cachedWidgetSummary = desktopWidgetSummary(snap.snapshot);
+      this.cachedWidgetVersion = version;
+    }
+    return {
+      ...this.cachedWidgetSummary,
+      appearance: snap.appearance,
+      dataVersion: version,
+    };
   }
 
   selectNavigation(item: NavigationItem) {
@@ -978,10 +1231,13 @@ export class AppController {
   startTimelineRefresh() {
     if (this.timelineTimer) clearInterval(this.timelineTimer);
     this.timelineTimer = setInterval(() => {
-      if (["today", "timer", "calendar", "timesheet", "insights", "agent"].includes(this.navigation)) {
-        void this.refreshVisibleRange();
-      }
-      if (this.auth.user) void this.tracker.heartbeat();
+      // The tracker sends its own heartbeat each minute while it is tracking.
+      if (this.auth.user && !this.tracker.isTracking) void this.tracker.heartbeat();
+      // Picks up ratings the server finished in the background or made on other devices.
+      if (this.auth.user && this.settings.syncEnabled) void this.loadJevRatings();
+      if (!["today", "timer", "calendar", "timesheet", "insights", "trend", "agent"].includes(this.navigation)) return;
+      if (this.anyWindowVisible()) void this.refreshVisibleRange();
+      else this.timelineRefreshDeferred = true;
     }, 60_000);
   }
 
@@ -990,7 +1246,7 @@ export class AppController {
     let ticks = 0;
     this.helperTimer = setInterval(() => {
       ticks += 1;
-      void this.refreshBlockingHelper(ticks % 4 === 0);
+      void this.refreshBlockingHelper(ticks % 4 === 0, true);
     }, 15_000);
   }
 
@@ -1002,16 +1258,17 @@ export class AppController {
     try {
       this.auth.user = await this.api.me();
       saveSessionUser(this.auth.user);
-      this.auth.statusMessage = `Signed in as ${this.auth.user.email}`;
+      this.setAuthStatus(`Signed in as ${this.auth.user.email}`);
       this.auth.mfaChallenge = null;
+      void this.loadJevRatings();
     } catch {
       if (!this.api.getTokens()) {
         this.auth.user = null;
-        this.auth.statusMessage = "Session expired. Sign in again.";
+        this.setAuthStatus("Session expired. Sign in again.", "error");
       } else if (this.auth.user) {
-        this.auth.statusMessage = `Signed in as ${this.auth.user.email}`;
+        this.setAuthStatus(`Signed in as ${this.auth.user.email}`);
       } else {
-        this.auth.statusMessage = "Still signed in. The server could not be reached.";
+        this.setAuthStatus("Still signed in. The server could not be reached.");
       }
     } finally {
       this.auth.loading = false;
@@ -1019,10 +1276,16 @@ export class AppController {
     }
   }
 
+  /** Sets the sign-in form message; `error` shows it as an alert. */
+  private setAuthStatus(message: string, tone: AuthUiState["statusTone"] = "info") {
+    this.auth.statusMessage = message;
+    this.auth.statusTone = tone;
+  }
+
   async login() {
     const error = signInError(this.auth.email, this.auth.password);
     if (error) {
-      this.auth.statusMessage = error;
+      this.setAuthStatus(error, "error");
       this.broadcast();
       return;
     }
@@ -1035,7 +1298,7 @@ export class AppController {
       });
       await this.handleAuthResult(result, "Signed in");
     } catch (error) {
-      this.auth.statusMessage = error instanceof Error ? error.message : "Sign in failed.";
+      this.setAuthStatus(error instanceof Error ? error.message : "Sign in failed.", "error");
     } finally {
       this.auth.loading = false;
       this.broadcast();
@@ -1050,7 +1313,7 @@ export class AppController {
       this.auth.phoneNumber,
     );
     if (error) {
-      this.auth.statusMessage = error;
+      this.setAuthStatus(error, "error");
       this.broadcast();
       return;
     }
@@ -1064,7 +1327,7 @@ export class AppController {
       });
       await this.handleAuthResult(result, "Account created");
     } catch (error) {
-      this.auth.statusMessage = error instanceof Error ? error.message : "Registration failed.";
+      this.setAuthStatus(error instanceof Error ? error.message : "Registration failed.", "error");
     } finally {
       this.auth.loading = false;
       this.broadcast();
@@ -1085,12 +1348,13 @@ export class AppController {
       this.auth.mfaChallenge = null;
       this.auth.user = await this.api.me();
       saveSessionUser(this.auth.user);
-      this.auth.statusMessage = `Signed in as ${this.auth.user.email}`;
+      this.setAuthStatus(`Signed in as ${this.auth.user.email}`);
+      void this.loadJevRatings();
       await this.syncPending();
       await this.refreshVisibleRange();
       await this.refreshBlockingHelper(true);
     } catch (error) {
-      this.auth.statusMessage = error instanceof Error ? error.message : "Verification failed.";
+      this.setAuthStatus(error instanceof Error ? error.message : "Verification failed.", "error");
     } finally {
       this.auth.loading = false;
       this.broadcast();
@@ -1101,9 +1365,9 @@ export class AppController {
     if (!this.auth.mfaChallenge) return;
     try {
       await this.api.resendOTP(this.auth.mfaChallenge.mfa_token);
-      this.auth.statusMessage = "A new code is on the way.";
+      this.setAuthStatus("A new code is on the way.");
     } catch (error) {
-      this.auth.statusMessage = error instanceof Error ? error.message : "Could not resend code.";
+      this.setAuthStatus(error instanceof Error ? error.message : "Could not resend code.", "error");
     }
     this.broadcast();
   }
@@ -1115,25 +1379,32 @@ export class AppController {
     this.statusMessage = "Signed out";
     this.summaryCache.clear();
     this.tracker.clearRangeCache();
+    this.tracker.jevSync.reset();
     this.broadcast();
   }
+
+  /**
+   * Loads this account's Jev ratings from the server. The first time, ratings older
+   * versions saved on disk are uploaded and the files and the old API key removed.
+   */
+  private async loadJevRatings() {
+    if (!this.jevMigrated) this.jevMigrated = await migrateLocalJevRatings(this.api);
+    await this.tracker.jevSync.pull();
+    this.broadcast();
+  }
+
+  private jevMigrated = false;
 
   updateSettings(patch: Partial<AppSettings>) {
     this.settings = { ...this.settings, ...patch };
     saveSettings(this.settings);
     this.api.setBaseUrl(this.settings.apiBaseUrl);
     if (patch.launchAtLogin !== undefined) syncLaunchAtLogin(this.settings.launchAtLogin);
+    if (patch.desktopWidgetVisible !== undefined) this.syncDesktopWidget();
     if (patch.distractionResponse !== undefined) {
       this.syncClassifierWatch();
       if (this.latestForeground) this.considerDistractionNudge(this.latestForeground);
     }
-    this.broadcast();
-  }
-
-  setTypesafeApiKey(key: string) {
-    const trimmed = key.trim();
-    if (trimmed) saveTypesafeApiKey(trimmed);
-    else clearTypesafeApiKey();
     this.broadcast();
   }
 
@@ -1312,12 +1583,13 @@ export class AppController {
     this.broadcast();
   }
 
-  async refreshBlockingHelper(fetchPolicy = false) {
+  /** `quiet` skips rebuilding the tray and app menus when blocking state is unchanged, as on the 15 s poll. */
+  async refreshBlockingHelper(fetchPolicy = false, quiet = false) {
     if (!this.auth.user || !this.api.getTokens()) {
       this.clearLocalEnforcement();
       await this.helper.refreshStatus();
       await this.loadInventoryOnce();
-      this.syncHelperSnapshot();
+      this.syncHelperSnapshot(quiet);
       return;
     }
     let policy: BlockingPolicyResponse | null = null;
@@ -1368,7 +1640,7 @@ export class AppController {
       this.publishLocalEnforcement();
     }
     await this.loadInventoryOnce();
-    this.syncHelperSnapshot();
+    this.syncHelperSnapshot(quiet);
   }
 
   async refreshBlockingInventory() {
@@ -1423,26 +1695,39 @@ export class AppController {
     this.stopBlockWatch();
     this.stopClassifierWatch();
     if (this.broadcastTimer) clearTimeout(this.broadcastTimer);
+    if (this.hiddenWidgetTimer) clearTimeout(this.hiddenWidgetTimer);
+    if (this.nativeWidgetTimer) clearTimeout(this.nativeWidgetTimer);
     if (this.prefetchTimer) clearTimeout(this.prefetchTimer);
     this.gameSync.stop();
     await Promise.all([this.tracker.shutdown(), this.helper.close()]);
   }
 
-  private syncHelperSnapshot() {
+  private syncHelperSnapshot(quietIfUnchanged = false) {
     const helperLive = this.helper.status.available && this.helper.status.connected;
     this.blocking.installedApplications = this.helper.inventory;
     this.blocking.hostSetup = this.helper.hostSetup;
     if (helperLive && this.networkFilterIsEnforcing()) this.clearLocalEnforcement();
-    if (this.usingLocalEnforcement) {
-      this.onBlockingStateChanged?.();
-      this.broadcast();
-      return;
+    if (!this.usingLocalEnforcement) {
+      this.blocking.enforcement = this.helper.status;
+      this.blocking.capabilities = this.helper.capabilities;
+      if (!this.helper.status.activeOccurrenceID) this.blocking.activeOccurrence = null;
     }
-    this.blocking.enforcement = this.helper.status;
-    this.blocking.capabilities = this.helper.capabilities;
-    if (!this.helper.status.activeOccurrenceID) this.blocking.activeOccurrence = null;
-    this.onBlockingStateChanged?.();
+    // The poll's broadcast also advances the live session on screen; only the menus are skipped.
+    if (this.blockingChanged() || !quietIfUnchanged) this.onBlockingStateChanged?.();
     this.broadcast();
+  }
+
+  private blockingSignature = "";
+  private blockingInventory: unknown = null;
+
+  /** True when blocking state differs from the last check, ignoring `checkedAt` timestamps. */
+  private blockingChanged() {
+    const { installedApplications, ...rest } = this.blocking;
+    const signature = JSON.stringify(rest, (key, value) => (key === "checkedAt" ? undefined : value));
+    const changed = signature !== this.blockingSignature || installedApplications !== this.blockingInventory;
+    this.blockingSignature = signature;
+    this.blockingInventory = installedApplications;
+    return changed;
   }
 
   private networkFilterIsEnforcing() {
@@ -1457,16 +1742,13 @@ export class AppController {
   }
 
   private startBlockWatch() {
-    if (this.blockWatchTimer) return;
-    this.blockWatchTimer = setInterval(() => {
-      this.watchBlockedBrowser();
-    }, 250);
+    this.blockWatchOn = true;
+    this.syncBrowserWatch();
   }
 
   private stopBlockWatch() {
-    if (!this.blockWatchTimer) return;
-    clearInterval(this.blockWatchTimer);
-    this.blockWatchTimer = null;
+    this.blockWatchOn = false;
+    this.syncBrowserWatch();
   }
 
   private syncClassifierWatch() {
@@ -1475,25 +1757,37 @@ export class AppController {
   }
 
   private startClassifierWatch() {
-    if (this.classifierWatchTimer) return;
-    this.classifierWatchTimer = setInterval(() => {
-      this.watchClassifierBrowser();
-    }, 250);
+    this.classifierWatchOn = true;
+    this.syncBrowserWatch();
   }
 
   private stopClassifierWatch() {
-    if (!this.classifierWatchTimer) return;
-    clearInterval(this.classifierWatchTimer);
-    this.classifierWatchTimer = null;
+    this.classifierWatchOn = false;
+    this.syncBrowserWatch();
+  }
+
+  private syncBrowserWatch() {
+    const wanted = this.blockWatchOn || this.classifierWatchOn;
+    if (wanted && !this.browserWatchTimer) {
+      this.browserWatchTimer = setInterval(() => {
+        let tab: ReturnType<typeof readFocusedBrowserContext> | undefined;
+        const readTab = () => (tab ??= readFocusedBrowserContext());
+        if (this.blockWatchOn) this.watchBlockedBrowser(readTab);
+        if (this.classifierWatchOn) this.watchClassifierBrowser(readTab);
+      }, 250);
+    } else if (!wanted && this.browserWatchTimer) {
+      clearInterval(this.browserWatchTimer);
+      this.browserWatchTimer = null;
+    }
   }
 
   /** Re-read the focused tab so Back from the block page is redirected again. */
-  private watchClassifierBrowser() {
+  private watchClassifierBrowser(readTab = readFocusedBrowserContext) {
     if (this.distractionResponse() !== "block") return;
     const latest = this.latestForeground;
     if (!latest || (!looksLikeBrowser(latest.bundleID) && !looksLikeBrowser(latest.appName))) return;
     try {
-      const tab = readFocusedBrowserContext();
+      const tab = readTab();
       if (!tab.url) return;
       if (tab.appName && latest.appName && tab.appName.toLowerCase() !== latest.appName.toLowerCase()) return;
       this.considerDistractionNudge({
@@ -1507,12 +1801,12 @@ export class AppController {
     }
   }
 
-  private watchBlockedBrowser() {
+  private watchBlockedBrowser(readTab = readFocusedBrowserContext) {
     if (!this.usingLocalEnforcement || !this.localEnforcer.activeOccurrence()) return;
     const latest = this.latestForeground;
     if (!latest || (!looksLikeBrowser(latest.bundleID) && !looksLikeBrowser(latest.appName))) return;
     try {
-      const tab = readFocusedBrowserContext();
+      const tab = readTab();
       if (!tab.url) return;
       if (tab.appName && latest.appName && tab.appName.toLowerCase() !== latest.appName.toLowerCase()) return;
       void this.localEnforcer.enforce({
@@ -1881,14 +2175,15 @@ export class AppController {
   private async handleAuthResult(result: Awaited<ReturnType<StopScrollingAPI["login"]>>, success: string) {
     if (isMfa(result)) {
       this.auth.mfaChallenge = result;
-      this.auth.statusMessage = result.message || "Enter the verification code.";
+      this.setAuthStatus(result.message || "Enter the verification code.");
       return;
     }
     this.api.setTokens(result);
     this.auth.user = await this.api.me();
     saveSessionUser(this.auth.user);
     this.auth.mfaChallenge = null;
-    this.auth.statusMessage = `${success} as ${this.auth.user.email}`;
+    this.setAuthStatus(`${success} as ${this.auth.user.email}`);
+    void this.loadJevRatings();
     await this.syncPending();
     await this.refreshVisibleRange();
     await this.refreshBlockingHelper(true);
@@ -2016,8 +2311,57 @@ export class AppController {
     }, PREFETCH_DELAY_MS);
   }
 
-  private insightBucket(): "day" | "month" | undefined {
-    if (this.navigation !== "insights" || this.insightsPeriod === "day") return undefined;
+  /**
+   * Day-over-day and week-over-week totals for the Trend screen.
+   * A synced account uses one cached daily summary for the 14-day window and
+   * does not replace the summary that draws the period chart. Offline totals
+   * come from local history.
+   */
+  private trendComparisonsFor(zone: string, deviceKeyForNav: string): TrendComparisons | null {
+    if (this.navigation !== "trend") {
+      this.trendComparisonPending = false;
+      return null;
+    }
+    const anchor = this.insightsAnchor;
+    const window = trendComparisonWindow(anchor, zone);
+    const syncing = Boolean(this.api.getTokens() && this.settings.syncEnabled);
+    if (!syncing) {
+      this.trendComparisonPending = false;
+      const entries = filterEntriesForInsights(
+        mergeEntries(
+          this.tracker.mergedEntries(),
+          this.tracker.history.overlapping(window.start, window.end),
+        ),
+        deviceKeyForNav,
+        this.hiddenDeviceKeys,
+      );
+      return trendComparisonsFromDailyTotals(trackedSecondsByDay(entries, window, zone), anchor, zone);
+    }
+    const scope = this.insightSummaryScope();
+    const key = rangeCacheKey(window, zone, "day", scope);
+    const cached = this.summaryCache.get(key);
+    if (cached || this.trendComparisonMiss?.key === key) {
+      this.trendComparisonPending = false;
+      const totals = cached?.tracked_seconds_by_day ?? this.trendComparisonMiss?.totals ?? {};
+      return trendComparisonsFromDailyTotals(totals, anchor, zone);
+    }
+    this.trendComparisonPending = true;
+    if (this.trendComparisonInflight !== key) {
+      this.trendComparisonInflight = key;
+      void this.fetchInsightSummary(window, zone, "day", scope).then((summary) => {
+        if (this.trendComparisonInflight !== key) return;
+        if (summary) this.rememberSummary(key, summary);
+        else this.trendComparisonMiss = { key, totals: {} };
+        this.trendComparisonPending = false;
+        this.trendComparisonRevision += 1;
+        this.broadcast();
+      });
+    }
+    return null;
+  }
+
+  private insightBucket(navigation: NavigationItem = this.navigation): "day" | "month" | undefined {
+    if (!usesInsightWindow(navigation) || this.insightsPeriod === "day") return undefined;
     return this.insightsPeriod === "year" ? "month" : "day";
   }
 
@@ -2031,11 +2375,12 @@ export class AppController {
   private localInsightChart(
     bounds: { start: Date; end: Date },
     zone: string,
+    quiet = false,
   ): LocalInsightRollup | null {
     const key = `${bounds.start.getTime()}|${bounds.end.getTime()}|${zone}|${this.insightsDeviceKey}|${[...this.hiddenDeviceKeys].sort().join("\n")}`;
     if (this.localInsightRollup?.key === key) return this.localInsightRollup;
     this.scheduleLocalInsightRollup(key, bounds, zone);
-    this.insightChartPending = true;
+    if (!quiet) this.insightChartPending = true;
     return null;
   }
 
@@ -2126,8 +2471,8 @@ export class AppController {
   }
 
   /** Week, month, and year Insights render from the summary instead of every session. */
-  private usesInsightBuckets(): boolean {
-    if (!this.insightBucket()) return false;
+  private usesInsightBuckets(navigation: NavigationItem = this.navigation): boolean {
+    if (!this.insightBucket(navigation)) return false;
     if (!this.api.getTokens() || !this.settings.syncEnabled) return false;
     return true;
   }
@@ -2204,10 +2549,10 @@ export class AppController {
     }
   }
 
-  private mappedServerSummary(bounds: { start: Date; end: Date }) {
+  private mappedServerSummary(bounds: { start: Date; end: Date }, navigation: NavigationItem = this.navigation) {
     if (!this.serverSummary || !this.serverSummaryRange) return undefined;
-    const bucket = this.usesInsightBuckets() ? (this.insightBucket() ?? "") : "";
-    const deviceId = this.usesInsightBuckets() ? this.insightSummaryScope() : "";
+    const bucket = this.usesInsightBuckets(navigation) ? (this.insightBucket(navigation) ?? "") : "";
+    const deviceId = this.usesInsightBuckets(navigation) ? this.insightSummaryScope() : "";
     if (
       this.serverSummaryRange.start !== bounds.start.getTime() ||
       this.serverSummaryRange.end !== bounds.end.getTime() ||

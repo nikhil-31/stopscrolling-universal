@@ -17,11 +17,11 @@
     "native:prepare-release": "node scripts/prepare-native-release.mjs",
     "native:test:macos": "cd native/macos && swift test",
     "native:test:windows-portable": "cmake -S native/windows -B out/windows-portable && cmake --build out/windows-portable --parallel && ctest --test-dir out/windows-portable --output-on-failure",
-    "prepack": "npm run native:prepare-release",
+    "prepack": "npm run native:prepare-release && node scripts/build-mac-widget.mjs",
     "pack": "npm run build && electron-builder --dir",
-    "predist": "npm run native:prepare-release",
+    "predist": "npm run native:prepare-release && node scripts/build-mac-widget.mjs",
     "dist": "npm run build && electron-builder",
-    "dist:mac-signed": "npm run native:prepare-release && npm run build && electron-builder --config electron-builder.mac-signed.yml"
+    "dist:mac-signed": "npm run native:prepare-release && node scripts/build-mac-widget.mjs && npm run build && electron-builder --config electron-builder.mac-signed.yml"
   },
   "dependencies": {
     "koffi": "^3.2.1",

@@ -1,4 +1,4 @@
-import { JEV_CONFIDENCE_THRESHOLD, JEV_MODEL, parseJevChoice } from "./jev";
+import { JEV_CONFIDENCE_THRESHOLD } from "./jev";
 import type { NavigationItem, ScreenTimeAppBreakdown, ScreenTimeEntry, ScreenTimeTimelineSegment } from "./types";
 import { appBreakdownKey, segmentSeconds } from "./timeline";
 
@@ -19,14 +19,6 @@ export interface ProductivityCacheEntry {
 }
 
 export type ProductivityCache = Record<string, ProductivityCacheEntry>;
-
-export interface ProductivityState {
-  appName: string;
-  bundleID: string;
-  host: string;
-  title: string;
-  category: string;
-}
 
 const MAX_TITLE_LENGTH = 120;
 
@@ -90,25 +82,6 @@ export function productivityInputsFromSegments(
   return inputs;
 }
 
-export function jevProductivityRequest(state: ProductivityState) {
-  return {
-    model: JEV_MODEL,
-    state,
-    questions: {
-      productivity: {
-        type: "choice" as const,
-        instructions:
-          "Rate whether this app or website, given the window title, is productive, neutral, or distracting.",
-        criteria: JEV_PRODUCTIVITY_CRITERIA,
-      },
-    },
-  };
-}
-
-export function parseJevProductivity(payload: unknown): { choice: string; confidence: number; model: string } | null {
-  return parseJevChoice(payload, "productivity");
-}
-
 export function acceptedProductivityVerdict(choice: string, confidence: number): ProductivityVerdict | null {
   if (confidence < JEV_CONFIDENCE_THRESHOLD) return null;
   if (!(choice in JEV_PRODUCTIVITY_CRITERIA)) return null;
@@ -142,7 +115,7 @@ export interface AgentState {
   reviewing: boolean;
   progress: { done: number; total: number };
   lastReviewAt: string | null;
-  keyConfigured: boolean;
+  ratingAvailable: boolean;
 }
 
 function acceptedEntry(entry: ProductivityCacheEntry | undefined): ProductivityCacheEntry | undefined {
@@ -150,6 +123,12 @@ function acceptedEntry(entry: ProductivityCacheEntry | undefined): ProductivityC
   if (entry.source === "user") return entry;
   return acceptedProductivityVerdict(entry.verdict, entry.confidence) ? entry : undefined;
 }
+
+/**
+ * Fallback verdict per app or site key, computed once per cache object. Caches are replaced,
+ * never mutated, so a new object means new entries.
+ */
+const fallbackVerdicts = new WeakMap<ProductivityCache, Map<string, ProductivityCacheEntry | undefined>>();
 
 /** Confident verdict for a title, or the most common confident verdict for the same app or site. */
 export function verdictForTitle(
@@ -159,6 +138,18 @@ export function verdictForTitle(
 ): ProductivityCacheEntry | undefined {
   const exact = acceptedEntry(cache[titleKey]);
   if (exact) return exact;
+  let fallbacks = fallbackVerdicts.get(cache);
+  if (!fallbacks) {
+    fallbacks = new Map();
+    fallbackVerdicts.set(cache, fallbacks);
+  }
+  if (fallbacks.has(breakdownKey)) return fallbacks.get(breakdownKey);
+  const best = mostCommonVerdict(cache, breakdownKey);
+  fallbacks.set(breakdownKey, best);
+  return best;
+}
+
+function mostCommonVerdict(cache: ProductivityCache, breakdownKey: string): ProductivityCacheEntry | undefined {
   const prefix = `${breakdownKey}#`;
   const counts = new Map<string, { count: number; entry: ProductivityCacheEntry }>();
   for (const [key, entry] of Object.entries(cache)) {
@@ -243,7 +234,7 @@ export function ensureLiveEntryVisible(entries: ScreenTimeEntry[]): ScreenTimeEn
 export function buildAgentView(
   segments: ScreenTimeTimelineSegment[],
   cache: ProductivityCache,
-  meta: { reviewing: boolean; progress: { done: number; total: number }; keyConfigured: boolean },
+  meta: { reviewing: boolean; progress: { done: number; total: number }; ratingAvailable: boolean },
 ): AgentState {
   const groups = new Map<string, { segment: ScreenTimeTimelineSegment; seconds: number; lastEnd: string; titles: Map<string, { title: string; seconds: number; lastEnd: string }> }>();
   for (const segment of segments) {
@@ -314,5 +305,5 @@ export function buildAgentView(
   for (const entry of Object.values(cache)) {
     if (!lastReviewAt || entry.at > lastReviewAt) lastReviewAt = entry.at;
   }
-  return { items, totals, reviewing: meta.reviewing, progress: meta.progress, lastReviewAt, keyConfigured: meta.keyConfigured };
+  return { items, totals, reviewing: meta.reviewing, progress: meta.progress, lastReviewAt, ratingAvailable: meta.ratingAvailable };
 }

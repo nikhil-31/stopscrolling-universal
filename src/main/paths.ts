@@ -11,6 +11,10 @@ export function settingsPath() {
   return join(userDataDir(), "app-settings.json");
 }
 
+export function desktopWidgetBoundsPath() {
+  return join(userDataDir(), "desktop-widget-bounds.json");
+}
+
 export function calendarWorkspacePath() {
   return join(userDataDir(), "calendar-workspace.json");
 }

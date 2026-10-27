@@ -36,6 +36,7 @@ export default defineConfig({
           settings: resolve(__dirname, "src/renderer/settings.html"),
           freedom: resolve(__dirname, "src/renderer/freedom.html"),
           nudge: resolve(__dirname, "src/renderer/nudge.html"),
+          widget: resolve(__dirname, "src/renderer/widget.html"),
         },
       },
     },

@@ -17,6 +17,7 @@ export const defaultSettings = (): AppSettings => ({
   timerBonusDay: "",
   agentSendTitles: true,
   distractionResponse: "popup",
+  desktopWidgetVisible: true,
 });
 
 export function loadSettings(): AppSettings {
@@ -31,6 +32,7 @@ export function loadSettings(): AppSettings {
       : response === "block" || response === "screen" || response === "both"
         ? "block"
         : "popup";
+    settings.desktopWidgetVisible = settings.desktopWidgetVisible !== false;
     return settings;
   } catch {
     return defaultSettings();

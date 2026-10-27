@@ -1,246 +1,194 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { JEV_ENDPOINT } from "@shared/jev";
+import { describe, expect, it, vi } from "vitest";
 import { JevProductivityAgent, type ProductivityInput } from "./jev-productivity-agent";
+import type { JevRatingKind, JevRatingRequestItem, JevServerRating } from "./jev-ratings";
 
-function jsonResponse(body: unknown, ok = true): Response {
-  return { ok, json: async () => body } as Response;
+vi.mock("./logger", () => ({ logObservability: vi.fn() }));
+
+function input(key = "web|youtube.com#Intro to Rust", patch: Partial<ProductivityInput> = {}): ProductivityInput {
+  return {
+    key,
+    breakdownKey: key.split("#")[0],
+    appName: "Google Chrome",
+    bundleID: "com.google.Chrome",
+    url: "https://www.youtube.com/watch?v=1&token=secret",
+    title: "Intro to Rust",
+    category: "Video",
+    sendTitle: true,
+    ...patch,
+  };
 }
 
-function answer(choice: string, confidence = 0.94) {
-  return { model: "jev-1.13.0", answers: { productivity: { type: "choice", choice, confidence } } };
+function rating(key: string, patch: Partial<JevServerRating> = {}): JevServerRating {
+  return {
+    key,
+    breakdown_key: key.split("#")[0],
+    status: "ready",
+    value: "Productive",
+    confidence: 0.9,
+    model: "jev-latest",
+    source: "jev",
+    rated_at: "2026-10-27T09:00:00.000Z",
+    ...patch,
+  };
 }
+
+function fakeApi(answer: (item: JevRatingRequestItem) => JevServerRating = (item) => rating(item.key)) {
+  const calls: Array<{ kind: JevRatingKind; priority: string; items: JevRatingRequestItem[] }> = [];
+  const api = {
+    calls,
+    requestJevRatings: vi.fn(async (kind: JevRatingKind, priority: "live" | "background", items: JevRatingRequestItem[]) => {
+      calls.push({ kind, priority, items });
+      return { enabled: true, ratings: items.map(answer) };
+    }),
+    overrideJevVerdict: vi.fn(async (key: string) => rating(key, { source: "user", value: "Productive" })),
+  };
+  return api;
+}
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("JevProductivityAgent", () => {
-  const dirs: string[] = [];
-
-  afterEach(() => {
-    for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
-    dirs.length = 0;
-    vi.restoreAllMocks();
-  });
-
-  function cachePath() {
-    const dir = mkdtempSync(join(tmpdir(), "jev-productivity-"));
-    dirs.push(dir);
-    return join(dir, "jev-productivity.json");
-  }
-
-  function input(patch: Partial<ProductivityInput> = {}): ProductivityInput {
-    return {
-      key: "web|youtube.com#Intro to Rust",
-      breakdownKey: "web|youtube.com",
-      appName: "Google Chrome",
-      bundleID: "com.google.Chrome",
-      url: "https://www.youtube.com/watch?v=1&token=secret",
-      title: "Intro to Rust",
-      category: "Video",
-      ...patch,
-    };
-  }
-
-  it("caches a confident verdict and coalesces duplicate keys", async () => {
-    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => jsonResponse(answer("Productive")));
+  it("asks the server for the app in front and keeps the verdict in memory", async () => {
+    const api = fakeApi();
     const onResolved = vi.fn();
-    const path = cachePath();
-    const agent = new JevProductivityAgent({
-      getApiKey: () => "test-key",
-      cachePath: path,
-      fetch,
-      now: () => new Date("2026-09-20T00:00:00.000Z"),
-      onResolved,
-    });
-    agent.enqueue(input());
-    agent.enqueue(input());
-    await vi.waitFor(() => expect(onResolved).toHaveBeenCalledTimes(1));
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch.mock.calls[0]?.[0]).toBe(JEV_ENDPOINT);
-    const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
-    expect(body.state).toEqual({
-      appName: "Google Chrome",
-      bundleID: "com.google.Chrome",
+    const agent = new JevProductivityAgent({ api, enabled: () => true, onResolved });
+    agent.enqueueLive(input());
+    await flush();
+    expect(api.calls).toHaveLength(1);
+    expect(api.calls[0]).toMatchObject({ kind: "productivity", priority: "live" });
+    expect(api.calls[0].items[0]).toEqual({
+      key: "web|youtube.com#Intro to Rust",
+      breakdown_key: "web|youtube.com",
+      app_name: "Google Chrome",
+      bundle_id: "com.google.Chrome",
       host: "youtube.com",
       title: "Intro to Rust",
       category: "Video",
     });
-    expect(JSON.stringify(body)).not.toContain("token=secret");
-    expect(agent.lookup(input().key)?.verdict).toBe("Productive");
-    expect(JSON.parse(readFileSync(path, "utf8"))[input().key].source).toBe("jev");
+    expect(agent.lookup("web|youtube.com#Intro to Rust")?.verdict).toBe("Productive");
+    expect(onResolved).toHaveBeenCalledTimes(1);
   });
 
-  it("skips the API without a key and does not retry inside the cooldown", async () => {
-    const unused = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>();
-    const withoutKey = new JevProductivityAgent({ getApiKey: () => null, cachePath: cachePath(), fetch: unused });
-    withoutKey.enqueue(input());
-    expect(unused).not.toHaveBeenCalled();
-
-    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => {
-      throw new Error("offline");
-    });
-    const agent = new JevProductivityAgent({
-      getApiKey: () => "test-key",
-      cachePath: cachePath(),
-      fetch,
-      cooldownMs: 60_000,
-      now: () => new Date("2026-09-20T00:00:00.000Z"),
-    });
-    agent.enqueue(input());
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    agent.enqueue(input());
-    expect(fetch).toHaveBeenCalledTimes(1);
+  it("sends nothing while signed out", async () => {
+    const api = fakeApi();
+    const agent = new JevProductivityAgent({ api, enabled: () => false });
+    agent.enqueueLive(input());
+    agent.enqueueBackground([input("app|Notes")]);
+    await flush();
+    expect(api.requestJevRatings).not.toHaveBeenCalled();
   });
 
-  it("keeps at most the configured number running and stops at the daily cap", async () => {
-    let release: () => void = () => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => {
-      await gate;
-      return jsonResponse(answer("Neutral"));
-    });
-    const agent = new JevProductivityAgent({
-      getApiKey: () => "test-key",
-      cachePath: cachePath(),
-      fetch,
-      concurrency: 2,
-      dailyCap: 3,
-    });
-    for (const key of ["a", "b", "c", "d"]) agent.enqueue(input({ key, title: key }));
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-    release();
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
-    expect(agent.lookup("d")).toBeUndefined();
+  it("does not resend a key the server is still rating", async () => {
+    const api = fakeApi((item) => rating(item.key, { status: "pending", value: "", confidence: null }));
+    let now = Date.parse("2026-10-27T09:00:00.000Z");
+    const agent = new JevProductivityAgent({ api, enabled: () => true, now: () => new Date(now), resendMs: 60_000 });
+    agent.enqueueBackground([input("app|A"), input("app|B")]);
+    await flush();
+    agent.enqueueBackground([input("app|A"), input("app|B")]);
+    agent.enqueueLive(input("app|A"));
+    await flush();
+    expect(api.requestJevRatings).toHaveBeenCalledTimes(1);
+    expect(agent.cache).toEqual({});
+    now += 61_000;
+    agent.enqueueBackground([input("app|A")]);
+    await flush();
+    expect(api.requestJevRatings).toHaveBeenCalledTimes(2);
   });
 
-  it("never overwrites a verdict you set yourself", async () => {
-    let resolveFetch: (response: Response) => void = () => {};
-    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(
-      () => new Promise<Response>((resolve) => {
-        resolveFetch = resolve;
-      }),
-    );
-    const agent = new JevProductivityAgent({ getApiKey: () => "test-key", cachePath: cachePath(), fetch });
-    const rated = input();
-    agent.enqueue(rated);
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    agent.override(rated.key, "Productive");
-    resolveFetch(jsonResponse(answer("Distracting")));
-    await vi.waitFor(() => expect(agent.lookup(rated.key)?.verdict).toBe("Productive"));
-    expect(agent.lookup(rated.key)?.source).toBe("user");
-
-    agent.enqueue(rated);
-    expect(fetch).toHaveBeenCalledTimes(1);
+  it("sends period titles in one background batch and skips rated ones", async () => {
+    const api = fakeApi();
+    const agent = new JevProductivityAgent({ api, enabled: () => true });
+    agent.hydrate({ "app|Done": { verdict: "Neutral", confidence: 0.9, model: "jev-latest", at: "x", source: "jev" } });
+    agent.enqueueBackground([input("app|A"), input("app|Done"), input("app|B")]);
+    await flush();
+    expect(api.calls).toHaveLength(1);
+    expect(api.calls[0].priority).toBe("background");
+    expect(api.calls[0].items.map((item) => item.key)).toEqual(["app|A", "app|B"]);
   });
 
   it("omits the title when titles are disabled", async () => {
-    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => jsonResponse(answer("Neutral")));
-    const agent = new JevProductivityAgent({ getApiKey: () => "test-key", cachePath: cachePath(), fetch });
-    agent.enqueue(input({ key: "web|youtube.com", sendTitle: false }));
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
-    expect(body.state.title).toBe("");
-    expect(body.state.host).toBe("youtube.com");
+    const api = fakeApi();
+    const agent = new JevProductivityAgent({ api, enabled: () => true });
+    agent.enqueueLive(input("web|youtube.com", { title: "Secret", sendTitle: false }));
+    await flush();
+    expect(api.calls[0].items[0].title).toBe("");
+  });
+
+  it("retries a key after the request fails", async () => {
+    const api = fakeApi();
+    api.requestJevRatings.mockRejectedValueOnce(new Error("offline"));
+    const agent = new JevProductivityAgent({ api, enabled: () => true });
+    agent.enqueueLive(input());
+    await flush();
+    agent.enqueueLive(input());
+    await flush();
+    expect(api.requestJevRatings).toHaveBeenCalledTimes(2);
+    expect(agent.lookup(input().key)).toBeDefined();
+  });
+
+  it("shows your override at once and saves it to the server", async () => {
+    const api = fakeApi();
+    const agent = new JevProductivityAgent({ api, enabled: () => true });
+    agent.override("web|youtube.com#Intro to Rust", "Productive");
+    expect(agent.lookup("web|youtube.com#Intro to Rust")).toMatchObject({ verdict: "Productive", source: "user" });
+    await flush();
+    expect(api.overrideJevVerdict).toHaveBeenCalledWith("web|youtube.com#Intro to Rust", "web|youtube.com", "Productive");
+  });
+
+  it("puts the previous verdict back when the server rejects an override", async () => {
+    const api = fakeApi();
+    api.overrideJevVerdict.mockRejectedValueOnce(new Error("offline"));
+    const agent = new JevProductivityAgent({ api, enabled: () => true });
+    const previous = { verdict: "Distracting", confidence: 0.9, model: "jev-latest", at: "x", source: "jev" as const };
+    agent.hydrate({ "app|Notes": previous });
+    agent.override("app|Notes", "Productive");
+    await flush();
+    expect(agent.lookup("app|Notes")).toEqual(previous);
+  });
+
+  it("never replaces your own verdict with a Jev answer", async () => {
+    const api = fakeApi((item) => rating(item.key, { value: "Distracting" }));
+    const agent = new JevProductivityAgent({ api, enabled: () => true });
+    agent.hydrate({ "app|Notes": { verdict: "Productive", confidence: 1, model: "user", at: "x", source: "user" } });
+    agent.enqueueLive(input("app|Notes"));
+    await flush();
+    expect(api.requestJevRatings).not.toHaveBeenCalled();
+    expect(agent.lookup("app|Notes")?.verdict).toBe("Productive");
   });
 
   it("falls back to the most common verdict for the same site", () => {
-    const agent = new JevProductivityAgent({ getApiKey: () => null, cachePath: cachePath() });
-    agent.override("web|youtube.com#One", "Distracting");
-    agent.override("web|youtube.com#Two", "Distracting");
-    agent.override("web|youtube.com#Three", "Productive");
-    expect(agent.verdictFor("web|youtube.com", "web|youtube.com#Unseen")?.verdict).toBe("Distracting");
-    expect(agent.verdictFor("web|youtube.com", "web|youtube.com#One")?.source).toBe("user");
+    const agent = new JevProductivityAgent({ api: fakeApi(), enabled: () => true });
+    agent.hydrate({
+      "web|youtube.com#A": { verdict: "Distracting", confidence: 0.9, model: "jev-latest", at: "x", source: "jev" },
+      "web|youtube.com#B": { verdict: "Distracting", confidence: 0.9, model: "jev-latest", at: "x", source: "jev" },
+    });
+    expect(agent.verdictFor("web|youtube.com", "web|youtube.com#C")?.verdict).toBe("Distracting");
   });
 
-  it("keeps the live app ahead of period ratings and does not mark the agent as reviewing", async () => {
-    let release: () => void = () => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => {
-      await gate;
-      return jsonResponse(answer("Neutral"));
-    });
-    const agent = new JevProductivityAgent({
-      getApiKey: () => "test-key",
-      cachePath: cachePath(),
-      fetch,
-      concurrency: 1,
-    });
-    agent.enqueueBackground([input({ key: "web|news.example#One", title: "One" }), input({ key: "web|news.example#Two", title: "Two" })]);
-    expect(agent.reviewing).toBe(false);
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    agent.enqueueLive(input({ key: "app|Cursor#main.ts", title: "main.ts", breakdownKey: "app|Cursor" }));
-    release();
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
-    const titles = fetch.mock.calls.map((call) => JSON.parse(String(call[1]?.body)).state.title);
-    expect(titles).toEqual(["One", "main.ts", "Two"]);
+  it("forgets everything when cleared", async () => {
+    const agent = new JevProductivityAgent({ api: fakeApi(), enabled: () => true });
+    agent.hydrate({ "app|Notes": { verdict: "Neutral", confidence: 0.9, model: "jev-latest", at: "x", source: "jev" } });
+    agent.clear();
+    expect(agent.cache).toEqual({});
   });
 
-  it("leaves a queued live app in place when the daily cap is full", async () => {
-    let now = Date.parse("2026-09-20T00:00:00.000Z");
-    let release: () => void = () => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
+  it("reviews titles and waits for the server to finish rating them", async () => {
+    const api = fakeApi((item) => rating(item.key, { status: "pending", value: "", confidence: null }));
+    let refreshes = 0;
+    const agent: JevProductivityAgent = new JevProductivityAgent({
+      api,
+      enabled: () => true,
+      wait: async () => {},
+      refresh: async () => {
+        refreshes += 1;
+        agent.hydrate({ [`app|${refreshes === 1 ? "A" : "B"}`]: { verdict: "Neutral", confidence: 0.9, model: "jev-latest", at: "x", source: "jev" } });
+      },
     });
-    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => {
-      await gate;
-      return jsonResponse(answer("Neutral"));
-    });
-    const agent = new JevProductivityAgent({
-      getApiKey: () => "test-key",
-      cachePath: cachePath(),
-      fetch,
-      concurrency: 1,
-      dailyCap: 1,
-      now: () => new Date(now),
-    });
-    agent.enqueue(input({ key: "a", title: "first" }));
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    agent.enqueueLive(input({ key: "live", title: "live app" }));
-    agent.enqueueBackground([input({ key: "background", title: "background app" })]);
-    now = Date.parse("2026-09-21T00:00:00.000Z");
-    release();
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-    const second = JSON.parse(String(fetch.mock.calls[1]?.[1]?.body));
-    expect(second.state.title).toBe("live app");
-    expect(fetch).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not requeue a verdict you set yourself", () => {
-    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => jsonResponse(answer("Distracting")));
-    const agent = new JevProductivityAgent({ getApiKey: () => "test-key", cachePath: cachePath(), fetch });
-    const rated = input();
-    agent.override(rated.key, "Productive");
-    agent.enqueueBackground([rated]);
-    expect(fetch).not.toHaveBeenCalled();
-    expect(agent.lookup(rated.key)?.source).toBe("user");
-  });
-
-  it("finishes a review when the daily cap leaves titles queued", async () => {
-    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => jsonResponse(answer("Neutral")));
-    const agent = new JevProductivityAgent({
-      getApiKey: () => "test-key",
-      cachePath: cachePath(),
-      fetch,
-      dailyCap: 1,
-    });
-    await agent.reviewAll([input({ key: "a", title: "a" }), input({ key: "b", title: "b" })]);
-    expect(agent.reviewing).toBe(false);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(agent.lookup("b")).toBeUndefined();
-  });
-
-  it("reports progress while reviewing", async () => {
-    const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async () => jsonResponse(answer("Productive")));
-    const agent = new JevProductivityAgent({ getApiKey: () => "test-key", cachePath: cachePath(), fetch });
-    const pending = agent.reviewAll([input({ key: "a" }), input({ key: "b" })]);
+    const review = agent.reviewAll([input("app|A"), input("app|B")]);
     expect(agent.reviewing).toBe(true);
-    expect(agent.progress.total).toBe(2);
-    await pending;
+    await review;
+    expect(refreshes).toBe(2);
+    expect(agent.progress).toEqual({ done: 2, total: 2 });
     expect(agent.reviewing).toBe(false);
-    expect(agent.progress.done).toBe(2);
   });
 });

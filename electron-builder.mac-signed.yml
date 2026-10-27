@@ -1,5 +1,9 @@
 appId: com.stopscrolling.desktop
 productName: Stop Scrolling
+protocols:
+  - name: Stop Scrolling
+    schemes:
+      - stopscrolling
 directories:
   output: dist
   buildResources: build
@@ -12,9 +16,15 @@ extraResources:
     to: .
   - from: release-native
     to: native
+afterPack: scripts/sign-mac-widget.mjs
+afterSign: scripts/sign-mac-widget.mjs
 extraFiles:
   - from: release-native/macos/SystemExtensions
     to: Library/SystemExtensions
+  - from: native/macos/.derivedData/widget-pack/StopScrollingWidget.appex
+    to: PlugIns/StopScrollingWidget.appex
+  - from: native/macos/.derivedData/widget-pack/StopScrollingWidgetReload.dylib
+    to: Frameworks/StopScrollingWidgetReload.dylib
   - from: release-native/macos/LaunchDaemons
     to: Library/LaunchDaemons
   - from: release-native/macos/PrivilegedHelperTools

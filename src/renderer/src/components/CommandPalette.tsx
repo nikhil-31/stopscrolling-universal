@@ -14,6 +14,7 @@ import {
   Shield,
   Square,
   SunMedium,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { EmptyState } from "./ui";
@@ -30,6 +31,7 @@ const navIcons: Record<string, LucideIcon> = {
   today: SunMedium,
   calendar: CalendarDays,
   insights: BarChart3,
+  trend: TrendingUp,
   blocking: Shield,
   agent: Bot,
   account: CircleUserRound,

@@ -10,7 +10,7 @@ import {
   scriptingAppName,
 } from "@shared/browser";
 import { logObservability } from "../logger";
-import { readBrowserContext } from "./ax-browser";
+import { readBrowserContext, readFrontmostApp } from "./ax-browser";
 import { isAccessibilityGranted, requestAccessibilityAccess } from "./macos-accessibility";
 import type { ActivityCollector, SampleResult } from "./types";
 
@@ -125,9 +125,41 @@ async function captureBrowserTab(appName: string, bundleID: string, windowTitle:
   return { title: title || ax.title || windowTitle, url };
 }
 
+const ACCESSIBILITY_RECHECK_MS = 5_000;
+
+async function frontmostViaSystemEvents() {
+  const raw = await osascript(`
+    tell application "System Events"
+      set frontApp to first application process whose frontmost is true
+      set appName to name of frontApp
+      set bundleId to bundle identifier of frontApp
+      set winTitle to ""
+      try
+        set winTitle to name of front window of frontApp
+      end try
+      return appName & "|||" & bundleId & "|||" & winTitle & "|||" & (unix id of frontApp as text)
+    end tell
+  `);
+  const [appName, bundleID, title, pid] = raw.split("|||");
+  return { appName, bundleID, title, pid: Number(pid) || 0 };
+}
+
 export class MacCollector implements ActivityCollector {
+  private granted = false;
+  private grantedCheckedAt = -Infinity;
+
+  /** Accessibility trust, re-read at most every few seconds. */
+  private accessibilityGranted() {
+    const now = Date.now();
+    if (now - this.grantedCheckedAt >= ACCESSIBILITY_RECHECK_MS) {
+      this.granted = isAccessibilityGranted();
+      this.grantedCheckedAt = now;
+    }
+    return this.granted;
+  }
+
   async start() {
-    if (!isAccessibilityGranted()) {
+    if (!this.accessibilityGranted()) {
       logObservability("accessibility_not_granted");
     }
   }
@@ -135,11 +167,12 @@ export class MacCollector implements ActivityCollector {
   async stop() {}
 
   requestPermission() {
+    this.grantedCheckedAt = -Infinity;
     return requestAccessibilityAccess();
   }
 
   capabilities() {
-    const granted = isAccessibilityGranted();
+    const granted = this.accessibilityGranted();
     return {
       platform: "macos" as const,
       accessibilityGranted: granted,
@@ -152,21 +185,9 @@ export class MacCollector implements ActivityCollector {
   }
 
   async sample(): Promise<SampleResult> {
-    if (!isAccessibilityGranted()) return { type: "unavailable" };
+    if (!this.accessibilityGranted()) return { type: "unavailable" };
     try {
-      const raw = await osascript(`
-        tell application "System Events"
-          set frontApp to first application process whose frontmost is true
-          set appName to name of frontApp
-          set bundleId to bundle identifier of frontApp
-          set winTitle to ""
-          try
-            set winTitle to name of front window of frontApp
-          end try
-          return appName & "|||" & bundleId & "|||" & winTitle & "|||" & (unix id of frontApp as text)
-        end tell
-      `);
-      const [appName, bundleID, title, pid] = raw.split("|||");
+      const { appName, bundleID, title, pid } = readFrontmostApp() ?? (await frontmostViaSystemEvents());
       const snapshot = {
         appName: appName || "Unknown",
         bundleID: bundleID || appName || "unknown",
@@ -174,7 +195,7 @@ export class MacCollector implements ActivityCollector {
         url: "",
       };
       if (looksLikeBrowser(snapshot.bundleID) || looksLikeBrowser(snapshot.appName)) {
-        const tab = await captureBrowserTab(snapshot.appName, snapshot.bundleID, snapshot.title, Number(pid) || 0);
+        const tab = await captureBrowserTab(snapshot.appName, snapshot.bundleID, snapshot.title, pid);
         snapshot.title = tab.title || snapshot.title;
         snapshot.url = tab.url;
       }

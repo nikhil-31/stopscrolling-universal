@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { deviceDisplayName } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { DeviceListEntry } from "@shared/types";
 import {
-  CheckCircle2,
+  Check,
+  Copy,
   Eye,
   EyeOff,
   Laptop2,
@@ -11,6 +12,7 @@ import {
   MonitorSmartphone,
   Pencil,
   ShieldCheck,
+  ShieldOff,
   Trash2,
   Sparkles,
   UserRound,
@@ -30,53 +32,137 @@ import {
 
 export function AccountScreen({ state }: { state: AppSnapshot }) {
   const auth = state.auth;
-  const [showPassword, setShowPassword] = useState(false);
-  if (!auth.user) {
-    return (
-      <div className="auth-shell">
-        <Card className="auth-card" elevated>
-          <div className="auth-brand">
-            <BrandMark />
-            <div>
-              <h2>{auth.mfaChallenge ? "Verify it’s you" : "Welcome to Stop Scrolling"}</h2>
-              <p>{auth.mfaChallenge ? "One more step keeps your timeline secure." : "Your screen time, made intentional."}</p>
+  if (!auth.user) return <SignInCard auth={auth} />;
+
+  const user = auth.user;
+  const devices = sortedDevices(state.devices);
+  return (
+    <div>
+      <header className="page-header">
+        <div>
+          <div className="page-eyebrow">Your space</div>
+          <h2>Account & devices</h2>
+          <p>Manage your identity and choose which devices contribute to your timeline.</p>
+        </div>
+        <SyncBadge syncEnabled={state.settings.syncEnabled} pending={state.pendingUploadCount} />
+      </header>
+      <div className="account-stack">
+        <Card className="profile-card">
+          <div className="profile-head">
+            <div className="profile-avatar" aria-hidden="true">{initials(user.email)}</div>
+            <div className="profile-identity">
+              <h3>{user.email.split("@")[0]}</h3>
+              <p>{user.email}</p>
             </div>
+            <Button variant="secondary" icon={LogOut} onClick={() => window.stopscrolling.authLogout()}>
+              Sign out
+            </Button>
           </div>
-          {auth.mfaChallenge ? (
-            <div className="form">
-              <Banner>{auth.statusMessage}</Banner>
-              <TextField
-                label={auth.useBackupCode ? "Backup code" : "Verification code"}
-                placeholder={auth.useBackupCode ? "XXXX-XXXX" : "000000"}
-                inputMode={auth.useBackupCode ? "text" : "numeric"}
-                autoComplete="one-time-code"
-                value={auth.useBackupCode ? auth.backupCode : auth.mfaCode}
-                onChange={(event) => window.stopscrolling.authSetForm(
-                  auth.useBackupCode
-                    ? { backupCode: event.target.value }
-                    : { mfaCode: event.target.value },
+          <dl className="profile-facts">
+            <div className="profile-fact">
+              <dt>Two-factor sign-in</dt>
+              <dd>
+                {user.totp_enabled ? (
+                  <Badge tone="success"><ShieldCheck size={11} aria-hidden="true" /> On</Badge>
+                ) : (
+                  <Badge><ShieldOff size={11} aria-hidden="true" /> Off</Badge>
                 )}
-              />
-              <Toggle
-                label="Use a backup code"
-                description="Choose this if you cannot access your authenticator."
-                checked={auth.useBackupCode}
-                onChange={(useBackupCode) => window.stopscrolling.authSetForm({ useBackupCode })}
-              />
-              <div className="form-actions">
-                <Button
-                  variant="primary"
-                  icon={ShieldCheck}
-                  disabled={auth.loading}
-                  onClick={() => window.stopscrolling.authVerifyMfa()}
-                >
-                  Verify identity
-                </Button>
-                <Button variant="ghost" onClick={() => window.stopscrolling.authResendOtp()}>Resend code</Button>
-              </div>
+              </dd>
+            </div>
+            <div className="profile-fact profile-fact-wide">
+              <dt>Tracking ID</dt>
+              <dd>
+                <span className="profile-tracking-id" title={user.tracking_id}>{user.tracking_id}</span>
+                <CopyButton value={user.tracking_id} label="Copy tracking ID" />
+              </dd>
+            </div>
+          </dl>
+        </Card>
+
+        <Grouped
+          title="Connected devices"
+          description="Choose which devices appear in timelines. Removing a device hides its timeline; its time stays in your totals."
+          action={<Badge>{devices.length === 1 ? "1 device" : `${devices.length} devices`}</Badge>}
+        >
+          {devices.length ? (
+            <div className="device-grid">
+              {devices.map((device) => (
+                <DeviceNicknameCard
+                  key={device.visibilityKey}
+                  device={device}
+                  visible={!state.hiddenDeviceKeys.includes(device.visibilityKey)}
+                />
+              ))}
             </div>
           ) : (
-            <div className="form">
+            <p className="muted">Devices appear here after your first sync.</p>
+          )}
+        </Grouped>
+      </div>
+    </div>
+  );
+}
+
+function SignInCard({ auth }: { auth: AppSnapshot["auth"] }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const signingUp = auth.formMode === "signUp";
+  const passwordsDiffer = signingUp && auth.confirmPassword !== "" && auth.confirmPassword !== auth.password;
+  const status = auth.statusMessage ? (
+    auth.statusTone === "error"
+      ? <Banner tone="danger">{auth.statusMessage}</Banner>
+      : <p className="auth-hint" role="status">{auth.statusMessage}</p>
+  ) : null;
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (auth.loading) return;
+    if (auth.mfaChallenge) window.stopscrolling.authVerifyMfa();
+    else if (signingUp) window.stopscrolling.authRegister();
+    else window.stopscrolling.authLogin();
+  }
+
+  return (
+    <div className="auth-shell">
+      <Card className="auth-card" elevated>
+        <div className="auth-brand">
+          <BrandMark />
+          <div>
+            <h2>{auth.mfaChallenge ? "Verify it’s you" : "Welcome to Stop Scrolling"}</h2>
+            <p>{auth.mfaChallenge ? "One more step keeps your timeline secure." : "Your screen time, made intentional."}</p>
+          </div>
+        </div>
+        {auth.mfaChallenge ? (
+          <form className="form" onSubmit={submit}>
+            {status}
+            <TextField
+              label={auth.useBackupCode ? "Backup code" : "Verification code"}
+              placeholder={auth.useBackupCode ? "XXXX-XXXX" : "000000"}
+              inputMode={auth.useBackupCode ? "text" : "numeric"}
+              autoComplete="one-time-code"
+              autoFocus
+              value={auth.useBackupCode ? auth.backupCode : auth.mfaCode}
+              onChange={(event) => window.stopscrolling.authSetForm(
+                auth.useBackupCode
+                  ? { backupCode: event.target.value }
+                  : { mfaCode: event.target.value },
+              )}
+            />
+            <Toggle
+              label="Use a backup code"
+              description="Choose this if you cannot access your authenticator."
+              checked={auth.useBackupCode}
+              onChange={(useBackupCode) => window.stopscrolling.authSetForm({ useBackupCode })}
+            />
+            <div className="form-actions">
+              <Button type="submit" variant="primary" icon={ShieldCheck} disabled={auth.loading}>
+                {auth.loading ? "Verifying…" : "Verify identity"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => window.stopscrolling.authResendOtp()}>Resend code</Button>
+            </div>
+          </form>
+        ) : (
+          <form className="form" onSubmit={submit}>
+            <div className="auth-tabs">
               <Tabs
                 ariaLabel="Account action"
                 value={auth.formMode}
@@ -86,115 +172,95 @@ export function AccountScreen({ state }: { state: AppSnapshot }) {
                   { value: "signUp", label: "Create account", icon: Sparkles },
                 ]}
               />
-              <TextField
-                label="Email address"
-                type="email"
-                autoComplete="email"
-                placeholder="you@example.com"
-                value={auth.email}
-                onChange={(event) => window.stopscrolling.authSetForm({ email: event.target.value })}
-              />
-              <div className="field">
-                <label className="field-label" htmlFor="account-password">Password</label>
-                <div style={{ position: "relative" }}>
-                  <input
-                    id="account-password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete={auth.formMode === "signIn" ? "current-password" : "new-password"}
-                    placeholder="At least 8 characters"
-                    value={auth.password}
-                    onChange={(event) => window.stopscrolling.authSetForm({ password: event.target.value })}
-                    style={{ paddingRight: 42 }}
-                  />
-                  <IconButton
-                    label={showPassword ? "Hide password" : "Show password"}
-                    icon={showPassword ? EyeOff : Eye}
-                    onClick={() => setShowPassword((value) => !value)}
-                    style={{ position: "absolute", right: 2, top: 2 }}
-                  />
-                </div>
-              </div>
-              {auth.formMode === "signUp" ? (
-                <>
-                  <TextField
-                    label="Confirm password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    value={auth.confirmPassword}
-                    onChange={(event) => window.stopscrolling.authSetForm({ confirmPassword: event.target.value })}
-                  />
-                  <TextField
-                    label="Phone number"
-                    placeholder="+15551234567"
-                    hint="Optional · use international format"
-                    value={auth.phoneNumber}
-                    onChange={(event) => window.stopscrolling.authSetForm({ phoneNumber: event.target.value })}
-                  />
-                </>
-              ) : null}
-              {auth.statusMessage ? <p className="small muted" role="status">{auth.statusMessage}</p> : null}
-              <Button
-                variant="primary"
-                icon={auth.formMode === "signIn" ? UserRound : Sparkles}
-                disabled={auth.loading}
-                onClick={() => auth.formMode === "signIn"
-                  ? window.stopscrolling.authLogin()
-                  : window.stopscrolling.authRegister()}
-              >
-                {auth.loading ? "Please wait…" : auth.formMode === "signIn" ? "Sign in" : "Create account"}
-              </Button>
             </div>
-          )}
-        </Card>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <header className="page-header">
-        <div>
-          <div className="page-eyebrow">Your space</div>
-          <h2>Account & devices</h2>
-          <p>Manage your identity and choose which devices contribute to your timeline.</p>
-        </div>
-        <Badge tone="success" dot>Synced</Badge>
-      </header>
-      <div className="account-layout">
-        <Card className="profile-card">
-          <div className="profile-avatar">{initials(auth.user.email)}</div>
-          <h3>{auth.user.email.split("@")[0]}</h3>
-          <p className="small muted">{auth.user.email}</p>
-          <div className="inspector-meta">
-            <Badge tone="success"><CheckCircle2 size={11} aria-hidden="true" /> Signed in</Badge>
-            {auth.user.totp_enabled ? <Badge tone="accent"><ShieldCheck size={11} aria-hidden="true" /> MFA</Badge> : null}
-          </div>
-          <div className="path-row" title={auth.user.tracking_id}>
-            <span className="path-value">{auth.user.tracking_id}</span>
-          </div>
-          <Button variant="ghost" icon={LogOut} onClick={() => window.stopscrolling.authLogout()}>
-            Sign out
-          </Button>
-        </Card>
-
-        <Grouped
-          title="Connected devices"
-          description="Choose which devices appear in timelines, or remove one from this account"
-          action={<Badge>{state.devices.length} devices</Badge>}
-        >
-          <div className="device-grid">
-            {state.devices.map((device) => (
-              <DeviceNicknameCard
-                key={device.visibilityKey}
-                device={device}
-                visible={!state.hiddenDeviceKeys.includes(device.visibilityKey)}
-              />
-            ))}
-          </div>
-          {!state.devices.length ? <p className="muted">Devices appear here after your first sync.</p> : null}
-        </Grouped>
-      </div>
+            <TextField
+              label="Email address"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={auth.email}
+              onChange={(event) => window.stopscrolling.authSetForm({ email: event.target.value })}
+            />
+            <div className="field">
+              <label className="field-label" htmlFor="account-password">Password</label>
+              <div className="password-input">
+                <input
+                  id="account-password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete={signingUp ? "new-password" : "current-password"}
+                  placeholder="At least 8 characters"
+                  value={auth.password}
+                  onChange={(event) => window.stopscrolling.authSetForm({ password: event.target.value })}
+                />
+                <IconButton
+                  type="button"
+                  label={showPassword ? "Hide password" : "Show password"}
+                  icon={showPassword ? EyeOff : Eye}
+                  onClick={() => setShowPassword((value) => !value)}
+                />
+              </div>
+            </div>
+            {signingUp ? (
+              <>
+                <TextField
+                  label="Confirm password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={auth.confirmPassword}
+                  aria-invalid={passwordsDiffer || undefined}
+                  hint={passwordsDiffer ? "Passwords don’t match yet" : undefined}
+                  className={passwordsDiffer ? "is-invalid" : undefined}
+                  onChange={(event) => window.stopscrolling.authSetForm({ confirmPassword: event.target.value })}
+                />
+                <TextField
+                  label="Phone number"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="+15551234567"
+                  hint="Optional · use international format"
+                  value={auth.phoneNumber}
+                  onChange={(event) => window.stopscrolling.authSetForm({ phoneNumber: event.target.value })}
+                />
+              </>
+            ) : null}
+            {status}
+            <Button
+              type="submit"
+              variant="primary"
+              icon={signingUp ? Sparkles : UserRound}
+              disabled={auth.loading}
+            >
+              {auth.loading ? "Please wait…" : signingUp ? "Create account" : "Sign in"}
+            </Button>
+          </form>
+        )}
+      </Card>
     </div>
+  );
+}
+
+function SyncBadge({ syncEnabled, pending }: { syncEnabled: boolean; pending: number }) {
+  if (!syncEnabled) return <Badge dot>Sync off</Badge>;
+  if (pending > 0) return <Badge tone="warning" dot>{pending.toLocaleString()} waiting to sync</Badge>;
+  return <Badge tone="success" dot>Synced</Badge>;
+}
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1600);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  return (
+    <IconButton
+      className="profile-copy"
+      label={copied ? "Copied" : label}
+      icon={copied ? Check : Copy}
+      onClick={() => {
+        void navigator.clipboard?.writeText(value).then(() => setCopied(true), () => {});
+      }}
+    />
   );
 }
 
@@ -223,12 +289,13 @@ function DeviceNicknameCard({
     setEditing(false);
   }
 
-  const subtitle = device.nickname.trim()
-    ? `${device.deviceName} · ${device.devicePlatform} · ${device.sessionCount} sessions`
-    : `${device.devicePlatform} · ${device.sessionCount} sessions`;
+  const sessions = `${device.sessionCount.toLocaleString()} ${device.sessionCount === 1 ? "session" : "sessions"}`;
+  const subtitle = [device.nickname.trim() ? device.deviceName : "", platformLabel(device.devicePlatform), sessions]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
-    <div className="device-card">
+    <div className={["device-card", visible ? "" : "is-hidden", confirmingDelete ? "is-confirming" : ""].filter(Boolean).join(" ")}>
       <div className="device-card-top">
         <span className="device-icon">
           {device.devicePlatform === "windows" ? <MonitorSmartphone size={15} /> : <Laptop2 size={15} />}
@@ -255,9 +322,15 @@ function DeviceNicknameCard({
             }}
           />
         ) : (
-          <span className="row-copy">
-            <span className="device-card-title-row">
-              <span className="row-title">{displayName}</span>
+          <>
+            <span className="row-copy">
+              <span className="device-card-title-row">
+                <span className="row-title">{displayName}</span>
+                {device.isLocal ? <Badge tone="accent">This device</Badge> : null}
+              </span>
+              <span className="row-subtitle">{subtitle}</span>
+            </span>
+            <span className="device-card-actions">
               {device.deviceID ? (
                 <IconButton
                   className="device-nickname-edit"
@@ -275,16 +348,18 @@ function DeviceNicknameCard({
                 />
               ) : null}
             </span>
-            <span className="row-subtitle">{subtitle}</span>
-          </span>
+          </>
         )}
-        <span className={`dot ${device.isOnline ? "online" : ""}`} title={device.isOnline ? "Online" : "Offline"} />
+      </div>
+      <div className="device-status">
+        <span className={`dot ${device.isOnline ? "online" : ""}`} aria-hidden="true" />
+        <span>{device.isOnline ? "Online now" : lastSeenLabel(device.lastSeenAt)}</span>
       </div>
       {confirmingDelete ? (
-        <div className="device-delete-confirm">
+        <div className="device-delete-confirm" role="alertdialog" aria-label={`Remove ${displayName}`}>
           <p>Remove {displayName} from this account? Its timeline disappears. Recorded screen time stays in your totals.</p>
           <div className="device-delete-actions">
-            <Button size="sm" variant="ghost" onClick={() => setConfirmingDelete(false)}>Cancel</Button>
+            <Button size="sm" variant="ghost" autoFocus onClick={() => setConfirmingDelete(false)}>Cancel</Button>
             <Button
               size="sm"
               variant="danger"
@@ -306,6 +381,51 @@ function DeviceNicknameCard({
       )}
     </div>
   );
+}
+
+/** This computer first, then devices that are online, then by name. */
+function sortedDevices(devices: DeviceListEntry[]) {
+  return [...devices].sort((a, b) =>
+    Number(Boolean(b.isLocal)) - Number(Boolean(a.isLocal))
+    || Number(b.isOnline) - Number(a.isOnline)
+    || deviceDisplayName(a.devicePlatform, a.deviceName, a.nickname)
+      .localeCompare(deviceDisplayName(b.devicePlatform, b.deviceName, b.nickname)));
+}
+
+const PLATFORM_LABELS: Record<string, string> = {
+  macos: "macOS",
+  windows: "Windows",
+  linux: "Linux",
+  ios: "iOS",
+  ipados: "iPadOS",
+  android: "Android",
+  watchos: "watchOS",
+};
+
+function platformLabel(platform: string) {
+  return PLATFORM_LABELS[platform.toLowerCase()] ?? (platform ? platform[0].toUpperCase() + platform.slice(1) : "Unknown");
+}
+
+const RELATIVE_STEPS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+  ["minute", 60],
+  ["hour", 60],
+  ["day", 24],
+  ["week", 7],
+  ["month", 4.35],
+  ["year", 12],
+];
+
+export function lastSeenLabel(lastSeenAt: string | null, now = Date.now()) {
+  const seen = lastSeenAt ? Date.parse(lastSeenAt) : NaN;
+  if (!Number.isFinite(seen)) return "Offline";
+  let value = Math.max(0, (now - seen) / 60_000);
+  if (value < 1) return "Last seen just now";
+  let unit: Intl.RelativeTimeFormatUnit = "minute";
+  for (let index = 1; index < RELATIVE_STEPS.length && value >= RELATIVE_STEPS[index][1]; index += 1) {
+    value /= RELATIVE_STEPS[index][1];
+    unit = RELATIVE_STEPS[index][0];
+  }
+  return `Last seen ${new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(-Math.floor(value), unit)}`;
 }
 
 function initials(value: string) {

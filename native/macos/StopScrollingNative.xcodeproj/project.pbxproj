@@ -33,6 +33,12 @@
 		B10E000000000003 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F10S000000000004 /* Security.framework */; };
 		B10E000000000004 /* libEndpointSecurity.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F10S000000000005 /* libEndpointSecurity.tbd */; };
 		B10A000000000001 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10A000000000001 /* main.swift */; };
+		B10W000000000001 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10W000000000001 /* WidgetSnapshot.swift */; };
+		B10W000000000002 /* TimeWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10W000000000002 /* TimeWidget.swift */; };
+		B10W000000000005 /* TrendSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10W000000000003 /* TrendSnapshot.swift */; };
+		B10W000000000006 /* TrendWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10W000000000004 /* TrendWidget.swift */; };
+		B10W000000000003 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F10S000000000006 /* SwiftUI.framework */; };
+		B10W000000000004 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F10S000000000007 /* WidgetKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -78,6 +84,15 @@
 		F10S000000000003 /* NetworkExtension.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = NetworkExtension.framework; path = System/Library/Frameworks/NetworkExtension.framework; sourceTree = SDKROOT; };
 		F10S000000000004 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		F10S000000000005 /* libEndpointSecurity.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libEndpointSecurity.tbd; path = usr/lib/libEndpointSecurity.tbd; sourceTree = SDKROOT; };
+		F10S000000000006 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		F10S000000000007 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		F10W000000000001 /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshot.swift; sourceTree = "<group>"; };
+		F10W000000000002 /* TimeWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeWidget.swift; sourceTree = "<group>"; };
+		F10W000000000003 /* TrendSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendSnapshot.swift; sourceTree = "<group>"; };
+		F10W000000000004 /* TrendWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendWidget.swift; sourceTree = "<group>"; };
+		F10P000000000008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		F10P000000000009 /* Widget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Widget.entitlements; sourceTree = "<group>"; };
+		F10T000000000008 /* StopScrollingWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StopScrollingWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -123,6 +138,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		K10W000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10W000000000003 /* SwiftUI.framework in Frameworks */,
+				B10W000000000004 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -137,6 +161,8 @@
 				G10M000000000001 /* NetworkFilterExtensionMain */,
 				G10E000000000001 /* EndpointSecurityExtension */,
 				G10A000000000001 /* HostProfileStub */,
+				G10W000000000002 /* WidgetCore */,
+				G10W000000000001 /* Widget */,
 				G10R000000000001 /* Resources */,
 				G10S000000000001 /* Frameworks */,
 				G10P000000000001 /* Products */,
@@ -151,13 +177,16 @@
 		G10M000000000001 /* NetworkFilterExtensionMain */ = {isa = PBXGroup; children = (F10N000000000002 /* main.swift */); name = NetworkFilterExtensionMain; path = Sources/NetworkFilterExtensionMain; sourceTree = "<group>"; };
 		G10E000000000001 /* EndpointSecurityExtension */ = {isa = PBXGroup; children = (F10E000000000001 /* main.swift */); name = EndpointSecurityExtension; path = Sources/EndpointSecurityExtension; sourceTree = "<group>"; };
 		G10A000000000001 /* HostProfileStub */ = {isa = PBXGroup; children = (F10A000000000001 /* main.swift */); name = HostProfileStub; path = Sources/HostProfileStub; sourceTree = "<group>"; };
-		G10R000000000001 /* Resources */ = {isa = PBXGroup; children = (G10R000000000002 /* Helper */, G10R000000000003 /* NetworkFilter */, G10R000000000004 /* EndpointSecurity */, G10R000000000005 /* Host */); path = Resources; sourceTree = "<group>"; };
+		G10W000000000002 /* WidgetCore */ = {isa = PBXGroup; children = (F10W000000000001 /* WidgetSnapshot.swift */, F10W000000000003 /* TrendSnapshot.swift */); name = WidgetCore; path = Sources/WidgetCore; sourceTree = "<group>"; };
+		G10W000000000001 /* Widget */ = {isa = PBXGroup; children = (F10W000000000002 /* TimeWidget.swift */, F10W000000000004 /* TrendWidget.swift */); name = Widget; path = Sources/Widget; sourceTree = "<group>"; };
+		G10R000000000001 /* Resources */ = {isa = PBXGroup; children = (G10R000000000002 /* Helper */, G10R000000000003 /* NetworkFilter */, G10R000000000004 /* EndpointSecurity */, G10R000000000005 /* Host */, G10R000000000006 /* Widget */); path = Resources; sourceTree = "<group>"; };
 		G10R000000000002 /* Helper */ = {isa = PBXGroup; children = (F10P000000000001 /* Info.plist */, F10P000000000002 /* Helper.entitlements */); path = Helper; sourceTree = "<group>"; };
 		G10R000000000003 /* NetworkFilter */ = {isa = PBXGroup; children = (F10P000000000003 /* Info.plist */, F10P000000000004 /* NetworkFilter.entitlements */); path = NetworkFilter; sourceTree = "<group>"; };
 		G10R000000000004 /* EndpointSecurity */ = {isa = PBXGroup; children = (F10P000000000005 /* Info.plist */, F10P000000000006 /* EndpointSecurity.entitlements */); path = EndpointSecurity; sourceTree = "<group>"; };
 		G10R000000000005 /* Host */ = {isa = PBXGroup; children = (F10P000000000007 /* StopScrolling.entitlements */); path = Host; sourceTree = "<group>"; };
-		G10S000000000001 /* Frameworks */ = {isa = PBXGroup; children = (F10S000000000001 /* ServiceManagement.framework */, F10S000000000002 /* SystemExtensions.framework */, F10S000000000003 /* NetworkExtension.framework */, F10S000000000004 /* Security.framework */, F10S000000000005 /* libEndpointSecurity.tbd */); name = Frameworks; sourceTree = "<group>"; };
-		G10P000000000001 /* Products */ = {isa = PBXGroup; children = (F10T000000000001 /* libBlockingCore.a */, F10T000000000002 /* libHelperXPC.a */, F10T000000000003 /* com.stopscrolling.helper */, F10T000000000004 /* libStopScrollingHostClient.dylib */, F10T000000000005 /* NetworkFilter.systemextension */, F10T000000000006 /* EndpointSecurity.systemextension */, F10T000000000007 /* StopScrollingHostProfile.app */); name = Products; sourceTree = "<group>"; };
+		G10R000000000006 /* Widget */ = {isa = PBXGroup; children = (F10P000000000008 /* Info.plist */, F10P000000000009 /* Widget.entitlements */); path = Widget; sourceTree = "<group>"; };
+		G10S000000000001 /* Frameworks */ = {isa = PBXGroup; children = (F10S000000000001 /* ServiceManagement.framework */, F10S000000000002 /* SystemExtensions.framework */, F10S000000000003 /* NetworkExtension.framework */, F10S000000000004 /* Security.framework */, F10S000000000005 /* libEndpointSecurity.tbd */, F10S000000000006 /* SwiftUI.framework */, F10S000000000007 /* WidgetKit.framework */); name = Frameworks; sourceTree = "<group>"; };
+		G10P000000000001 /* Products */ = {isa = PBXGroup; children = (F10T000000000001 /* libBlockingCore.a */, F10T000000000002 /* libHelperXPC.a */, F10T000000000003 /* com.stopscrolling.helper */, F10T000000000004 /* libStopScrollingHostClient.dylib */, F10T000000000005 /* NetworkFilter.systemextension */, F10T000000000006 /* EndpointSecurity.systemextension */, F10T000000000007 /* StopScrollingHostProfile.app */, F10T000000000008 /* StopScrollingWidget.appex */); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -168,6 +197,7 @@
 		T10N000000000001 /* NetworkFilter */ = {isa = PBXNativeTarget; buildConfigurationList = C10N000000000001 /* Build configuration list for PBXNativeTarget "NetworkFilter" */; buildPhases = (S10N000000000001 /* Sources */, K10N000000000001 /* Frameworks */); buildRules = (); dependencies = (D10N000000000001 /* PBXTargetDependency */); name = NetworkFilter; productName = NetworkFilter; productReference = F10T000000000005 /* NetworkFilter.systemextension */; productType = "com.apple.product-type.system-extension"; };
 		T10E000000000001 /* EndpointSecurity */ = {isa = PBXNativeTarget; buildConfigurationList = C10E000000000001 /* Build configuration list for PBXNativeTarget "EndpointSecurity" */; buildPhases = (S10E000000000001 /* Sources */, K10E000000000001 /* Frameworks */); buildRules = (); dependencies = (D10E000000000001 /* PBXTargetDependency */); name = EndpointSecurity; productName = EndpointSecurity; productReference = F10T000000000006 /* EndpointSecurity.systemextension */; productType = "com.apple.product-type.system-extension"; };
 		T10A000000000001 /* StopScrollingHostProfile */ = {isa = PBXNativeTarget; buildConfigurationList = C10A000000000001 /* Build configuration list for PBXNativeTarget "StopScrollingHostProfile" */; buildPhases = (S10A000000000001 /* Sources */, K10A000000000001 /* Frameworks */); buildRules = (); dependencies = (); name = StopScrollingHostProfile; productName = StopScrollingHostProfile; productReference = F10T000000000007 /* StopScrollingHostProfile.app */; productType = "com.apple.product-type.application"; };
+		T10W000000000001 /* StopScrollingWidget */ = {isa = PBXNativeTarget; buildConfigurationList = C10W000000000001 /* Build configuration list for PBXNativeTarget "StopScrollingWidget" */; buildPhases = (S10W000000000001 /* Sources */, K10W000000000001 /* Frameworks */); buildRules = (); dependencies = (); name = StopScrollingWidget; productName = StopScrollingWidget; productReference = F10T000000000008 /* StopScrollingWidget.appex */; productType = "com.apple.product-type.app-extension"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -197,6 +227,7 @@
 				T10N000000000001 /* NetworkFilter */,
 				T10E000000000001 /* EndpointSecurity */,
 				T10A000000000001 /* StopScrollingHostProfile */,
+				T10W000000000001 /* StopScrollingWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -209,6 +240,7 @@
 		S10N000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B10N000000000001 /* FilterDataProvider.swift in Sources */, B10N000000000002 /* main.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
 		S10E000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B10E000000000001 /* main.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
 		S10A000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B10A000000000001 /* main.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
+		S10W000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B10W000000000001 /* WidgetSnapshot.swift in Sources */, B10W000000000005 /* TrendSnapshot.swift in Sources */, B10W000000000002 /* TimeWidget.swift in Sources */, B10W000000000006 /* TrendWidget.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -271,6 +303,8 @@
 		C10E000000000003 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = Resources/EndpointSecurity/EndpointSecurity.entitlements; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Resources/EndpointSecurity/Info.plist; MACOSX_DEPLOYMENT_TARGET = 13.0; PRODUCT_BUNDLE_IDENTIFIER = com.stopscrolling.desktop.endpoint-security; PRODUCT_BUNDLE_PACKAGE_TYPE = SYSX; PRODUCT_MODULE_NAME = StopScrollingEndpointSecurity; PRODUCT_NAME = EndpointSecurity; SKIP_INSTALL = YES; SWIFT_VERSION = 6.0; WRAPPER_EXTENSION = systemextension; }; name = Release; };
 		C10A000000000002 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = Resources/Host/StopScrolling.entitlements; CURRENT_PROJECT_VERSION = 1; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 13.0; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = com.stopscrolling.desktop; PRODUCT_NAME = StopScrollingHostProfile; SKIP_INSTALL = YES; SWIFT_VERSION = 6.0; }; name = Debug; };
 		C10A000000000003 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = Resources/Host/StopScrolling.entitlements; CURRENT_PROJECT_VERSION = 1; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 13.0; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = com.stopscrolling.desktop; PRODUCT_NAME = StopScrollingHostProfile; SKIP_INSTALL = YES; SWIFT_VERSION = 6.0; }; name = Release; };
+		C10W000000000002 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES; APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_ENTITLEMENTS = Resources/Widget/Widget.entitlements; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Resources/Widget/Info.plist; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"; MACOSX_DEPLOYMENT_TARGET = 14.0; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = com.stopscrolling.desktop.widget; PRODUCT_NAME = StopScrollingWidget; SKIP_INSTALL = YES; SWIFT_VERSION = 6.0; WRAPPER_EXTENSION = appex; }; name = Debug; };
+		C10W000000000003 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES; APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_ENTITLEMENTS = Resources/Widget/Widget.entitlements; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Resources/Widget/Info.plist; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"; MACOSX_DEPLOYMENT_TARGET = 14.0; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = com.stopscrolling.desktop.widget; PRODUCT_NAME = StopScrollingWidget; SKIP_INSTALL = YES; SWIFT_VERSION = 6.0; WRAPPER_EXTENSION = appex; }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -282,6 +316,7 @@
 		C10N000000000001 /* Build configuration list for PBXNativeTarget "NetworkFilter" */ = {isa = XCConfigurationList; buildConfigurations = (C10N000000000002 /* Debug */, C10N000000000003 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		C10E000000000001 /* Build configuration list for PBXNativeTarget "EndpointSecurity" */ = {isa = XCConfigurationList; buildConfigurations = (C10E000000000002 /* Debug */, C10E000000000003 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		C10A000000000001 /* Build configuration list for PBXNativeTarget "StopScrollingHostProfile" */ = {isa = XCConfigurationList; buildConfigurations = (C10A000000000002 /* Debug */, C10A000000000003 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		C10W000000000001 /* Build configuration list for PBXNativeTarget "StopScrollingWidget" */ = {isa = XCConfigurationList; buildConfigurations = (C10W000000000002 /* Debug */, C10W000000000003 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = P100000000000001 /* Project object */;

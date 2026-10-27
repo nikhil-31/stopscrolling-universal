@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockItemShareLabel, blockSegments, bucketsFromDailyTotals, buildDeviceSeries, colorForCategory, combineSessionBlocks, continuousActivityEvents, dayAxisHour, dayHourTitle, dayTrackAxis, durationAxisTicks, entriesToTimelines, entryFromSession, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, formatTrackedDuration, highlightRangesForApp, ALL_INSIGHTS_DEVICES, mergePeriodSummaries, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, serverPeriodBuckets, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, weekNumber } from "./timeline";
+import { blockItemShareLabel, blockSegments, bucketsFromDailyTotals, buildDeviceSeries, colorForCategory, combineSessionBlocks, continuousActivityEvents, dayAxisHour, dayHourTitle, dayTrackAxis, durationAxisTicks, entriesToTimelines, entryFromSession, filterEntriesForInsights, filterSegmentsForApp, filterTimelinesForApp, filterTimelinesForInsights, formatPeriod, formatTrackedDuration, highlightRangesForApp, ALL_INSIGHTS_DEVICES, mergePeriodSummaries, normalizeInsightsDeviceKey, normalizeInsightsTab, periodBounds, rankedAppsBySeconds, serverPeriodBuckets, shiftTodayAnchor, snapshotFromEntries, timelineAxisTicks, todayPeriodBounds, trackedSecondsByDay, trendComparisonWindow, trendComparisonsFromDailyTotals, weekNumber } from "./timeline";
 import { mergeRecords, persistenceKey, entryToPayload } from "./payload";
 import { toDateInput } from "./platform";
 import type { ScreenTimeEntry, ScreenTimePeriodBucket, ScreenTimeSessionBlock, ScreenTimeTimelineSegment } from "./types";
@@ -898,6 +898,52 @@ describe("trackedSecondsByDay", () => {
       "America/New_York",
     );
     expect(totals).toEqual({ "2026-03-07": 3600, "2026-03-08": 4 * 3600 });
+  });
+});
+
+describe("trend comparisons", () => {
+  const zone = "UTC";
+  const anchor = new Date("2026-09-09T15:00:00.000Z");
+
+  it("covers the previous week and the selected week", () => {
+    const week = periodBounds("week", anchor, zone);
+    const window = trendComparisonWindow(anchor, zone);
+    expect(window.start).toEqual(new Date(week.start.getTime() - 7 * 24 * 60 * 60 * 1000));
+    expect(window.end).toEqual(week.end);
+    expect((window.end.getTime() - window.start.getTime()) / (24 * 60 * 60 * 1000)).toBe(14);
+  });
+
+  it("compares a finished day and the week around a midweek date", () => {
+    const comparisons = trendComparisonsFromDailyTotals({
+      "2026-08-30": 900,
+      "2026-09-06": 1800,
+      "2026-09-08": 3600,
+      "2026-09-09": 7200,
+      "2026-09-10": 100,
+    }, anchor, zone);
+    expect(comparisons.day).toEqual({
+      currentSeconds: 7200,
+      previousSeconds: 3600,
+      deltaSeconds: 3600,
+    });
+    expect(comparisons.week).toEqual({
+      currentSeconds: 1800 + 3600 + 7200 + 100,
+      previousSeconds: 900,
+      deltaSeconds: 1800 + 3600 + 7200 + 100 - 900,
+    });
+  });
+
+  it("treats a missing previous day as no tracked time", () => {
+    const comparisons = trendComparisonsFromDailyTotals({
+      "2026-09-09": 1500,
+    }, anchor, zone);
+    expect(comparisons.day).toEqual({
+      currentSeconds: 1500,
+      previousSeconds: 0,
+      deltaSeconds: 1500,
+    });
+    expect(comparisons.week.currentSeconds).toBe(1500);
+    expect(comparisons.week.previousSeconds).toBe(0);
   });
 });
 

@@ -55,6 +55,15 @@ export function refreshTray(controller: AppController) {
       label: "Open Stop Scrolling",
       click: () => showMainWindow(controller),
     },
+    ...(process.platform === "darwin"
+      ? [{
+          label: controller.settings.desktopWidgetVisible ? "Hide desktop widget" : "Show desktop widget",
+          click: () => {
+            controller.updateSettings({ desktopWidgetVisible: !controller.settings.desktopWidgetVisible });
+            refreshTray(controller);
+          },
+        }]
+      : []),
     ...(pending > 0 || controller.auth.user
       ? [
           {

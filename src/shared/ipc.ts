@@ -27,7 +27,6 @@ export const IPC = {
   commandPalette: "app:command-palette",
   updateSettings: "app:update-settings",
   setTimeZone: "app:set-time-zone",
-  setTypesafeApiKey: "app:set-typesafe-api-key",
   agentReviewAll: "app:agent-review-all",
   agentOverride: "app:agent-override",
   previewBlockScreen: "app:preview-block-screen",
@@ -82,6 +81,10 @@ export const IPC = {
   approveTimesheetEntries: "app:approve-timesheet-entries",
   unapproveTimesheetEntry: "app:unapprove-timesheet-entry",
   reportCrash: "app:report-crash",
+  desktopWidgetState: "app:desktop-widget-state",
+  getDesktopWidgetState: "app:get-desktop-widget-state",
+  openToday: "app:open-today",
+  hideDesktopWidget: "app:hide-desktop-widget",
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

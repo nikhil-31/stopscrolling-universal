@@ -12,10 +12,17 @@ const DAY_FILE = /^(\d{4}-\d{2}-\d{2})\.bin$/;
 
 export class LocalHistoryStore {
   private readonly days = new Map<string, ScreenTimeEntry[]>();
+  /** Day names found on disk, listed once and then kept current by this store. */
+  private listed: Set<string> | null = null;
+  private readonly dirty = new Set<string>();
+  private writeTimer: NodeJS.Timeout | null = null;
+  private prunedOn = "";
 
+  /** `writeDelayMs` coalesces day-file writes; reads always see the latest entries. */
   constructor(
     private readonly directory: string,
     private readonly key: Buffer,
+    private readonly writeDelayMs = 0,
   ) {}
 
   remember(entries: ScreenTimeEntry[]) {
@@ -28,12 +35,34 @@ export class LocalHistoryStore {
       else incoming.set(day, [entry]);
     }
     if (!incoming.size) return;
-    mkdirSync(this.directory, { recursive: true });
     for (const [day, batch] of incoming) {
-      const merged = dedupe([...this.loadDay(day), ...batch]);
+      const existing = this.loadDay(day);
+      const merged = dedupe([...existing, ...batch]);
+      // Range refreshes re-send days that are already stored; skip rewriting those.
+      if (this.listed?.has(day) && sameEntries(existing, merged)) continue;
       this.days.set(day, merged);
-      writeFileSync(this.file(day), encryptAesGcm(Buffer.from(JSON.stringify(merged), "utf8"), this.key));
+      this.dirty.add(day);
     }
+    if (this.writeDelayMs <= 0) this.flush();
+    else if (this.dirty.size && !this.writeTimer) {
+      this.writeTimer = setTimeout(() => this.flush(), this.writeDelayMs);
+      this.writeTimer.unref?.();
+    }
+  }
+
+  /** Writes every changed day file now. */
+  flush() {
+    if (this.writeTimer) clearTimeout(this.writeTimer);
+    this.writeTimer = null;
+    if (!this.dirty.size) return;
+    mkdirSync(this.directory, { recursive: true });
+    const names = this.dayNames();
+    for (const day of this.dirty) {
+      const entries = this.days.get(day) ?? [];
+      writeFileSync(this.file(day), encryptAesGcm(Buffer.from(JSON.stringify(entries), "utf8"), this.key));
+      names.add(day);
+    }
+    this.dirty.clear();
     this.prune();
   }
 
@@ -60,7 +89,7 @@ export class LocalHistoryStore {
     const from = dayKey(new Date(startMs - RANGE_PAD_MS).toISOString());
     const to = dayKey(new Date(endMs).toISOString());
     if (!from || !to) return [];
-    return this.dayNames().filter((day) => day >= from && day <= to).sort();
+    return [...this.dayNames()].filter((day) => day >= from && day <= to).sort();
   }
 
   entriesForDay(day: string): ScreenTimeEntry[] {
@@ -69,7 +98,7 @@ export class LocalHistoryStore {
 
   /** Day files on disk, oldest names included, without decrypting them. */
   listedDays(): string[] {
-    return this.dayNames();
+    return [...this.dayNames()];
   }
 
   /**
@@ -112,22 +141,32 @@ export class LocalHistoryStore {
     }
   }
 
-  private dayNames(): string[] {
-    const names = new Set(this.days.keys());
-    if (existsSync(this.directory)) {
-      for (const file of readdirSync(this.directory)) {
-        const match = DAY_FILE.exec(file);
-        if (match) names.add(match[1]);
+  /** Day files on disk plus days held in memory. The directory is read once. */
+  private dayNames(): Set<string> {
+    if (!this.listed) {
+      this.listed = new Set();
+      if (existsSync(this.directory)) {
+        for (const file of readdirSync(this.directory)) {
+          const match = DAY_FILE.exec(file);
+          if (match) this.listed.add(match[1]);
+        }
       }
     }
-    return [...names];
+    for (const day of this.days.keys()) this.listed.add(day);
+    return this.listed;
   }
 
+  /** Drops day files past retention, at most once per UTC day. */
   private prune() {
+    const today = new Date().toISOString().slice(0, 10);
+    if (this.prunedOn === today) return;
+    this.prunedOn = today;
     const cutoff = new Date(Date.now() - RETENTION_DAYS * DAY_MS).toISOString().slice(0, 10);
-    for (const day of this.dayNames()) {
+    const names = this.dayNames();
+    for (const day of [...names]) {
       if (day >= cutoff) continue;
       this.days.delete(day);
+      names.delete(day);
       const path = this.file(day);
       if (existsSync(path)) unlinkSync(path);
     }
@@ -157,4 +196,8 @@ export function mergeEntries(primary: ScreenTimeEntry[], extra: ScreenTimeEntry[
   for (const entry of extra) byKey.set(persistenceKey(entry), entry);
   for (const entry of primary) byKey.set(persistenceKey(entry), entry);
   return [...byKey.values()].sort((a, b) => Date.parse(a.startTimeUTC) - Date.parse(b.startTimeUTC));
+}
+
+function sameEntries(a: ScreenTimeEntry[], b: ScreenTimeEntry[]) {
+  return a.length === b.length && JSON.stringify(a) === JSON.stringify(b);
 }

@@ -93,6 +93,7 @@ function stageMacNativeDirectory(root) {
     "  <key>com.apple.security.application-groups</key>",
     "  <array>",
     `    <string>${teamIdentifier}.group.com.stopscrolling.shared</string>`,
+    "    <string>group.com.stopscrolling.desktop</string>",
     "  </array>",
     "</dict>",
     "</plist>",

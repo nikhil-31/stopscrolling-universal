@@ -9,6 +9,7 @@ import {
   Sheet,
   Shield,
   SunMedium,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { BrandMark } from "./BrandMark";
@@ -19,6 +20,7 @@ const icons: Record<string, LucideIcon> = {
   calendar: CalendarDays,
   timesheet: Sheet,
   insights: BarChart3,
+  trend: TrendingUp,
   blocking: Shield,
   agent: Bot,
   account: CircleUserRound,

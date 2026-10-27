@@ -13,6 +13,9 @@ interface GoogleTokens {
   expiry: number;
 }
 
+/** Decrypted tokens, read once per path; `connected()` runs on every snapshot. */
+let cachedTokens: { path: string; tokens: GoogleTokens | null } | null = null;
+
 function saveGoogleTokens(tokens: GoogleTokens) {
   mkdirSync(dirname(googleTokensPath()), { recursive: true });
   const payload = JSON.stringify(tokens);
@@ -21,12 +24,20 @@ function saveGoogleTokens(tokens: GoogleTokens) {
   } else {
     writeFileSync(googleTokensPath(), payload, "utf8");
   }
+  cachedTokens = { path: googleTokensPath(), tokens };
 }
 
 function loadGoogleTokens(): GoogleTokens | null {
+  const path = googleTokensPath();
+  if (cachedTokens?.path === path) return cachedTokens.tokens;
+  cachedTokens = { path, tokens: readGoogleTokens(path) };
+  return cachedTokens.tokens;
+}
+
+function readGoogleTokens(path: string): GoogleTokens | null {
   try {
-    if (!existsSync(googleTokensPath())) return null;
-    const raw = readFileSync(googleTokensPath());
+    if (!existsSync(path)) return null;
+    const raw = readFileSync(path);
     const text = safeStorage.isEncryptionAvailable()
       ? safeStorage.decryptString(raw)
       : raw.toString("utf8");
@@ -76,6 +87,7 @@ export class GoogleCalendarService {
 
   disconnect() {
     if (existsSync(googleTokensPath())) unlinkSync(googleTokensPath());
+    cachedTokens = { path: googleTokensPath(), tokens: null };
   }
 
   async connect(clientId: string): Promise<string> {

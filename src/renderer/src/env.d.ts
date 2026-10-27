@@ -29,7 +29,6 @@ interface StopScrollingDesktop {
   setCommandPalette: (open: boolean) => void;
   updateSettings: (patch: Partial<import("@shared/types").AppSettings>) => void;
   setTimeZone: (timeZone: string) => void;
-  setTypesafeApiKey: (key: string) => void;
   agentReviewAll: () => void;
   agentOverride: (key: string, verdict: string) => void;
   previewBlockScreen: () => void;
@@ -97,6 +96,10 @@ interface StopScrollingDesktop {
   approveTimesheetEntries: (blocks: Array<Pick<import("@shared/types").ScreenTimeSessionBlock, "id" | "start" | "end" | "category">>) => void;
   unapproveTimesheetEntry: (blockId: string) => void;
   reportCrash: (report: import("@shared/crash").RendererCrashReport) => void;
+  getDesktopWidgetState: () => Promise<import("@shared/desktop-widget").DesktopWidgetState>;
+  onDesktopWidgetState: (handler: (state: import("@shared/desktop-widget").DesktopWidgetState) => void) => () => void;
+  openToday: () => void;
+  hideDesktopWidget: () => void;
 }
 
 declare global {

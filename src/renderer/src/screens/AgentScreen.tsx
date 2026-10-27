@@ -139,15 +139,19 @@ export function AgentScreen({ state }: { state: AppSnapshot }) {
           {agent.reviewing ? (
             <span className="agent-progress">{agent.progress.done} of {agent.progress.total}</span>
           ) : null}
-          <Button icon={Sparkles} variant="primary" disabled={agent.reviewing} onClick={() => window.stopscrolling.agentReviewAll()}>
+          <Button icon={Sparkles} variant="primary" disabled={agent.reviewing || !agent.ratingAvailable} onClick={() => window.stopscrolling.agentReviewAll()}>
             {agent.reviewing ? "Reviewing…" : "Review now"}
           </Button>
         </div>
       </header>
 
-      {agent.keyConfigured ? null : (
-        <Banner tone="warning" action={<Button size="sm" onClick={() => window.stopscrolling.openSettings()}>Open Settings</Button>}>
-          Add a Typesafe API key in Settings so the agent can rate what you use.
+      {agent.ratingAvailable ? null : state.isAuthenticated ? (
+        <Banner tone="warning">
+          Ratings are unavailable right now. Check that sync is on in Settings; ratings resume when the server is reachable.
+        </Banner>
+      ) : (
+        <Banner tone="warning" action={<Button size="sm" onClick={() => window.stopscrolling.navigate("account")}>Sign in</Button>}>
+          Sign in so the agent can rate what you use. Ratings are saved to your account.
         </Banner>
       )}
 

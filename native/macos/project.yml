@@ -119,6 +119,26 @@ targets:
       GENERATE_INFOPLIST_FILE: true
       SKIP_INSTALL: true
     scheme: {}
+  StopScrollingWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Sources/WidgetCore
+      - path: Sources/Widget
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.stopscrolling.desktop.widget
+      PRODUCT_NAME: StopScrollingWidget
+      INFOPLIST_FILE: Resources/Widget/Info.plist
+      CODE_SIGN_ENTITLEMENTS: Resources/Widget/Widget.entitlements
+      SKIP_INSTALL: true
+      GENERATE_INFOPLIST_FILE: false
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
+      APPLICATION_EXTENSION_API_ONLY: true
+      WRAPPER_EXTENSION: appex
+    scheme: {}
 schemes:
   StopScrollingNative:
     build:
@@ -129,3 +149,4 @@ schemes:
         StopScrollingHostClient: all
         NetworkFilter: all
         EndpointSecurity: all
+        StopScrollingWidget: all

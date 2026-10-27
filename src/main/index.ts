@@ -25,6 +25,25 @@ function applyDevelopmentDockIcon(): void {
 }
 
 const controller = new AppController();
+const WIDGET_URL_SCHEME = "stopscrolling";
+let openFromWidget = false;
+
+if (process.platform === "darwin") {
+  if (process.defaultApp && process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient(WIDGET_URL_SCHEME, process.execPath, [process.argv[1]]);
+  } else {
+    app.setAsDefaultProtocolClient(WIDGET_URL_SCHEME);
+  }
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    if (!url.startsWith(`${WIDGET_URL_SCHEME}:`)) return;
+    if (!app.isReady()) {
+      openFromWidget = true;
+      return;
+    }
+    showMainWindow(controller);
+  });
+}
 
 app.whenReady().then(async () => {
   applyDevelopmentDockIcon();
@@ -34,8 +53,9 @@ app.whenReady().then(async () => {
   installApplicationMenu(controller);
   await controller.boot();
   syncLaunchAtLogin(controller.settings.launchAtLogin);
-  const openedHidden = app.isPackaged && app.getLoginItemSettings().wasOpenedAsHidden;
-  createMainWindow(controller, shouldShowWindowOnLaunch(openedHidden));
+  const openedHidden = app.isPackaged && app.getLoginItemSettings().wasOpenedAsHidden && !openFromWidget;
+  createMainWindow(controller, shouldShowWindowOnLaunch(openedHidden) || openFromWidget);
+  controller.syncDesktopWidget();
   installTray(controller);
   refreshTray(controller);
   controller.onBlockingStateChanged = () => {
@@ -56,6 +76,9 @@ app.whenReady().then(async () => {
     });
   }
 });
+
+// Outbox and history writes are coalesced; make sure the last ones reach disk.
+process.on("exit", () => controller.tracker.flushStores());
 
 app.on("before-quit", (event) => {
   if (controller.hasHelperConfirmedStrictMode()) {

@@ -3,6 +3,10 @@ import { normalizeCapturedUrl } from "@shared/browser";
 
 const UTF8 = 0x08000100;
 const MAX_DEPTH = 18;
+/** Elements visited per walk; large pages otherwise cost thousands of blocking AX calls. */
+const MAX_NODES = 800;
+/** A walk for the same window title is reused this long. */
+const CONTEXT_REUSE_MS = 2_000;
 
 type Pointer = unknown;
 
@@ -24,6 +28,10 @@ interface AxLib {
   stringCString: (cf: Pointer, buffer: Buffer, size: number, encoding: number) => boolean;
   retain: (cf: Pointer) => Pointer;
   release: (cf: Pointer) => void;
+  pidPath: (pid: number, buffer: Buffer, size: number) => number;
+  urlFromPath: (alloc: Pointer | null, path: string, length: number, isDirectory: boolean) => Pointer;
+  createBundle: (alloc: Pointer | null, url: Pointer) => Pointer;
+  bundleIdentifier: (bundle: Pointer) => Pointer;
 }
 
 let lib: AxLib | null = null;
@@ -35,6 +43,7 @@ function loadAx(): AxLib | null {
   try {
     const cf = koffi.load("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation");
     const ax = koffi.load("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices");
+    const proc = koffi.load("/usr/lib/libproc.dylib");
     lib = {
       createApp: ax.func("void *AXUIElementCreateApplication(int pid)"),
       createSystemWide: ax.func("void *AXUIElementCreateSystemWide()"),
@@ -53,6 +62,10 @@ function loadAx(): AxLib | null {
       stringCString: cf.func("bool CFStringGetCString(void *theString, void *buffer, long bufferSize, unsigned int encoding)"),
       retain: cf.func("void *CFRetain(void *cf)"),
       release: cf.func("void CFRelease(void *cf)"),
+      pidPath: proc.func("int proc_pidpath(int pid, void *buffer, uint32_t buffersize)"),
+      urlFromPath: cf.func("void *CFURLCreateFromFileSystemRepresentation(void *alloc, const char *buffer, long bufLen, bool isDirectory)"),
+      createBundle: cf.func("void *CFBundleCreate(void *alloc, void *bundleURL)"),
+      bundleIdentifier: cf.func("void *CFBundleGetIdentifier(void *bundle)"),
     };
     return lib;
   } catch (error) {
@@ -157,6 +170,59 @@ function focusedApplication(api: AxLib) {
   const app = copyValue(api, system, "AXFocusedApplication");
   api.release(system);
   return app;
+}
+
+/** Bundle identifiers by executable path; a reused pid maps to a new path. */
+const bundleIds = new Map<string, string>();
+
+function executablePath(api: AxLib, pid: number) {
+  const buffer = Buffer.alloc(4096);
+  const length = api.pidPath(pid, buffer, buffer.length);
+  return length > 0 ? buffer.toString("utf8", 0, length) : "";
+}
+
+function bundleIdForExecutable(api: AxLib, path: string) {
+  const cached = bundleIds.get(path);
+  if (cached !== undefined) return cached;
+  let id = "";
+  const marker = path.lastIndexOf("/Contents/MacOS/");
+  if (marker > 0) {
+    const bundlePath = path.slice(0, marker);
+    const url = api.urlFromPath(null, bundlePath, Buffer.byteLength(bundlePath), true);
+    if (url) {
+      const bundle = api.createBundle(null, url);
+      if (bundle) {
+        id = readString(api, api.bundleIdentifier(bundle));
+        api.release(bundle);
+      }
+      api.release(url);
+    }
+  }
+  bundleIds.set(path, id);
+  return id;
+}
+
+/** Frontmost app and its focused window title, read without spawning osascript. */
+export function readFrontmostApp(): { appName: string; bundleID: string; title: string; pid: number } | null {
+  const api = loadAx();
+  if (!api) return null;
+  try {
+    const app = focusedApplication(api);
+    if (!app) return null;
+    const slot = [0];
+    const status = api.getPid(app, slot);
+    const pid = status === 0 ? slot[0] ?? 0 : 0;
+    const appName = attrString(api, app, "AXTitle");
+    const window = copyValue(api, app, "AXFocusedWindow");
+    const title = window ? attrString(api, window, "AXTitle") : "";
+    if (window) api.release(window);
+    api.release(app);
+    if (!pid || !appName) return null;
+    const path = executablePath(api, pid);
+    return { appName, bundleID: path ? bundleIdForExecutable(api, path) : "", title, pid };
+  } catch {
+    return null;
+  }
 }
 
 function someChild(api: AxLib, element: Pointer, visit: (child: Pointer) => boolean) {
@@ -524,6 +590,8 @@ export function quitFocusedApp() {
   }
 }
 
+let lastContext: { pid: number; windowTitle: string; at: number; result: { title: string; url: string } } | null = null;
+
 export function readBrowserContext(pid: number): { title: string; url: string } {
   const api = loadAx();
   if (!api || !pid) return { title: "", url: "" };
@@ -543,7 +611,14 @@ export function readBrowserContext(pid: number): { title: string; url: string } 
       return { title: "", url: "" };
     }
     const title = attrString(api, window, "AXTitle");
-    const found = { url: "", title };
+    const now = Date.now();
+    if (lastContext && lastContext.pid === pid && lastContext.windowTitle === title && now - lastContext.at < CONTEXT_REUSE_MS) {
+      if (windowsHandle) api.release(windowsHandle);
+      if (focused) api.release(focused);
+      api.release(app);
+      return lastContext.result;
+    }
+    const found = { url: "", title, budget: MAX_NODES };
     walk(api, window, 0, found);
     if (!found.url) {
       const focusedEl = copyValue(api, app, "AXFocusedUIElement");
@@ -555,17 +630,20 @@ export function readBrowserContext(pid: number): { title: string; url: string } 
     if (windowsHandle) api.release(windowsHandle);
     if (focused) api.release(focused);
     api.release(app);
-    return {
+    const result = {
       title: found.title,
       url: normalizeCapturedUrl(found.url) || (/^(chrome|brave|edge|about):/i.test(found.url) ? found.url : ""),
     };
+    lastContext = { pid, windowTitle: title, at: now, result };
+    return result;
   } catch {
     return { title: "", url: "" };
   }
 }
 
-function walk(api: AxLib, element: Pointer, depth: number, found: { url: string; title: string }) {
-  if (depth > MAX_DEPTH || found.url) return;
+function walk(api: AxLib, element: Pointer, depth: number, found: { url: string; title: string; budget: number }) {
+  if (depth > MAX_DEPTH || found.url || found.budget <= 0) return;
+  found.budget -= 1;
   const role = attrString(api, element, "AXRole");
   if (role === "AXWebArea") {
     const url = attrString(api, element, "AXURL") || attrString(api, element, "AXDocument");

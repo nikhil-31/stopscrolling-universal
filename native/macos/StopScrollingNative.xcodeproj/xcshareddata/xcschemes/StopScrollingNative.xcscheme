@@ -90,6 +90,20 @@
                ReferencedContainer = "container:StopScrollingNative.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "T10W000000000001"
+               BuildableName = "StopScrollingWidget.appex"
+               BlueprintName = "StopScrollingWidget"
+               ReferencedContainer = "container:StopScrollingNative.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction

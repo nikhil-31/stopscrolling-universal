@@ -33,8 +33,6 @@ export class LinuxCollector implements ActivityCollector {
   async sample(): Promise<SampleResult> {
     const fromHypr = await this.hyprland();
     if (fromHypr) return { type: "app", snapshot: fromHypr };
-    const fromGnome = await this.gnome();
-    if (fromGnome) return { type: "app", snapshot: fromGnome };
     const fromX11 = await this.x11();
     if (!fromX11) return { type: "unavailable" };
     return { type: "app", snapshot: fromX11 };
@@ -54,25 +52,6 @@ export class LinuxCollector implements ActivityCollector {
     } catch {
       return null;
     }
-  }
-
-  private async gnome(): Promise<ActivitySnapshot | null> {
-    try {
-      const raw = await run("gdbus", [
-        "call",
-        "--session",
-        "--dest",
-        "org.gnome.Shell",
-        "--object-path",
-        "/org/gnome/Shell/Focusable",
-        "--method",
-        "org.freedesktop.DBus.Peer.Ping",
-      ]);
-      if (!raw) return null;
-    } catch {
-      /* ignore */
-    }
-    return null;
   }
 
   private async x11(): Promise<ActivitySnapshot | null> {

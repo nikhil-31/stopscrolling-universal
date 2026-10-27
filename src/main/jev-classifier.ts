@@ -1,16 +1,10 @@
-import {
-  acceptedJevCategory,
-  JEV_ENDPOINT,
-  jevCategoryRequest,
-  jevClassificationState,
-  parseJevChoice,
-  type JevCategoryCache,
-  type JevCategoryCacheEntry,
-} from "@shared/jev";
-import { loadJevCategoryCache, saveJevCategoryCache } from "./jev-category-cache";
+import { websiteHostname } from "@shared/browser";
+import { acceptedJevCategory, type JevCategoryCache, type JevCategoryCacheEntry } from "@shared/jev";
+import { toCategoryEntry, type JevRatingsApi } from "./jev-ratings";
+import { logObservability } from "./logger";
 
-const DEFAULT_TIMEOUT_MS = 8_000;
-const DEFAULT_COOLDOWN_MS = 5 * 60 * 1000;
+/** A key the server is still classifying is not sent again for this long. */
+const DEFAULT_RESEND_MS = 5 * 60 * 1000;
 
 export interface JevClassifyInput {
   key: string;
@@ -20,23 +14,24 @@ export interface JevClassifyInput {
 }
 
 export interface JevClassifierOptions {
-  getApiKey: () => string | null;
-  cachePath: string;
-  fetch?: (input: string, init?: RequestInit) => Promise<Response>;
+  api: JevRatingsApi;
+  /** Signed in with sync on. Nothing is requested otherwise. */
+  enabled: () => boolean;
   now?: () => Date;
-  timeoutMs?: number;
-  cooldownMs?: number;
+  resendMs?: number;
   onResolved?: (key: string, entry: JevCategoryCacheEntry) => void;
 }
 
+/**
+ * Categories for apps and sites the built-in rules do not know. The server asks Jev
+ * and stores the answer; this keeps the signed-in user's categories in memory only.
+ */
 export class JevClassifier {
-  cache: JevCategoryCache;
+  cache: JevCategoryCache = {};
   onResolved?: (key: string, entry: JevCategoryCacheEntry) => void;
-  private readonly inflight = new Map<string, Promise<void>>();
-  private readonly lastAttempt = new Map<string, number>();
+  private readonly requested = new Map<string, number>();
 
   constructor(private readonly options: JevClassifierOptions) {
-    this.cache = loadJevCategoryCache(options.cachePath);
     this.onResolved = options.onResolved;
   }
 
@@ -45,56 +40,57 @@ export class JevClassifier {
   }
 
   enqueue(input: JevClassifyInput): void {
-    if (!input.key) return;
-    if (this.cache[input.key]) return;
-    if (this.inflight.has(input.key)) return;
-    if (!this.options.getApiKey()) return;
+    if (!input.key || this.cache[input.key] || !this.options.enabled()) return;
     const now = this.timestamp();
-    const previous = this.lastAttempt.get(input.key) ?? 0;
-    if (now - previous < (this.options.cooldownMs ?? DEFAULT_COOLDOWN_MS)) return;
-    const pending = this.classify(input).finally(() => this.inflight.delete(input.key));
-    this.inflight.set(input.key, pending);
+    const sentAt = this.requested.get(input.key);
+    if (sentAt !== undefined && now - sentAt < (this.options.resendMs ?? DEFAULT_RESEND_MS)) return;
+    this.requested.set(input.key, now);
+    void this.classify(input);
+  }
+
+  /** Merges categories read from the server. */
+  hydrate(entries: Record<string, JevCategoryCacheEntry>): void {
+    const keys = Object.keys(entries);
+    if (!keys.length) return;
+    this.cache = { ...this.cache, ...entries };
+    for (const key of keys) this.notify(key, entries[key]);
+  }
+
+  clear(): void {
+    this.cache = {};
+    this.requested.clear();
+  }
+
+  private async classify(input: JevClassifyInput): Promise<void> {
+    try {
+      const response = await this.options.api.requestJevRatings("category", "live", [
+        {
+          key: input.key,
+          breakdown_key: input.key,
+          app_name: input.appName,
+          bundle_id: input.bundleID,
+          host: websiteHostname(input.url),
+          title: "",
+          category: "",
+        },
+      ]);
+      for (const row of response.ratings) {
+        const entry = toCategoryEntry(row);
+        if (!entry) continue;
+        this.cache = { ...this.cache, [row.key]: entry };
+        this.notify(row.key, entry);
+      }
+    } catch (error) {
+      this.requested.delete(input.key);
+      logObservability(`Jev category request failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private notify(key: string, entry: JevCategoryCacheEntry) {
+    if (acceptedJevCategory(entry.category, entry.confidence)) this.onResolved?.(key, entry);
   }
 
   private timestamp() {
     return (this.options.now?.() ?? new Date()).getTime();
-  }
-
-  private async classify(input: JevClassifyInput): Promise<void> {
-    this.lastAttempt.set(input.key, this.timestamp());
-    const apiKey = this.options.getApiKey();
-    if (!apiKey) return;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-    try {
-      const request = this.options.fetch ?? ((url: string, init?: RequestInit) => fetch(url, init));
-      const response = await request(JEV_ENDPOINT, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(jevCategoryRequest(jevClassificationState(input))),
-        signal: controller.signal,
-      });
-      if (!response.ok) return;
-      const parsed = parseJevChoice(await response.json());
-      if (!parsed) return;
-      const entry: JevCategoryCacheEntry = {
-        category: parsed.choice,
-        confidence: parsed.confidence,
-        model: parsed.model,
-        at: new Date(this.timestamp()).toISOString(),
-      };
-      this.cache = { ...this.cache, [input.key]: entry };
-      saveJevCategoryCache(this.options.cachePath, this.cache);
-      if (acceptedJevCategory(entry.category, entry.confidence)) {
-        this.onResolved?.(input.key, entry);
-      }
-    } catch {
-      return;
-    } finally {
-      clearTimeout(timer);
-    }
   }
 }

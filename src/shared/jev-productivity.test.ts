@@ -1,17 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { JEV_MODEL } from "./jev";
 import {
   buildAgentView,
   ensureLiveEntryVisible,
   focusVerdictForSegment,
-  jevProductivityRequest,
   normalizeTitle,
-  parseJevProductivity,
   classifiesFocus,
   productivityBreakdown,
   productivityInputsFromSegments,
   productivityKey,
   stampSegmentVerdicts,
+  verdictForTitle,
   type ProductivityCache,
 } from "./jev-productivity";
 import { snapshotFromEntries } from "./timeline";
@@ -37,7 +35,7 @@ function segment(patch: Partial<ScreenTimeTimelineSegment>): ScreenTimeTimelineS
   };
 }
 
-const meta = { reviewing: false, progress: { done: 0, total: 0 }, keyConfigured: true };
+const meta = { reviewing: false, progress: { done: 0, total: 0 }, ratingAvailable: true };
 
 describe("productivity titles", () => {
   it("normalizes counters, browser suffixes, and whitespace", () => {
@@ -51,35 +49,6 @@ describe("productivity titles", () => {
     expect(productivityKey("app|Slack", "   ")).toBe("app|Slack");
   });
 
-  it("sends the title and category but never the URL path or token", () => {
-    const request = jevProductivityRequest({
-      appName: "Google Chrome",
-      bundleID: "com.google.Chrome",
-      host: "youtube.com",
-      title: "Intro to Rust",
-      category: "Video",
-    });
-    expect(request.model).toBe(JEV_MODEL);
-    expect(request.state).toEqual({
-      appName: "Google Chrome",
-      bundleID: "com.google.Chrome",
-      host: "youtube.com",
-      title: "Intro to Rust",
-      category: "Video",
-    });
-    expect(JSON.stringify(request)).not.toContain("token=secret");
-    expect(request.questions.productivity.type).toBe("choice");
-  });
-
-  it("parses the productivity answer", () => {
-    expect(
-      parseJevProductivity({
-        model: "jev-1.13.0",
-        answers: { productivity: { type: "choice", choice: "Distracting", confidence: 0.91 } },
-      }),
-    ).toEqual({ choice: "Distracting", confidence: 0.91, model: "jev-1.13.0" });
-    expect(parseJevProductivity({ answers: { category: { choice: "Video", confidence: 0.9 } } })).toBeNull();
-  });
 });
 
 describe("live entries", () => {
@@ -234,5 +203,32 @@ describe("agent view", () => {
       meta,
     );
     expect(view.items[0]?.verdict).toBe("Distracting");
+  });
+});
+
+describe("verdictForTitle", () => {
+  const rated = (verdict: "Productive" | "Distracting") =>
+    ({ verdict, confidence: 1, model: "user", at: "2026-09-20T09:00:00.000Z", source: "user" }) as const;
+
+  it("falls back to the most common verdict for the site", () => {
+    const cache: ProductivityCache = {
+      "web|youtube.com#A": rated("Distracting"),
+      "web|youtube.com#B": rated("Distracting"),
+      "web|youtube.com#C": rated("Productive"),
+    };
+    expect(verdictForTitle(cache, "web|youtube.com", "web|youtube.com#New")?.verdict).toBe("Distracting");
+    expect(verdictForTitle(cache, "web|youtube.com", "web|youtube.com#C")?.verdict).toBe("Productive");
+  });
+
+  it("sees new verdicts once the cache object is replaced", () => {
+    const first: ProductivityCache = { "web|example.com#A": rated("Productive") };
+    expect(verdictForTitle(first, "web|example.com", "web|example.com#X")?.verdict).toBe("Productive");
+    const next: ProductivityCache = {
+      ...first,
+      "web|example.com#B": rated("Distracting"),
+      "web|example.com#C": rated("Distracting"),
+    };
+    expect(verdictForTitle(next, "web|example.com", "web|example.com#X")?.verdict).toBe("Distracting");
+    expect(verdictForTitle(first, "web|example.com", "web|example.com#X")?.verdict).toBe("Productive");
   });
 });

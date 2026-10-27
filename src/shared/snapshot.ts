@@ -1,4 +1,5 @@
 import type { CalendarDayStats, CalendarView, CalendarWorkspace } from "./calendar-workspace";
+import type { TrendComparisons } from "./timeline";
 import type { AgentState } from "./jev-productivity";
 import type { TimesheetSummaries } from "./timesheet";
 import type {
@@ -72,6 +73,8 @@ export interface AuthUiState {
   useBackupCode: boolean;
   loading: boolean;
   statusMessage: string;
+  /** `error` when `statusMessage` reports a failed sign-in, sign-up, or verification. */
+  statusTone: "info" | "error";
   user: AuthenticatedUser | null;
   mfaChallenge: MFAPendingResponse | null;
 }
@@ -119,11 +122,12 @@ export interface AppSnapshot {
   timesheetSummaries: TimesheetSummaries;
   calendarDayStats: CalendarDayStats;
   calendarReviewVisible: boolean;
-  typesafeApiKeyConfigured: boolean;
   insightsPeriod: InsightsPeriod;
   insightsAnchor: string;
   insightsTab: InsightsTab;
   insightsDeviceKey: string;
+  /** Day-over-day and week-over-week totals. Null off the Trend screen, and until its fetch has totals. */
+  trendComparisons: TrendComparisons | null;
   snapshot: ScreenTimeSnapshot;
   timelines: ScreenTimeDeviceTimeline[];
   loadingEntries: boolean;

@@ -27,6 +27,7 @@ import type {
   BypassIssueInput,
 } from "@shared/types";
 import type { TimesheetEntryPayload, TimesheetSummaryStatus } from "@shared/timesheet";
+import type { JevRatingKind, JevRatingRequestItem, JevRatingsResponse, JevServerRating } from "./jev-ratings";
 import { logNetwork } from "./logger";
 
 export class APIError extends Error {
@@ -287,6 +288,32 @@ export class StopScrollingAPI {
       { method: "POST", body: JSON.stringify({ entries }) },
     );
     return body.summaries ?? [];
+  }
+
+  async jevRatings(since?: string | null) {
+    const query = since ? `?${new URLSearchParams({ since }).toString()}` : "";
+    return this.request<JevRatingsResponse>(`api/jev/ratings/${query}`);
+  }
+
+  async requestJevRatings(kind: JevRatingKind, priority: "live" | "background", items: JevRatingRequestItem[]) {
+    return this.request<{ enabled: boolean; ratings: JevServerRating[] }>("api/jev/ratings/request/", {
+      method: "POST",
+      body: JSON.stringify({ kind, priority, items }),
+    });
+  }
+
+  async overrideJevVerdict(key: string, breakdownKey: string, verdict: string) {
+    return this.request<JevServerRating>("api/jev/ratings/override/", {
+      method: "PUT",
+      body: JSON.stringify({ key, breakdown_key: breakdownKey, verdict }),
+    });
+  }
+
+  async importJevRatings(payload: { productivity: Record<string, unknown>; categories: Record<string, unknown> }) {
+    return this.request<{ productivity: number; categories: number }>("api/jev/ratings/import/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   }
 
   async sessions(params: {

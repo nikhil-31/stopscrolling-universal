@@ -37,12 +37,12 @@ function snapshot(signedIn: boolean): AppSnapshot {
       timerBonusSeconds: 0,
       timerBonusDay: "",
       agentSendTitles: true,
+      desktopWidgetVisible: true,
     },
     capabilities: { platform: "macos", urlCaptureNote: "Accessibility is required." },
     calendarWorkspace: { labels: [] },
     googleCalendarConnected: false,
     googleCalendarStatus: "Not connected",
-    typesafeApiKeyConfigured: false,
     logs: { network: "/tmp/network.log", observability: "/tmp/observability.log" },
   } as unknown as AppSnapshot;
 }
@@ -52,7 +52,6 @@ beforeEach(() => {
   window.stopscrolling = {
     updateSettings: vi.fn(),
     setTimeZone,
-    setTypesafeApiKey: vi.fn(),
     requestAccessibility: vi.fn(),
     googleConnect: vi.fn(),
     googleDisconnect: vi.fn(),
@@ -84,6 +83,13 @@ describe("Settings time zone", () => {
     render(<SettingsScreen state={snapshot(true)} />);
     await userEvents.selectOptions(screen.getByTestId("settings-clock-format"), "12");
     expect(window.stopscrolling.updateSettings).toHaveBeenCalledWith({ clockFormat: "12" });
+  });
+
+  it("opens and closes the desktop widget", async () => {
+    const userEvents = userEvent.setup();
+    render(<SettingsScreen state={snapshot(true)} />);
+    await userEvents.click(screen.getByTestId("settings-desktop-widget"));
+    expect(window.stopscrolling.updateSettings).toHaveBeenCalledWith({ desktopWidgetVisible: false });
   });
 
   it("toggles whether window titles are sent to Jev", async () => {

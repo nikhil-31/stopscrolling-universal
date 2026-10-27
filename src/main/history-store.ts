@@ -28,6 +28,6 @@ function loadOrCreateKey(): Buffer {
   return key;
 }
 
-export function openLocalHistory() {
-  return new LocalHistoryStore(historyDir(), loadOrCreateKey());
+export function openLocalHistory(writeDelayMs = 0) {
+  return new LocalHistoryStore(historyDir(), loadOrCreateKey(), writeDelayMs);
 }

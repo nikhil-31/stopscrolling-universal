@@ -17,6 +17,7 @@ const subtitles: Record<AppSnapshot["navigation"], string> = {
   calendar: "See where your time went",
   timesheet: "Review and approve your time entries",
   insights: "Patterns across your digital life",
+  trend: "Tracked time across this period",
   blocking: "Sessions, schedules, and lists",
   leaderboard: "A little friendly accountability",
   account: "Profile, sync, and connected devices",
@@ -33,8 +34,8 @@ export function Toolbar({ state }: { state: AppSnapshot }) {
         <div className="toolbar-subtitle">{subtitles[state.navigation]}</div>
       </div>
       <div className="toolbar-center">
-        {state.navigation === "insights" ? (
-          <div className="seg" aria-label="Insights period">
+        {state.navigation === "insights" || state.navigation === "trend" ? (
+          <div className="seg" aria-label="Activity period">
             {(["day", "week", "month", "year"] as const).map((period) => (
               <button
                 key={period}
@@ -47,7 +48,7 @@ export function Toolbar({ state }: { state: AppSnapshot }) {
             ))}
           </div>
         ) : null}
-        {state.navigation === "insights" ? (
+        {state.navigation === "insights" || state.navigation === "trend" ? (
           <DateNav
             label={formatPeriod(state.insightsPeriod, new Date(state.insightsAnchor), timeZone)}
             onPrev={() => shiftPeriod(state, -1)}
@@ -55,7 +56,7 @@ export function Toolbar({ state }: { state: AppSnapshot }) {
             onCurrent={() => window.stopscrolling.setInsightsAnchor(new Date().toISOString())}
           />
         ) : null}
-        {!["today", "timer", "calendar", "insights"].includes(state.navigation) ? (
+        {!["today", "timer", "calendar", "insights", "trend"].includes(state.navigation) ? (
           <span className="timezone">{localTimeZoneLabel(timeZone)}</span>
         ) : null}
       </div>
@@ -63,7 +64,7 @@ export function Toolbar({ state }: { state: AppSnapshot }) {
         <Tooltip label="Refresh timeline">
           <IconButton label="Refresh timeline" icon={RefreshCw} onClick={() => window.stopscrolling.refresh()} />
         </Tooltip>
-        {["today", "timer", "calendar", "insights"].includes(state.navigation)
+        {["today", "timer", "calendar", "insights", "trend"].includes(state.navigation)
           && state.capabilities.platform === "macos"
           && !state.capabilities.accessibilityGranted ? (
           <Tooltip label="Grant Accessibility permission">

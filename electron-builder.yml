@@ -1,5 +1,9 @@
 appId: com.stopscrolling.desktop
 productName: Stop Scrolling
+protocols:
+  - name: Stop Scrolling
+    schemes:
+      - stopscrolling
 directories:
   output: dist
   buildResources: build
@@ -12,6 +16,8 @@ extraResources:
     to: .
   - from: release-native
     to: native
+afterPack: scripts/sign-mac-widget.mjs
+afterSign: scripts/sign-mac-widget.mjs
 mac:
   category: public.app-category.productivity
   target:
@@ -20,6 +26,11 @@ mac:
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+  extraFiles:
+    - from: native/macos/.derivedData/widget-pack/StopScrollingWidget.appex
+      to: PlugIns/StopScrollingWidget.appex
+    - from: native/macos/.derivedData/widget-pack/StopScrollingWidgetReload.dylib
+      to: Frameworks/StopScrollingWidgetReload.dylib
   extendInfo:
     CFBundleName: Stop Scrolling
     CFBundleDisplayName: Stop Scrolling

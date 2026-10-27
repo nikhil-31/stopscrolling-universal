@@ -25,11 +25,13 @@ import { openLocalHistory } from "./history-store";
 import { PendingUploadStore } from "./outbox";
 import { JevClassifier } from "./jev-classifier";
 import { JevProductivityAgent, type ProductivityInput } from "./jev-productivity-agent";
-import { deviceName, devicesCachePath, jevCategoriesPath, jevProductivityPath, localDeviceIdPath } from "./paths";
-import { resolveTypesafeApiKey } from "./typesafe-key-store";
+import { JevRatingsSync } from "./jev-ratings";
+import { deviceName, devicesCachePath, localDeviceIdPath } from "./paths";
 import type { StopScrollingAPI } from "./api-client";
 
 const SAMPLE_MS = 1000;
+/** Closed sessions reach disk within this long; `shutdown()` writes them immediately. */
+const STORE_WRITE_DELAY_MS = 5_000;
 const FLUSH_MS = 60_000;
 const HEARTBEAT_MS = 60_000;
 const FLUSH_THRESHOLD = 20;
@@ -41,8 +43,8 @@ function rangeKey(start: Date, end: Date, timeZone: string) {
 }
 
 export class ScreenTimeTracker {
-  readonly outbox = new PendingUploadStore();
-  readonly history = openLocalHistory();
+  readonly outbox = new PendingUploadStore(STORE_WRITE_DELAY_MS);
+  readonly history = openLocalHistory(STORE_WRITE_DELAY_MS);
   readonly collector: ActivityCollector = createCollector();
   isTracking = false;
   currentContext: ForegroundContext | null = null;
@@ -69,6 +71,8 @@ export class ScreenTimeTracker {
     : null;
 
   private sampleTimer: NodeJS.Timeout | null = null;
+  /** True while a timer-driven sample is still running, so slow collectors never overlap. */
+  private sampling = false;
   private flushTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private keepAliveId: number | null = null;
@@ -81,6 +85,8 @@ export class ScreenTimeTracker {
   private dwellSince = 0;
   readonly classifier: JevClassifier;
   readonly productivityAgent: JevProductivityAgent;
+  /** Loads and refreshes both rating caches from the server. */
+  readonly jevSync: JevRatingsSync;
 
   constructor(
     private readonly api: StopScrollingAPI,
@@ -94,16 +100,16 @@ export class ScreenTimeTracker {
     private readonly onSessionClosed: (entry: ScreenTimeEntry) => void = () => {},
     private readonly onFlushed: () => void = () => {},
   ) {
-    this.classifier = classifier ?? new JevClassifier({
-      getApiKey: resolveTypesafeApiKey,
-      cachePath: jevCategoriesPath(),
-    });
+    // Jev ratings live on the server; without a signed-in account nothing is rated.
+    this.classifier = classifier ?? new JevClassifier({ api, enabled: syncReady });
     this.classifier.onResolved = (key, entry) => this.applyClassification(key, entry);
     this.productivityAgent = productivityAgent ?? new JevProductivityAgent({
-      getApiKey: resolveTypesafeApiKey,
-      cachePath: jevProductivityPath(),
+      api,
+      enabled: syncReady,
+      refresh: () => this.jevSync.pull(),
     });
     this.productivityAgent.onResolved = (_key, entry) => this.applyProductivity(entry);
+    this.jevSync = new JevRatingsSync(api, this.productivityAgent, this.classifier);
     this.pendingUploadCount = this.outbox.count();
     this.history.remember(this.outbox.load());
     this.recoverCheckpoint();
@@ -205,7 +211,7 @@ export class ScreenTimeTracker {
     this.isTracking = true;
     this.keepAliveId = powerSaveBlocker.start("prevent-app-suspension");
     this.sampleTimer = setInterval(() => {
-      void this.sample();
+      void this.sampleOnce();
     }, SAMPLE_MS);
     this.flushTimer = setInterval(() => {
       void this.flushOutbox();
@@ -240,6 +246,24 @@ export class ScreenTimeTracker {
 
   async shutdown() {
     await this.stopTracking();
+    this.flushStores();
+  }
+
+  /** Writes pending outbox and history changes synchronously. Safe to call from `process.on("exit")`. */
+  flushStores() {
+    this.outbox.flush();
+    this.history.flush();
+  }
+
+  /** One timer tick; skipped while the previous tick's sample is still in flight. */
+  async sampleOnce() {
+    if (this.sampling) return;
+    this.sampling = true;
+    try {
+      await this.sample();
+    } finally {
+      this.sampling = false;
+    }
   }
 
   async sample() {
@@ -289,8 +313,10 @@ export class ScreenTimeTracker {
 
   async flushOutbox() {
     if (!this.syncReady()) {
-      this.pendingUploadCount = this.outbox.count();
-      this.onChange();
+      const pending = this.outbox.count();
+      const changed = pending !== this.pendingUploadCount;
+      this.pendingUploadCount = pending;
+      if (changed) this.onChange();
       this.onFlushed();
       return;
     }

@@ -33,6 +33,10 @@ function loadOrCreateKey(): Buffer {
 export class PendingUploadStore {
   private key = loadOrCreateKey();
   private cached: ScreenTimeEntry[] | null = null;
+  private writeTimer: NodeJS.Timeout | null = null;
+
+  /** `writeDelayMs` coalesces disk writes; memory is always current and `flush()` writes now. */
+  constructor(private readonly writeDelayMs = 0) {}
 
   load(): ScreenTimeEntry[] {
     if (this.cached) return this.cached;
@@ -51,11 +55,22 @@ export class PendingUploadStore {
   }
 
   save(entries: ScreenTimeEntry[]) {
+    this.cached = dedupe(entries);
+    if (this.writeDelayMs <= 0) {
+      this.flush();
+      return;
+    }
+    if (this.writeTimer) return;
+    this.writeTimer = setTimeout(() => this.flush(), this.writeDelayMs);
+    this.writeTimer.unref?.();
+  }
+
+  flush() {
+    if (this.writeTimer) clearTimeout(this.writeTimer);
+    this.writeTimer = null;
+    if (!this.cached) return;
     mkdirSync(dirname(outboxPath()), { recursive: true });
-    const unique = dedupe(entries);
-    const blob = encryptAesGcm(Buffer.from(JSON.stringify(unique), "utf8"), this.key);
-    writeFileSync(outboxPath(), blob);
-    this.cached = unique;
+    writeFileSync(outboxPath(), encryptAesGcm(Buffer.from(JSON.stringify(this.cached), "utf8"), this.key));
   }
 
   append(entry: ScreenTimeEntry) {

@@ -90,7 +90,7 @@ export function createMainWindow(controller: AppController, showOnReady = true) 
 }
 
 export function showMainWindow(controller: AppController) {
-  const existing = BrowserWindow.getAllWindows().find((window) => window.getTitle() !== "Settings");
+  const existing = BrowserWindow.getAllWindows().find((window) => window.getTitle() === "Stop Scrolling");
   if (existing) {
     if (existing.isMinimized()) existing.restore();
     existing.show();

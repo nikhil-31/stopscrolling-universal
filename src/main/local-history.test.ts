@@ -71,3 +71,20 @@ describe("local session history", () => {
     expect(merged[0].source).toBe("live");
   });
 });
+
+describe("coalesced history writes", () => {
+  it("keeps sessions in memory until flushed, then writes them once", () => {
+    const { directory, key } = openStore();
+    const history = new LocalHistoryStore(directory, key, 60_000);
+    history.remember([entry("2026-10-08T04:00:00.000Z", "2026-10-08T05:00:00.000Z")]);
+    history.remember([entry("2026-10-08T06:00:00.000Z", "2026-10-08T07:00:00.000Z", "Chrome")]);
+    const range = [new Date("2026-10-07T18:30:00.000Z"), new Date("2026-10-08T18:30:00.000Z")] as const;
+    expect(history.overlapping(...range)).toHaveLength(2);
+    expect(new LocalHistoryStore(directory, key).overlapping(...range)).toHaveLength(0);
+    history.flush();
+    expect(new LocalHistoryStore(directory, key).overlapping(...range).map((item) => item.appName)).toEqual([
+      "Notes",
+      "Chrome",
+    ]);
+  });
+});

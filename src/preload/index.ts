@@ -52,7 +52,6 @@ const api = {
   setCommandPalette: (open: boolean) => ipcRenderer.send(IPC.commandPalette, open),
   updateSettings: (patch: Partial<AppSettings>) => ipcRenderer.send(IPC.updateSettings, patch),
   setTimeZone: (timeZone: string) => ipcRenderer.send(IPC.setTimeZone, timeZone),
-  setTypesafeApiKey: (key: string) => ipcRenderer.send(IPC.setTypesafeApiKey, key),
   agentReviewAll: () => ipcRenderer.send(IPC.agentReviewAll),
   agentOverride: (key: string, verdict: string) => ipcRenderer.send(IPC.agentOverride, { key, verdict }),
   previewBlockScreen: () => ipcRenderer.send(IPC.previewBlockScreen),
@@ -130,6 +129,14 @@ const api = {
   approveTimesheetEntries: (blocks: Array<Pick<ScreenTimeSessionBlock, "id" | "start" | "end" | "category">>) => ipcRenderer.send(IPC.approveTimesheetEntries, blocks),
   unapproveTimesheetEntry: (blockId: string) => ipcRenderer.send(IPC.unapproveTimesheetEntry, blockId),
   reportCrash: (report: RendererCrashReport) => ipcRenderer.send(IPC.reportCrash, report),
+  getDesktopWidgetState: () => ipcRenderer.invoke(IPC.getDesktopWidgetState) as Promise<import("@shared/desktop-widget").DesktopWidgetState>,
+  onDesktopWidgetState: (handler: (state: import("@shared/desktop-widget").DesktopWidgetState) => void) => {
+    const listener = (_event: unknown, state: import("@shared/desktop-widget").DesktopWidgetState) => handler(state);
+    ipcRenderer.on(IPC.desktopWidgetState, listener);
+    return () => ipcRenderer.removeListener(IPC.desktopWidgetState, listener);
+  },
+  openToday: () => ipcRenderer.send(IPC.openToday),
+  hideDesktopWidget: () => ipcRenderer.send(IPC.hideDesktopWidget),
 };
 
 export type StopScrollingDesktop = typeof api;

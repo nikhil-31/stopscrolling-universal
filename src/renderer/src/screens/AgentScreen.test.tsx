@@ -40,7 +40,7 @@ function agentState(patch: Partial<AgentState> = {}): AgentState {
     reviewing: false,
     progress: { done: 0, total: 0 },
     lastReviewAt: null,
-    keyConfigured: true,
+    ratingAvailable: true,
     ...patch,
   };
 }
@@ -57,6 +57,7 @@ beforeEach(() => {
     agentReviewAll: vi.fn(),
     agentOverride: vi.fn(),
     openSettings: vi.fn(),
+    navigate: vi.fn(),
     previewBlockScreen: vi.fn(),
     previewDistractionPopup: vi.fn(),
     updateSettings: vi.fn(),
@@ -122,11 +123,17 @@ describe("AgentScreen", () => {
     expect(window.stopscrolling.updateSettings).toHaveBeenCalledWith({ distractionResponse: "block" });
   });
 
-  it("asks for an API key when none is configured", async () => {
+  it("asks you to sign in when ratings are not available", async () => {
     const user = userEvent.setup();
-    render(<AgentScreen state={state(agentState({ keyConfigured: false, items: [], totals: { Productive: 0, Neutral: 0, Distracting: 0, unrated: 0 } }))} />);
-    expect(screen.getByText(/Add a Typesafe API key/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Open Settings" }));
-    expect(window.stopscrolling.openSettings).toHaveBeenCalledTimes(1);
+    render(<AgentScreen state={state(agentState({ ratingAvailable: false, items: [], totals: { Productive: 0, Neutral: 0, Distracting: 0, unrated: 0 } }))} />);
+    expect(screen.getByText(/Sign in so the agent can rate/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review now" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(window.stopscrolling.navigate).toHaveBeenCalledWith("account");
+  });
+
+  it("explains when a signed-in account cannot get ratings", () => {
+    render(<AgentScreen state={{ ...state(agentState({ ratingAvailable: false })), isAuthenticated: true }} />);
+    expect(screen.getByText(/Ratings are unavailable right now/)).toBeInTheDocument();
   });
 });

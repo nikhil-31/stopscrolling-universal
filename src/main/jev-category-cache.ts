@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import type { JevCategoryCache } from "@shared/jev";
 
 export function loadJevCategoryCache(path: string): JevCategoryCache {
@@ -11,9 +10,4 @@ export function loadJevCategoryCache(path: string): JevCategoryCache {
   } catch {
     return {};
   }
-}
-
-export function saveJevCategoryCache(path: string, cache: JevCategoryCache) {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(cache), "utf8");
 }

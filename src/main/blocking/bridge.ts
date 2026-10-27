@@ -51,7 +51,11 @@ export function createHelperTransport(
   );
 }
 
+/** Minimum gap between repeated "helper unavailable" log lines. */
+const FAILURE_LOG_INTERVAL_MS = 10 * 60_000;
+
 export class BlockingHelperBridge {
+  private lastFailureLoggedAt = -Infinity;
   status: BlockingEnforcementStatus;
   inventory: InstalledApplication[] = [];
   capabilities: BlockingCapabilities;
@@ -96,6 +100,7 @@ export class BlockingHelperBridge {
       if (!(await this.registeredHelper())) return this.status;
       this.status = parseEnforcementStatus(await this.transport.request({ operation: "status" }));
       this.capabilities = { ...this.capabilities, helperAvailable: true, reason: null };
+      this.lastFailureLoggedAt = -Infinity;
       await this.refreshHostSetup();
       return this.status;
     } catch (error) {
@@ -191,6 +196,11 @@ export class BlockingHelperBridge {
       ? { ...this.status, connected: false, lastError: reason, checkedAt: new Date().toISOString() }
       : unavailableStatus(reason);
     this.capabilities = { ...this.capabilities, helperAvailable: false, reason };
+    // The 15 s poll keeps failing while the helper is missing; log the first failure and a
+    // reminder every few minutes instead of two lines per poll.
+    const now = Date.now();
+    if (now - this.lastFailureLoggedAt < FAILURE_LOG_INTERVAL_MS) return;
+    this.lastFailureLoggedAt = now;
     // Do not persist helper messages: OS errors can contain usernames, paths,
     // policy identifiers, or pipe/XPC details.
     logObservability(`blocking_helper_unavailable transport=${this.transport.kind}`);

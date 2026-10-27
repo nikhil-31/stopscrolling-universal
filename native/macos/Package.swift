@@ -11,6 +11,7 @@ let package = Package(
         .executable(name: "StopScrollingHelper", targets: ["PrivilegedHelper"]),
         .library(name: "StopScrollingNetworkFilter", targets: ["NetworkFilterExtension"]),
         .executable(name: "StopScrollingEndpointSecurity", targets: ["EndpointSecurityExtension"]),
+        .library(name: "WidgetCore", targets: ["WidgetCore"]),
     ],
     targets: [
         .target(name: "BlockingCore"),
@@ -49,6 +50,11 @@ let package = Package(
         .testTarget(
             name: "HostClientTests",
             dependencies: ["HostClient"]
+        ),
+        .target(name: "WidgetCore"),
+        .testTarget(
+            name: "WidgetCoreTests",
+            dependencies: ["WidgetCore"]
         ),
     ]
 )

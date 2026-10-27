@@ -1323,6 +1323,61 @@ export function sumTrackedSecondsInBounds(
   return sum;
 }
 
+export interface TrackedTimeComparison {
+  currentSeconds: number;
+  previousSeconds: number;
+  /** Current period minus the previous period. Positive means more tracked time. */
+  deltaSeconds: number;
+}
+
+export interface TrendComparisons {
+  day: TrackedTimeComparison;
+  week: TrackedTimeComparison;
+}
+
+/** Previous week through the end of the selected week. */
+export function trendComparisonWindow(anchor: Date, timeZone = localTimeZone()) {
+  const week = periodBounds("week", anchor, timeZone);
+  return {
+    start: addCalendarDays(week.start, -7, timeZone),
+    end: week.end,
+  };
+}
+
+export function trendComparisonsFromDailyTotals(
+  totals: Record<string, number>,
+  anchor: Date,
+  timeZone = localTimeZone(),
+): TrendComparisons {
+  const day = periodBounds("day", anchor, timeZone);
+  const week = periodBounds("week", anchor, timeZone);
+  return {
+    day: trackedTimeComparison(totals, day, {
+      start: addCalendarDays(day.start, -1, timeZone),
+      end: day.start,
+    }, timeZone),
+    week: trackedTimeComparison(totals, week, {
+      start: addCalendarDays(week.start, -7, timeZone),
+      end: week.start,
+    }, timeZone),
+  };
+}
+
+function trackedTimeComparison(
+  totals: Record<string, number>,
+  current: { start: Date; end: Date },
+  previous: { start: Date; end: Date },
+  timeZone: string,
+): TrackedTimeComparison {
+  const currentSeconds = sumTrackedSecondsInBounds(totals, current, timeZone);
+  const previousSeconds = sumTrackedSecondsInBounds(totals, previous, timeZone);
+  return {
+    currentSeconds,
+    previousSeconds,
+    deltaSeconds: currentSeconds - previousSeconds,
+  };
+}
+
 export function clipSegmentsToBounds(
   segments: ScreenTimeTimelineSegment[],
   bounds: { start: Date; end: Date },

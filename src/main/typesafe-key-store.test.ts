@@ -1,58 +1,30 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { typesafeKeyPath } from "./paths";
-import {
-  clearTypesafeApiKey,
-  hasTypesafeApiKey,
-  loadTypesafeApiKey,
-  resolveTypesafeApiKey,
-  saveTypesafeApiKey,
-} from "./typesafe-key-store";
-
-vi.mock("electron", () => ({
-  safeStorage: {
-    isEncryptionAvailable: () => false,
-    encryptString: (value: string) => Buffer.from(value),
-    decryptString: (value: Buffer) => value.toString("utf8"),
-  },
-}));
+import { clearTypesafeApiKey } from "./typesafe-key-store";
 
 vi.mock("./paths", () => ({
   typesafeKeyPath: vi.fn(),
 }));
 
-describe("Typesafe API key store", () => {
+describe("old Typesafe API key", () => {
   const dirs: string[] = [];
-  const previous = process.env.TYPESAFE_API_KEY;
-
-  beforeEach(() => {
-    const dir = mkdtempSync(join(tmpdir(), "typesafe-key-"));
-    dirs.push(dir);
-    vi.mocked(typesafeKeyPath).mockReturnValue(join(dir, "typesafe-api-key.dat"));
-    delete process.env.TYPESAFE_API_KEY;
-  });
 
   afterEach(() => {
-    clearTypesafeApiKey();
     for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
     dirs.length = 0;
-    if (previous === undefined) delete process.env.TYPESAFE_API_KEY;
-    else process.env.TYPESAFE_API_KEY = previous;
   });
 
-  it("persists and clears the key without using app settings", () => {
-    expect(hasTypesafeApiKey()).toBe(false);
-    saveTypesafeApiKey("  secret-key  ");
-    expect(loadTypesafeApiKey()).toBe("secret-key");
-    expect(hasTypesafeApiKey()).toBe(true);
+  it("removes a key an older version stored", () => {
+    const dir = mkdtempSync(join(tmpdir(), "typesafe-key-"));
+    dirs.push(dir);
+    const path = join(dir, "typesafe-api-key.dat");
+    vi.mocked(typesafeKeyPath).mockReturnValue(path);
+    writeFileSync(path, "secret-key");
     clearTypesafeApiKey();
-    expect(loadTypesafeApiKey()).toBeNull();
-  });
-
-  it("falls back to TYPESAFE_API_KEY when nothing is stored", () => {
-    process.env.TYPESAFE_API_KEY = "env-key";
-    expect(resolveTypesafeApiKey()).toBe("env-key");
+    expect(existsSync(path)).toBe(false);
+    expect(() => clearTypesafeApiKey()).not.toThrow();
   });
 });

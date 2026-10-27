@@ -6,7 +6,7 @@ import type { AppSettings, InsightsPeriod, LeaderboardPeriod, NavigationItem, To
 import type { CalendarView } from "@shared/calendar-workspace";
 import type { AppController } from "./app-controller";
 import { refreshTray } from "./tray";
-import { createSettingsWindow } from "./windows";
+import { createSettingsWindow, showMainWindow } from "./windows";
 import { recordRendererCrash } from "./crash-reporting";
 import { quitApp } from "./lifecycle";
 
@@ -125,6 +125,7 @@ export function installIpc(controller: AppController) {
   });
   ipcMain.on(IPC.updateSettings, (_event, patch: Partial<AppSettings>) => {
     controller.updateSettings(patch);
+    if (patch.desktopWidgetVisible !== undefined) refreshTray(controller);
   });
   ipcMain.on(IPC.agentReviewAll, () => {
     controller.reviewAgent();
@@ -141,8 +142,14 @@ export function installIpc(controller: AppController) {
     if (typeof payload?.label !== "string") return;
     controller.previewDistractionPopup(payload.label, typeof payload.site === "string" ? payload.site : "");
   });
-  ipcMain.on(IPC.setTypesafeApiKey, (_event, key: string) => {
-    controller.setTypesafeApiKey(typeof key === "string" ? key : "");
+  ipcMain.handle(IPC.getDesktopWidgetState, () => controller.desktopWidgetState());
+  ipcMain.on(IPC.openToday, () => {
+    showMainWindow(controller);
+    controller.selectNavigation("today");
+  });
+  ipcMain.on(IPC.hideDesktopWidget, () => {
+    controller.updateSettings({ desktopWidgetVisible: false });
+    refreshTray(controller);
   });
   ipcMain.on(IPC.setDeviceVisible, (_event, payload: { key: string; visible: boolean }) => {
     controller.setDeviceVisible(payload.key, payload.visible);
@@ -406,6 +413,7 @@ export function installApplicationMenu(controller: AppController) {
         { label: "Today", accelerator: "CmdOrCtrl+1", click: () => controller.selectNavigation("today") },
         { label: "Calendar", accelerator: "CmdOrCtrl+2", click: () => controller.selectNavigation("calendar") },
         { label: "Insights", accelerator: "CmdOrCtrl+3", click: () => controller.selectNavigation("insights") },
+        { label: "Trend", accelerator: "CmdOrCtrl+6", click: () => controller.selectNavigation("trend") },
         { label: "Blocking", accelerator: "CmdOrCtrl+4", click: () => controller.selectNavigation("blocking") },
         { label: "Account", accelerator: "CmdOrCtrl+5", click: () => controller.selectNavigation("account") },
         { type: "separator" },

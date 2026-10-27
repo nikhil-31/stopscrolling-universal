@@ -28,6 +28,11 @@ const desktop = {
   setDeviceVisible: vi.fn(),
   setDeviceNickname: vi.fn(),
   deleteDevice: vi.fn(),
+  authLogin: vi.fn(),
+  authRegister: vi.fn(),
+  authVerifyMfa: vi.fn(),
+  authSetForm: vi.fn(),
+  authLogout: vi.fn(),
   getBlockScreens: vi.fn().mockResolvedValue({
     default: { imageFile: "", header: "", detail: "", imageUrl: "" },
     sessions: {},
@@ -42,6 +47,8 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
     currentContext: null,
     statusMessage: "Ready",
     inspector: { kind: "none", segment: null, block: null, schedule: null },
+    settings: { syncEnabled: true },
+    pendingUploadCount: 0,
     ...patch,
   } as AppSnapshot;
 }
@@ -334,6 +341,7 @@ describe("account states", () => {
     useBackupCode: false,
     loading: false,
     statusMessage: "",
+    statusTone: "info" as const,
   };
 
   it("renders labeled sign-in controls", () => {
@@ -341,6 +349,34 @@ describe("account states", () => {
     expect(screen.getByRole("heading", { name: "Welcome to Stop Scrolling" })).toBeVisible();
     expect(screen.getByLabelText("Email address")).toBeVisible();
     expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
+  });
+
+  it("submits sign-in when Enter is pressed in the form", async () => {
+    const user = userEvent.setup();
+    render(<AccountScreen state={snapshot({ auth: { ...auth, email: "a@b.co", password: "hunter22" } } as Partial<AppSnapshot>)} />);
+    await user.click(screen.getByLabelText("Password"));
+    await user.keyboard("{Enter}");
+    expect(desktop.authLogin).toHaveBeenCalled();
+  });
+
+  it("shows sign-in failures as an alert and neutral hints as status", () => {
+    const { rerender } = render(
+      <AccountScreen state={snapshot({ auth: { ...auth, statusMessage: "Wrong password.", statusTone: "error" } } as Partial<AppSnapshot>)} />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Wrong password.");
+    rerender(<AccountScreen state={snapshot({ auth: { ...auth, statusMessage: "Sign in to sync." } } as Partial<AppSnapshot>)} />);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("Sign in to sync.");
+  });
+
+  it("flags a confirm password that does not match", () => {
+    render(
+      <AccountScreen
+        state={snapshot({ auth: { ...auth, formMode: "signUp", password: "hunter22", confirmPassword: "hunter2" } } as Partial<AppSnapshot>)}
+      />,
+    );
+    expect(screen.getByLabelText(/^Confirm password/)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("Passwords don’t match yet")).toBeVisible();
   });
 
   it("renders profile and device visibility controls when signed in", () => {
@@ -420,7 +456,7 @@ describe("account states", () => {
       />,
     );
     expect(screen.getByText("Work Mac")).toBeVisible();
-    expect(screen.getByText(/Studio Mac · macos · 4 sessions/)).toBeVisible();
+    expect(screen.getByText(/Studio Mac · macOS · 4 sessions/)).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Rename Work Mac" }));
     const field = screen.getByLabelText("Nickname");
     await user.clear(field);
