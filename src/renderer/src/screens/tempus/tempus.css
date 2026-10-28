@@ -1,0 +1,155 @@
+.tempus-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(100%, 760px);
+  margin: 0 auto;
+}
+.tempus-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tempus-header .tabs { margin: 0; }
+.tempus-header-actions { display: flex; gap: 4px; }
+.tempus-muted { color: var(--text-secondary); font-size: 12px; }
+.tempus-error { margin: 0; color: var(--danger); font-size: 13px; }
+
+.tempus-timeline { display: flex; flex-direction: column; gap: 10px; min-height: 240px; }
+.tempus-bubble {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.tempus-bubble-user {
+  align-self: flex-end;
+  white-space: pre-wrap;
+  color: var(--on-brand);
+  background: var(--brand);
+  border-bottom-right-radius: var(--radius-xs);
+}
+.tempus-bubble-assistant {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: var(--radius-xs);
+}
+.tempus-tool { align-self: flex-start; }
+.tempus-event { align-self: center; margin: 0; color: var(--text-tertiary); font-size: 12px; text-align: center; }
+.tempus-thinking { display: flex; align-items: center; gap: 8px; align-self: flex-start; color: var(--text-secondary); font-size: 13px; }
+.tempus-thinking .spinner { width: 14px; height: 14px; }
+
+.tempus-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.tempus-chip-button { cursor: pointer; font: inherit; font-size: 13px; color: var(--text); }
+.tempus-chip-button:hover:not(:disabled) { background: var(--surface-hover); }
+.tempus-chip-button:disabled { cursor: default; opacity: 0.5; }
+.tempus-suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; }
+
+.tempus-composer {
+  position: sticky;
+  bottom: -48px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+}
+.tempus-composer textarea {
+  flex: 1;
+  min-height: 22px;
+  max-height: 160px;
+  padding: 6px 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  field-sizing: content;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+.tempus-send { flex: 0 0 auto; }
+
+.tempus-markdown { display: flex; flex-direction: column; gap: 6px; }
+.tempus-markdown p { margin: 0; }
+.tempus-markdown hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
+.tempus-markdown code { padding: 1px 4px; border-radius: 4px; background: var(--surface-subtle); font-size: 0.92em; }
+.tempus-md-heading { font-weight: 650; }
+.tempus-md-h1 { font-size: 17px; }
+.tempus-md-h2 { font-size: 15px; }
+.tempus-md-item { display: flex; gap: 8px; }
+.tempus-md-marker { flex: 0 0 auto; min-width: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.tempus-md-table { overflow-x: auto; }
+.tempus-md-table table { border-collapse: collapse; font-size: 13px; }
+.tempus-md-table th, .tempus-md-table td { padding: 4px 10px 4px 0; border-bottom: 1px solid var(--line); text-align: left; }
+.tempus-md-table th { color: var(--text-secondary); font-weight: 600; }
+
+.tempus-usage, .tempus-action, .tempus-digest {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.tempus-usage { align-self: stretch; }
+.tempus-digest .tempus-usage { background: var(--surface-subtle); }
+.tempus-usage-header { display: grid; grid-template-columns: 1fr auto; align-items: baseline; column-gap: 12px; }
+.tempus-usage-eyebrow { grid-column: 1 / -1; color: var(--text-tertiary); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.tempus-usage-total { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.tempus-usage-bars { display: flex; align-items: flex-end; gap: 3px; height: 96px; padding-bottom: 16px; overflow-x: auto; }
+.tempus-usage-bar { position: relative; display: flex; flex: 1 0 8px; align-items: flex-end; height: 100%; }
+.tempus-usage-bars.is-daily .tempus-usage-bar { flex-basis: 28px; }
+.tempus-usage-bar-fill { width: 100%; min-height: 2px; border-radius: 3px 3px 0 0; background: var(--brand); opacity: 0.85; }
+.tempus-usage-bar-label { position: absolute; bottom: -16px; left: 0; color: var(--text-tertiary); font-size: 10px; white-space: nowrap; }
+.tempus-usage-categories { display: flex; flex-wrap: wrap; gap: 6px; }
+.tempus-usage-apps { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.tempus-usage-apps li { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
+.tempus-usage-app-dot { width: 8px; height: 8px; margin: 0 3px; border-radius: 50%; background: var(--text-tertiary); }
+.tempus-usage-app-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.tempus-usage-app-time { font-variant-numeric: tabular-nums; color: var(--text); }
+.tempus-usage-app-share { min-width: 36px; text-align: right; }
+
+.tempus-action { align-self: stretch; border-color: var(--line-strong); }
+.tempus-action p { margin: 0; font-size: 14px; }
+.tempus-action-header { display: flex; align-items: center; gap: 8px; }
+.tempus-action-header strong { flex: 1; font-size: 13px; }
+.tempus-action-buttons { display: flex; justify-content: flex-end; gap: 8px; }
+
+.tempus-digests { display: flex; flex-direction: column; gap: 14px; }
+.tempus-digest-header { display: flex; align-items: center; gap: 10px; }
+.tempus-digest-header strong { flex: 1; }
+.tempus-digest > .tempus-muted { margin: 0; font-size: 13px; }
+
+.tempus-history ul { display: flex; flex-direction: column; gap: 2px; margin: 12px 0 0; padding: 0; list-style: none; }
+.tempus-history button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tempus-history button:hover, .tempus-history button.is-current { background: var(--surface-hover); }
+.tempus-history button .tempus-muted { grid-column: 2; }
+.tempus-history-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }

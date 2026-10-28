@@ -6,6 +6,7 @@ import {
   Bot,
   CalendarDays,
   CircleUserRound,
+  Hourglass,
   Command,
   Play,
   RefreshCw,
@@ -34,6 +35,7 @@ const navIcons: Record<string, LucideIcon> = {
   trend: TrendingUp,
   blocking: Shield,
   agent: Bot,
+  tempus: Hourglass,
   account: CircleUserRound,
 };
 

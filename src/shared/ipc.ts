@@ -89,6 +89,13 @@ export const IPC = {
   getDesktopWidgetState: "app:get-desktop-widget-state",
   openToday: "app:open-today",
   hideDesktopWidget: "app:hide-desktop-widget",
+  tempusConversations: "app:tempus-conversations",
+  tempusConversation: "app:tempus-conversation",
+  tempusSend: "app:tempus-send",
+  tempusPlan: "app:tempus-plan",
+  tempusResolveAction: "app:tempus-resolve-action",
+  tempusDigests: "app:tempus-digests",
+  tempusRequestDigest: "app:tempus-request-digest",
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

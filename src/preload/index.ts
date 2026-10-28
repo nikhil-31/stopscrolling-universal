@@ -9,6 +9,15 @@ import type {
   CalendarView,
 } from "@shared/calendar-workspace";
 import type {
+  TempusAction,
+  TempusConversation,
+  TempusConversationDetail,
+  TempusDigest,
+  TempusPeriod,
+  TempusResult,
+  TempusTurn,
+} from "@shared/tempus";
+import type {
   AppSettings,
   InsightsPeriod,
   InsightsTab,
@@ -143,6 +152,16 @@ const api = {
   },
   openToday: () => ipcRenderer.send(IPC.openToday),
   hideDesktopWidget: () => ipcRenderer.send(IPC.hideDesktopWidget),
+  tempusConversations: () => ipcRenderer.invoke(IPC.tempusConversations) as Promise<TempusResult<TempusConversation[]>>,
+  tempusConversation: (id: string) => ipcRenderer.invoke(IPC.tempusConversation, id) as Promise<TempusResult<TempusConversationDetail>>,
+  tempusSend: (conversationId: string | null, content: string) =>
+    ipcRenderer.invoke(IPC.tempusSend, { conversationId, content }) as Promise<TempusResult<TempusTurn>>,
+  tempusPlan: (date?: string) => ipcRenderer.invoke(IPC.tempusPlan, date) as Promise<TempusResult<TempusTurn>>,
+  tempusResolveAction: (id: string, decision: "confirm" | "reject") =>
+    ipcRenderer.invoke(IPC.tempusResolveAction, { id, decision }) as Promise<TempusResult<TempusAction>>,
+  tempusDigests: (period: TempusPeriod) => ipcRenderer.invoke(IPC.tempusDigests, period) as Promise<TempusResult<TempusDigest[]>>,
+  tempusRequestDigest: (period: TempusPeriod) =>
+    ipcRenderer.invoke(IPC.tempusRequestDigest, period) as Promise<TempusResult<TempusDigest>>,
 };
 
 export type StopScrollingDesktop = typeof api;

@@ -105,6 +105,14 @@ interface StopScrollingDesktop {
   onDesktopWidgetState: (handler: (state: import("@shared/desktop-widget").DesktopWidgetState) => void) => () => void;
   openToday: () => void;
   hideDesktopWidget: () => void;
+  tempusConversations: () => Promise<import("@shared/tempus").TempusResult<import("@shared/tempus").TempusConversation[]>>;
+  tempusConversation: (id: string) => Promise<import("@shared/tempus").TempusResult<import("@shared/tempus").TempusConversationDetail>>;
+  /** Sends to the conversation, or to a new one when `conversationId` is null. */
+  tempusSend: (conversationId: string | null, content: string) => Promise<import("@shared/tempus").TempusResult<import("@shared/tempus").TempusTurn>>;
+  tempusPlan: (date?: string) => Promise<import("@shared/tempus").TempusResult<import("@shared/tempus").TempusTurn>>;
+  tempusResolveAction: (id: string, decision: "confirm" | "reject") => Promise<import("@shared/tempus").TempusResult<import("@shared/tempus").TempusAction>>;
+  tempusDigests: (period: import("@shared/tempus").TempusPeriod) => Promise<import("@shared/tempus").TempusResult<import("@shared/tempus").TempusDigest[]>>;
+  tempusRequestDigest: (period: import("@shared/tempus").TempusPeriod) => Promise<import("@shared/tempus").TempusResult<import("@shared/tempus").TempusDigest>>;
 }
 
 declare global {

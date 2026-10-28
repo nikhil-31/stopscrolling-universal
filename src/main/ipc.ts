@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { IPC } from "@shared/ipc";
 import type { AppSettings, CalendarProvider, InsightsPeriod, LeaderboardPeriod, NavigationItem, TodayPeriod, TodayTab, BlocklistWritePayload, BlocklistUpdatePayload, BlockingScheduleUpdatePayload, BlockingScheduleWritePayload } from "@shared/types";
 import type { CalendarView } from "@shared/calendar-workspace";
+import type { TempusPeriod } from "@shared/tempus";
 import type { AppController } from "./app-controller";
 import { refreshTray } from "./tray";
 import { createSettingsWindow, showMainWindow } from "./windows";
@@ -322,6 +323,34 @@ export function installIpc(controller: AppController) {
       return controller.setCalendarSelected(payload);
     },
   );
+  ipcMain.handle(IPC.tempusConversations, (event) => {
+    assertTrustedRenderer(event);
+    return controller.tempusConversations();
+  });
+  ipcMain.handle(IPC.tempusConversation, (event, id: string) => {
+    assertTrustedRenderer(event);
+    return controller.tempusConversation(String(id));
+  });
+  ipcMain.handle(IPC.tempusSend, (event, payload: { conversationId: string | null; content: string }) => {
+    assertTrustedRenderer(event);
+    return controller.tempusSend(payload.conversationId ? String(payload.conversationId) : null, String(payload.content));
+  });
+  ipcMain.handle(IPC.tempusPlan, (event, date?: string) => {
+    assertTrustedRenderer(event);
+    return controller.tempusPlan(typeof date === "string" ? date : undefined);
+  });
+  ipcMain.handle(IPC.tempusResolveAction, (event, payload: { id: string; decision: "confirm" | "reject" }) => {
+    assertTrustedRenderer(event);
+    return controller.tempusResolveAction(String(payload.id), payload.decision === "confirm" ? "confirm" : "reject");
+  });
+  ipcMain.handle(IPC.tempusDigests, (event, period: TempusPeriod) => {
+    assertTrustedRenderer(event);
+    return controller.tempusDigests(period === "weekly" ? "weekly" : "daily");
+  });
+  ipcMain.handle(IPC.tempusRequestDigest, (event, period: TempusPeriod) => {
+    assertTrustedRenderer(event);
+    return controller.tempusRequestDigest(period === "weekly" ? "weekly" : "daily");
+  });
   ipcMain.on(IPC.linkRiot, (_event, riotId: string) => {
     void controller.gameSync.linkRiot(riotId);
   });
@@ -459,6 +488,8 @@ export function installApplicationMenu(controller: AppController) {
         { label: "Trend", accelerator: "CmdOrCtrl+6", click: () => controller.selectNavigation("trend") },
         { label: "Blocking", accelerator: "CmdOrCtrl+4", click: () => controller.selectNavigation("blocking") },
         { label: "Account", accelerator: "CmdOrCtrl+5", click: () => controller.selectNavigation("account") },
+        { label: "Agent", accelerator: "CmdOrCtrl+7", click: () => controller.selectNavigation("agent") },
+        { label: "Tempus", accelerator: "CmdOrCtrl+8", click: () => controller.selectNavigation("tempus") },
         { type: "separator" },
         {
           label: "Command Palette…",

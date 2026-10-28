@@ -31,9 +31,20 @@ import type {
   CalendarSourceRow,
 } from "@shared/types";
 import type { CalendarWorkspace } from "@shared/calendar-workspace";
+import type {
+  TempusAction,
+  TempusConversation,
+  TempusConversationDetail,
+  TempusDigest,
+  TempusPeriod,
+  TempusTurn,
+} from "@shared/tempus";
 import type { TimesheetEntryPayload, TimesheetSummaryStatus } from "@shared/timesheet";
 import type { JevRatingKind, JevRatingRequestItem, JevRatingsResponse, JevServerRating } from "./jev-ratings";
 import { logNetwork } from "./logger";
+
+/** Matches the mobile apps: a Tempus turn may run several tool rounds on the server. */
+const TEMPUS_TURN_TIMEOUT_MS = 180_000;
 
 export class APIError extends Error {
   constructor(
@@ -368,6 +379,54 @@ export class StopScrollingAPI {
     return this.request<{ productivity: number; categories: number }>("api/jev/ratings/import/", {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  }
+
+  async tempusConversations() {
+    return asList(await this.request<TempusConversation[]>("api/tempus/conversations/"));
+  }
+
+  async tempusConversation(id: string) {
+    return this.request<TempusConversationDetail>(`api/tempus/conversations/${encodeURIComponent(id)}/`);
+  }
+
+  async createTempusConversation(title = "") {
+    return this.request<TempusConversation>("api/tempus/conversations/", {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    });
+  }
+
+  /** One agent turn; the server runs its tools before answering, which can take minutes. */
+  async sendTempusMessage(conversationId: string, content: string) {
+    return this.request<TempusTurn>(`api/tempus/conversations/${encodeURIComponent(conversationId)}/messages/`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+      signal: AbortSignal.timeout(TEMPUS_TURN_TIMEOUT_MS),
+    });
+  }
+
+  /** Starts a new plan conversation for `date` (the user's today when omitted). */
+  async planTempusDay(date?: string) {
+    return this.request<TempusTurn>("api/tempus/plan/", {
+      method: "POST",
+      body: JSON.stringify(date ? { date } : {}),
+      signal: AbortSignal.timeout(TEMPUS_TURN_TIMEOUT_MS),
+    });
+  }
+
+  async resolveTempusAction(id: string, decision: "confirm" | "reject") {
+    return this.request<TempusAction>(`api/tempus/actions/${encodeURIComponent(id)}/${decision}/`, { method: "POST" });
+  }
+
+  async tempusDigests(period: TempusPeriod) {
+    return asList(await this.request<TempusDigest[]>(`api/tempus/digests/?${new URLSearchParams({ period }).toString()}`));
+  }
+
+  async requestTempusDigest(period: TempusPeriod) {
+    return this.request<TempusDigest>("api/tempus/digests/request/", {
+      method: "POST",
+      body: JSON.stringify({ period }),
     });
   }
 

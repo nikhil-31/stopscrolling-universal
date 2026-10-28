@@ -6,6 +6,7 @@ import {
   Bot,
   CalendarDays,
   CircleUserRound,
+  Hourglass,
   Sheet,
   Shield,
   SunMedium,
@@ -23,6 +24,7 @@ const icons: Record<string, LucideIcon> = {
   trend: TrendingUp,
   blocking: Shield,
   agent: Bot,
+  tempus: Hourglass,
   account: CircleUserRound,
 };
 

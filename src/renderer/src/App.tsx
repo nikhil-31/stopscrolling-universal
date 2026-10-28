@@ -18,6 +18,7 @@ import { LeaderboardScreen } from "./screens/LeaderboardScreen";
 import { TimerScreen } from "./screens/TimerScreen";
 import { TodayScreen } from "./screens/TodayScreen";
 import { TrendScreen } from "./screens/TrendScreen";
+import { TempusScreen } from "./screens/tempus/TempusScreen";
 
 const InsightsScreen = lazy(() => import("./screens/InsightsScreen").then((module) => ({ default: module.InsightsScreen })));
 
@@ -84,6 +85,7 @@ export function App() {
               {state.navigation === "leaderboard" && <LeaderboardScreen state={state} />}
               {state.navigation === "account" && <AccountScreen state={state} />}
               {state.navigation === "agent" && <AgentScreen state={state} />}
+              {state.navigation === "tempus" && <TempusScreen state={state} />}
             </div>
           </main>
           <Inspector state={state} onEditSchedule={setEditingSchedule} />

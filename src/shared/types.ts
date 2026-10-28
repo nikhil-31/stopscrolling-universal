@@ -1,4 +1,4 @@
-export type NavigationItem = "today" | "timer" | "calendar" | "timesheet" | "insights" | "trend" | "blocking" | "leaderboard" | "account" | "agent";
+export type NavigationItem = "today" | "timer" | "calendar" | "timesheet" | "insights" | "trend" | "blocking" | "leaderboard" | "account" | "agent" | "tempus";
 
 export type InsightsPeriod = "day" | "week" | "month" | "year";
 export type InsightsTab = "overview" | "sessions";

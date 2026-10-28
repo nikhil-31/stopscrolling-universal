@@ -22,6 +22,7 @@ const subtitles: Record<AppSnapshot["navigation"], string> = {
   leaderboard: "A little friendly accountability",
   account: "Profile, sync, and connected devices",
   agent: "Productive, neutral, or distracting",
+  tempus: "Ask where your time goes",
 };
 
 export function Toolbar({ state }: { state: AppSnapshot }) {

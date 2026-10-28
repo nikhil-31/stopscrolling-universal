@@ -115,7 +115,8 @@ import type {
   BlockingPolicyResponse,
   BypassRedeemInput,
 } from "@shared/types";
-import { isMfa, StopScrollingAPI } from "./api-client";
+import { APIError, isMfa, StopScrollingAPI } from "./api-client";
+import type { TempusPeriod, TempusResult } from "@shared/tempus";
 import { BlockingHelperBridge } from "./blocking/bridge";
 import { LocalEnforcer } from "./blocking/local-enforcer";
 import { loadCalendarWorkspace, saveCalendarWorkspace } from "./calendar-workspace-store";
@@ -1222,6 +1223,56 @@ export class AppController {
     if (!existsSync(legacyGoogleTokensPath())) return;
     rmSync(legacyGoogleTokensPath(), { force: true });
     this.statusMessage = "Google Calendar now links through your Stop Scrolling account. Reconnect it in Settings › Calendar.";
+  }
+
+  tempusConversations() {
+    return this.tempusCall(() => this.api.tempusConversations());
+  }
+
+  tempusConversation(id: string) {
+    return this.tempusCall(() => this.api.tempusConversation(id));
+  }
+
+  /** Sends to `conversationId`, or to a new conversation when it is null. */
+  tempusSend(conversationId: string | null, content: string) {
+    return this.tempusCall(async () => {
+      const id = conversationId ?? (await this.api.createTempusConversation()).id;
+      return this.api.sendTempusMessage(id, content);
+    });
+  }
+
+  tempusPlan(date?: string) {
+    return this.tempusCall(() => this.api.planTempusDay(date));
+  }
+
+  tempusResolveAction(id: string, decision: "confirm" | "reject") {
+    return this.tempusCall(async () => {
+      const action = await this.api.resolveTempusAction(id, decision);
+      // Confirmed changes are schedules and blocklists the Blocking screen shows.
+      if (action.status === "applied") void this.refreshBlocking();
+      return action;
+    });
+  }
+
+  tempusDigests(period: TempusPeriod) {
+    return this.tempusCall(() => this.api.tempusDigests(period));
+  }
+
+  tempusRequestDigest(period: TempusPeriod) {
+    return this.tempusCall(() => this.api.requestTempusDigest(period));
+  }
+
+  private async tempusCall<T>(run: () => Promise<T>): Promise<TempusResult<T>> {
+    if (!this.auth.user) return { ok: false, status: 401, message: "Sign in to use Tempus." };
+    try {
+      return { ok: true, data: await run() };
+    } catch (error) {
+      if (error instanceof APIError) return { ok: false, status: error.status, message: error.message };
+      if (error instanceof Error && error.name === "TimeoutError") {
+        return { ok: false, status: 0, message: "Tempus took too long to answer. Try again." };
+      }
+      return { ok: false, status: 0, message: error instanceof Error ? error.message : "Couldn't reach Tempus." };
+    }
   }
 
   async connectGoogleCalendar() {
