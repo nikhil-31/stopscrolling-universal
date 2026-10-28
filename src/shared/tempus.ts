@@ -7,7 +7,8 @@ export interface TempusUsageCard {
   title: string;
   total: string;
   total_seconds: number;
-  timeline: { kind: "hour" | "day"; bars: Array<{ label: string; seconds: number }> };
+  /** `categories` (largest first) is missing on cards saved before the server split bars by category. */
+  timeline: { kind: "hour" | "day"; bars: Array<{ label: string; seconds: number; categories?: Array<{ name: string; seconds: number }> }> };
   /** `time` and `share` are display strings, e.g. "1h 20m" and "34%". */
   categories: Array<{ name: string; seconds: number; time: string; share: string }>;
   apps: Array<{ name: string; category: string; is_website: boolean; seconds: number; time: string; share: string }>;

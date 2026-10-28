@@ -1,5 +1,8 @@
-import { Globe, Wand2 } from "lucide-react";
+import type { CSSProperties } from "react";
+import { Wand2 } from "lucide-react";
+import { appShareBarPercent, colorForCategory } from "@shared/timeline";
 import type { TempusAction, TempusUsageCard } from "@shared/tempus";
+import { CategoryMark } from "../../components/GameMark";
 import { Badge, Button } from "../../components/ui";
 import { parseMarkdown, type MdSpan } from "./markdown";
 
@@ -69,29 +72,49 @@ export function TempusUsageCardView({ card }: { card: TempusUsageCard }) {
         <div className={`tempus-usage-bars ${hourly ? "is-hourly" : "is-daily"}`} aria-hidden="true">
           {bars.map((bar, index) => (
             <div key={`${bar.label}-${index}`} className="tempus-usage-bar" title={bar.label}>
-              <span className="tempus-usage-bar-fill" style={{ height: `${(bar.seconds / peak) * 100}%` }} />
+              <span
+                className={`tempus-usage-bar-fill ${bar.categories?.length ? "is-stacked" : ""}`}
+                style={{ height: `${(bar.seconds / peak) * 100}%` }}
+              >
+                {bar.categories?.map((category) => (
+                  <span key={category.name} style={{ flexGrow: category.seconds, background: colorForCategory(category.name) }} />
+                ))}
+              </span>
               {!hourly || index % 6 === 0 ? <span className="tempus-usage-bar-label">{bar.label}</span> : null}
             </div>
           ))}
         </div>
       ) : null}
       {card.categories.length ? (
-        <div className="tempus-usage-categories">
-          {card.categories.map((category) => (
-            <span key={category.name} className="tempus-chip">
-              {category.name} <span className="tempus-muted">{category.time}</span>
-            </span>
-          ))}
-        </div>
+        <>
+          <div className="tempus-usage-split" aria-hidden="true">
+            {card.categories.map((category) => (
+              <span key={category.name} style={{ flexGrow: category.seconds, background: colorForCategory(category.name) }} />
+            ))}
+          </div>
+          <div className="tempus-usage-categories">
+            {card.categories.map((category) => (
+              <span key={category.name} className="tempus-chip">
+                <span className="legend-dot" style={{ ["--swatch" as string]: colorForCategory(category.name) }} />
+                {category.name} <span className="tempus-muted">{category.time}</span>
+              </span>
+            ))}
+          </div>
+        </>
       ) : null}
       {card.apps.length ? (
         <ul className="tempus-usage-apps">
           {card.apps.map((app) => (
-            <li key={app.name}>
-              {app.is_website ? <Globe size={14} aria-hidden="true" /> : <span className="tempus-usage-app-dot" aria-hidden="true" />}
-              <span className="tempus-usage-app-name">
-                {app.name}
-                {app.category ? <span className="tempus-muted"> · {app.category}</span> : null}
+            <li key={app.name} style={{ "--bar-color": colorForCategory(app.category) } as CSSProperties}>
+              <CategoryMark color={colorForCategory(app.category)} />
+              <span className="tempus-usage-app-copy">
+                <span className="tempus-usage-app-name">
+                  {app.name}
+                  {app.category ? <span className="tempus-muted"> · {app.category}</span> : null}
+                </span>
+                <span className="activity-app-bar" aria-hidden="true">
+                  <span style={{ width: `${appShareBarPercent(card.total_seconds ? app.seconds / card.total_seconds : 0)}%` }} />
+                </span>
               </span>
               <span className="tempus-usage-app-time">{app.time}</span>
               <span className="tempus-muted tempus-usage-app-share">{app.share}</span>

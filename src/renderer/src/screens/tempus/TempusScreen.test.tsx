@@ -5,6 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { TempusAction, TempusConversation, TempusMessage } from "@shared/tempus";
+import { colorForCategory } from "@shared/timeline";
+import { TempusUsageCardView } from "./TempusComponents";
 import { TempusScreen } from "./TempusScreen";
 
 const conversation: TempusConversation = {
@@ -116,5 +118,52 @@ describe("TempusScreen", () => {
 
     expect(await screen.findByText("You've reached today's Tempus limit. Try again tomorrow.")).toBeInTheDocument();
     expect(composer).toHaveValue("One more question");
+  });
+});
+
+describe("TempusUsageCardView", () => {
+  it("colors categories and apps the way Insights does", () => {
+    render(
+      <TempusUsageCardView
+        card={{
+          type: "usage",
+          title: "Today",
+          total: "3h",
+          total_seconds: 10_800,
+          timeline: { kind: "hour", bars: [] },
+          categories: [{ name: "Video", seconds: 7_200, time: "2h", share: "67%" }],
+          apps: [{ name: "YouTube", category: "Video", is_website: true, seconds: 7_200, time: "2h", share: "67%" }],
+        }}
+      />,
+    );
+
+    const row = screen.getByText("YouTube").closest("li")!;
+    expect(row.style.getPropertyValue("--bar-color")).toBe(colorForCategory("Video"));
+    expect(row.querySelector(".activity-app-bar span")).toHaveStyle({ width: "66.66666666666666%" });
+    expect(screen.getByText("Video", { selector: ".tempus-chip" }).querySelector(".legend-dot")).toBeInTheDocument();
+  });
+});
+
+describe("TempusUsageCardView bars", () => {
+  const base = { type: "usage" as const, title: "Week", total: "2h", total_seconds: 7_200, categories: [], apps: [] };
+
+  it("stacks each bar by category", () => {
+    const { container } = render(
+      <TempusUsageCardView
+        card={{
+          ...base,
+          timeline: { kind: "day", bars: [{ label: "Tue 27", seconds: 7_200, categories: [{ name: "Video", seconds: 6_000 }, { name: "Social", seconds: 1_200 }] }] },
+        }}
+      />,
+    );
+
+    const segments = container.querySelectorAll<HTMLElement>(".tempus-usage-bar-fill.is-stacked span");
+    expect([...segments].map((segment) => segment.style.background)).toEqual([colorForCategory("Video"), colorForCategory("Social")]);
+  });
+
+  it("keeps one color for bars saved without categories", () => {
+    const { container } = render(<TempusUsageCardView card={{ ...base, timeline: { kind: "day", bars: [{ label: "Tue 27", seconds: 7_200 }] } }} />);
+
+    expect(container.querySelector(".tempus-usage-bar-fill")).not.toHaveClass("is-stacked");
   });
 });

@@ -113,14 +113,18 @@
 .tempus-usage-bars { display: flex; align-items: flex-end; gap: 3px; height: 96px; padding-bottom: 16px; overflow-x: auto; }
 .tempus-usage-bar { position: relative; display: flex; flex: 1 0 8px; align-items: flex-end; height: 100%; }
 .tempus-usage-bars.is-daily .tempus-usage-bar { flex-basis: 28px; }
-.tempus-usage-bar-fill { width: 100%; min-height: 2px; border-radius: 3px 3px 0 0; background: var(--brand); opacity: 0.85; }
+.tempus-usage-bar-fill { width: 100%; min-height: 2px; border-radius: 3px 3px 1px 1px; background: var(--brand); }
+.tempus-usage-bar-fill.is-stacked { display: flex; flex-direction: column-reverse; overflow: hidden; background: transparent; }
+.tempus-usage-bar-fill.is-stacked span { min-height: 1px; }
 .tempus-usage-bar-label { position: absolute; bottom: -16px; left: 0; color: var(--text-tertiary); font-size: 10px; white-space: nowrap; }
+.tempus-usage-split { display: flex; gap: 2px; height: 8px; overflow: hidden; border-radius: var(--radius-pill); background: var(--surface-subtle); }
+.tempus-usage-split span { min-width: 2px; }
 .tempus-usage-categories { display: flex; flex-wrap: wrap; gap: 6px; }
-.tempus-usage-apps { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
-.tempus-usage-apps li { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
-.tempus-usage-app-dot { width: 8px; height: 8px; margin: 0 3px; border-radius: 50%; background: var(--text-tertiary); }
-.tempus-usage-app-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
-.tempus-usage-app-time { font-variant-numeric: tabular-nums; color: var(--text); }
+.tempus-usage-apps { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.tempus-usage-apps li { display: flex; align-items: center; gap: 10px; color: var(--text-secondary); }
+.tempus-usage-app-copy { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; }
+.tempus-usage-app-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.tempus-usage-app-time { min-width: 64px; font-variant-numeric: tabular-nums; color: var(--text); text-align: right; }
 .tempus-usage-app-share { min-width: 36px; text-align: right; }
 
 .tempus-action { align-self: stretch; border-color: var(--line-strong); }
@@ -153,3 +157,4 @@
 .tempus-history button:hover, .tempus-history button.is-current { background: var(--surface-hover); }
 .tempus-history button .tempus-muted { grid-column: 2; }
 .tempus-history-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.tempus-usage-apps .category-swatch { height: 24px; }
