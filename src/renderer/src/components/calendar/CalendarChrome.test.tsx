@@ -12,6 +12,13 @@ function snapshot(view: CalendarView, when: Date): AppSnapshot {
     calendarAnchor: when.toISOString(),
     calendarMonth: when.toISOString(),
     calendarEvents: [],
+    settings: { showCalendarEvents: false },
+    calendarIntegration: {
+      google: { available: true, connecting: false, accounts: [] },
+      apple: { access: "unsupported" },
+      calendars: [],
+      errors: [],
+    },
   } as unknown as AppSnapshot;
 }
 
@@ -61,7 +68,7 @@ describe("CalendarChrome shortcuts and menu", () => {
   });
 
   function chromeState(view: CalendarView) {
-    return { ...snapshot(view, day), settings: { showGoogleCalendarEvents: true } } as unknown as AppSnapshot;
+    return { ...snapshot(view, day), settings: { showCalendarEvents: true } } as unknown as AppSnapshot;
   }
 
   it("ignores keys unless shortcuts are on", () => {
@@ -99,5 +106,17 @@ describe("CalendarChrome shortcuts and menu", () => {
     fireEvent.click(trigger);
     fireEvent.mouseDown(document.body);
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("offers to connect a calendar and lists calendars that failed to load", () => {
+    const state = chromeState("day");
+    render(<CalendarChrome state={{
+      ...state,
+      calendarIntegration: { ...state.calendarIntegration, errors: ["ada@example.com: Reconnect this Google account."] },
+    }} />);
+    fireEvent.click(screen.getByRole("button", { name: "More calendar options" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Reconnect this Google account.");
+    fireEvent.click(screen.getByRole("button", { name: "Connect a calendar" }));
+    expect(desktop.openSettings).toHaveBeenCalled();
   });
 });

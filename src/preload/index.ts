@@ -110,8 +110,13 @@ const api = {
     ipcRenderer.invoke(IPC.cancelNormalSession, payload),
   redeemBlockingBypass: (input: import("@shared/types").BypassRedeemInput) =>
     ipcRenderer.invoke(IPC.redeemBlockingBypass, input),
-  googleConnect: () => ipcRenderer.send(IPC.googleConnect),
-  googleDisconnect: () => ipcRenderer.send(IPC.googleDisconnect),
+  googleConnect: () => ipcRenderer.invoke(IPC.googleConnect) as Promise<void>,
+  googleDisconnect: (connectionId: number) => ipcRenderer.invoke(IPC.googleDisconnect, connectionId) as Promise<void>,
+  appleCalendarRequestAccess: () =>
+    ipcRenderer.invoke(IPC.appleCalendarRequestAccess) as Promise<import("@shared/types").AppleCalendarAccess>,
+  refreshCalendarSources: () => ipcRenderer.invoke(IPC.refreshCalendarSources) as Promise<void>,
+  setCalendarSelected: (payload: { provider: import("@shared/types").CalendarProvider; id: string; selected: boolean }) =>
+    ipcRenderer.invoke(IPC.setCalendarSelected, payload) as Promise<void>,
   linkRiot: (riotId: string) => ipcRenderer.send(IPC.linkRiot, riotId),
   disconnectRiot: () => ipcRenderer.send(IPC.disconnectRiot),
   connectSteam: () => ipcRenderer.send(IPC.connectSteam),

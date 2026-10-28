@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { buildMacCalendar } from "./build-mac-calendar.mjs";
 import { ensureMacosDevApp } from "./macos-dev-app.mjs";
 
 const require = createRequire(import.meta.url);
@@ -13,6 +14,12 @@ delete env.ELECTRON_RUN_AS_NODE;
 
 if (process.platform === "darwin") {
   env.ELECTRON_EXEC_PATH = ensureMacosDevApp();
+  try {
+    buildMacCalendar();
+  } catch (error) {
+    // Apple Calendar shows as unavailable without the bridge; everything else still runs.
+    console.warn(`Apple Calendar bridge not built: ${error instanceof Error ? error.message : error}`);
+  }
 }
 
 const bin = join(dirname(require.resolve("electron-vite/package.json")), "bin", "electron-vite.js");

@@ -80,7 +80,13 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
     calendarWorkspace: defaultWorkspace(),
     timesheetSummaries: {},
     devices: [],
-    settings: { showGoogleCalendarEvents: true },
+    settings: { showCalendarEvents: true },
+    calendarIntegration: {
+      google: { available: true, connecting: false, accounts: [] },
+      apple: { access: "unsupported" },
+      calendars: [],
+      errors: [],
+    },
     ...patch,
   } as AppSnapshot;
 }

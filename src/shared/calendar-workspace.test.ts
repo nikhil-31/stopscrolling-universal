@@ -9,6 +9,7 @@ import {
   formatWeekRange,
   hourLabel24,
   mergeIntervals,
+  mergeWorkspaces,
   mondayMonthGridBounds,
   mondayMonthGridDays,
   mondayWeekBounds,
@@ -22,6 +23,8 @@ import {
   unlabeledBlocks,
   upsertLabel,
   upsertTask,
+  type CalendarLabel,
+  type CalendarWorkspace,
 } from "./calendar-workspace";
 import { toDateInput } from "./platform";
 import type { ScreenTimeSessionBlock, ScreenTimeTimelineSegment } from "./types";
@@ -317,5 +320,68 @@ describe("calendar workspace math", () => {
       "2026-09-09T09:00:00",
       "2026-09-09T11:00:00",
     ]);
+  });
+});
+
+describe("mergeWorkspaces", () => {
+  const label = (id: string, name = id) => ({ id, name, color: "#1fb894", bucket: "focus" as const, countsTowardWork: true });
+  const task = (id: string, title = id) => ({ id, title, start: "2026-09-12T09:00:00.000Z", end: "2026-09-12T10:00:00.000Z" });
+  const workspace = (patch: Partial<CalendarWorkspace>): CalendarWorkspace => ({
+    labels: [label("a")],
+    tasks: [],
+    assignments: [],
+    skippedBlockIds: [],
+    approvedBlockIds: [],
+    ...patch,
+  });
+
+  it("keeps additions from both sides", () => {
+    const base = workspace({});
+    const merged = mergeWorkspaces(
+      base,
+      workspace({ tasks: [task("mine")], approvedBlockIds: ["block-1"] }),
+      workspace({ tasks: [task("theirs")], approvedBlockIds: ["block-2"] }),
+    );
+    expect(merged.tasks.map((item) => item.id)).toEqual(["mine", "theirs"]);
+    expect(merged.approvedBlockIds).toEqual(["block-1", "block-2"]);
+  });
+
+  it("applies deletions from either side unless the other side edited the item", () => {
+    const base = workspace({ labels: [label("a"), label("b"), label("c")], skippedBlockIds: ["x", "y"] });
+    const merged = mergeWorkspaces(
+      base,
+      workspace({ labels: [label("a"), label("c", "Edited here")], skippedBlockIds: ["x"] }),
+      workspace({ labels: [label("a"), label("b")], skippedBlockIds: ["x", "y"] }),
+    );
+    // "b" was deleted here and untouched there; "c" was deleted there but edited here, so it stays.
+    expect(merged.labels.map((item) => item.name)).toEqual(["a", "Edited here"]);
+    expect(merged.skippedBlockIds).toEqual(["x"]);
+  });
+
+  it("takes the other side's edit when this side didn't touch the item, and its own when both did", () => {
+    const base = workspace({ labels: [label("a"), label("b")] });
+    const merged = mergeWorkspaces(
+      base,
+      workspace({ labels: [label("a"), label("b", "Mine")] }),
+      workspace({ labels: [label("a", "Theirs"), label("b", "Also theirs")] }),
+    );
+    expect(merged.labels.map((item) => item.name)).toEqual(["Theirs", "Mine"]);
+  });
+
+  it("takes the server copy on a device that never changed its defaults", () => {
+    const remote = workspace({ labels: [label("label-research", "Deep work")] });
+    expect(mergeWorkspaces(null, defaultWorkspace(), remote)).toEqual(normalizeWorkspace(remote));
+  });
+
+  it("unions both copies on first sync when this device has its own changes", () => {
+    const merged = mergeWorkspaces(null, workspace({ tasks: [task("local")] }), workspace({ tasks: [task("remote")] }));
+    expect(merged.tasks.map((item) => item.id)).toEqual(["local", "remote"]);
+  });
+
+  it("ignores key order when comparing to the last agreed copy", () => {
+    const base = workspace({ labels: [label("a")] });
+    const reordered = { countsTowardWork: true, bucket: "focus", color: "#1fb894", name: "a", id: "a" } as CalendarLabel;
+    const merged = mergeWorkspaces(base, workspace({ labels: [reordered] }), workspace({ labels: [label("a", "Renamed")] }));
+    expect(merged.labels.map((item) => item.name)).toEqual(["Renamed"]);
   });
 });

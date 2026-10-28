@@ -6,6 +6,7 @@ import { formatMonthLabel } from "@shared/timeline";
 import { ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { IconButton, Tooltip } from "../ui";
+import { allDayEventsOn } from "./events";
 
 const views: CalendarView[] = ["day", "week", "month"];
 
@@ -31,7 +32,9 @@ export function CalendarChrome({
       ? formatMonthLabel(new Date(state.calendarMonth), timeZone)
       : formatFullDate(anchor);
   const stepLabel = week ? "week" : month ? "month" : "day";
-  const allDay = state.calendarEvents.filter((event) => event.isAllDay);
+  const allDay = allDayEventsOn(state.calendarEvents, anchor, timeZone);
+  const calendarsLinked = state.calendarIntegration.google.accounts.length > 0
+    || state.calendarIntegration.apple.access === "fullAccess";
   const awayFromToday = !viewIncludesToday(state.calendarView, anchor, new Date(state.calendarMonth), timeZone);
   const step = (delta: -1 | 1) => (
     month ? shiftMonth(new Date(state.calendarMonth), delta, timeZone) : shiftAnchor(anchor, (week ? 7 : 1) * delta)
@@ -137,7 +140,10 @@ export function CalendarChrome({
                 ) : (
                   <div className="calendar-more-item muted">No all-day events</div>
                 )}
-                {!state.settings.showGoogleCalendarEvents ? (
+                {state.calendarIntegration.errors.map((error) => (
+                  <div key={error} className="calendar-more-item muted" role="status">{error}</div>
+                ))}
+                {!state.settings.showCalendarEvents || !calendarsLinked ? (
                   <button
                     type="button"
                     className="calendar-more-action"
@@ -146,7 +152,7 @@ export function CalendarChrome({
                       window.stopscrolling.openSettings();
                     }}
                   >
-                    Connect Google Calendar
+                    {calendarsLinked ? "Show calendar events" : "Connect a calendar"}
                   </button>
                 ) : null}
               </div>

@@ -605,3 +605,68 @@ export function shouldShowReviewBar(unlabeledIds: string[], dismissedIds: string
   if (!unlabeledIds.length) return false;
   return unlabeledIds.some((id) => !dismissedIds.includes(id));
 }
+
+/**
+ * Three-way merge of two copies of the workspace that both started from `base` (the last copy both
+ * sides agreed on). Labels, tasks and assignments merge by id: additions on either side are kept,
+ * deletions on either side win over an untouched copy, and when both sides changed the same item
+ * the local one wins. An edit beats a delete. Block id lists merge the same way.
+ */
+export function mergeWorkspaces(
+  base: CalendarWorkspace | null,
+  local: CalendarWorkspace,
+  remote: CalendarWorkspace,
+): CalendarWorkspace {
+  const original = base ? normalizeWorkspace(base) : null;
+  const mine = normalizeWorkspace(local);
+  const theirs = normalizeWorkspace(remote);
+  // A device that never changed its defaults has nothing to contribute; merging would bring back
+  // default labels the user removed elsewhere.
+  if (!original && sameValue(mine, defaultWorkspace())) return theirs;
+  return normalizeWorkspace({
+    labels: mergeById(original?.labels ?? [], mine.labels, theirs.labels),
+    tasks: mergeById(original?.tasks ?? [], mine.tasks, theirs.tasks),
+    assignments: mergeById(original?.assignments ?? [], mine.assignments, theirs.assignments),
+    skippedBlockIds: mergeIdSets(original?.skippedBlockIds ?? [], mine.skippedBlockIds, theirs.skippedBlockIds),
+    approvedBlockIds: mergeIdSets(original?.approvedBlockIds ?? [], mine.approvedBlockIds, theirs.approvedBlockIds),
+  });
+}
+
+export function sameWorkspace(a: CalendarWorkspace, b: CalendarWorkspace) {
+  return sameValue(normalizeWorkspace(a), normalizeWorkspace(b));
+}
+
+function sameValue(a: unknown, b: unknown) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function mergeById<T extends { id: string }>(base: T[], local: T[], remote: T[]): T[] {
+  const baseById = new Map(base.map((item) => [item.id, item]));
+  const localById = new Map(local.map((item) => [item.id, item]));
+  const remoteById = new Map(remote.map((item) => [item.id, item]));
+  const ids = [...new Set([...local.map((item) => item.id), ...remote.map((item) => item.id)])];
+  const merged: T[] = [];
+  for (const id of ids) {
+    const before = baseById.get(id);
+    const mine = localById.get(id);
+    const theirs = remoteById.get(id);
+    if (mine && theirs) {
+      merged.push(before && sameValue(mine, before) ? theirs : mine);
+    } else if (mine) {
+      // Missing remotely: new here, or deleted there. Keep it if it's new or was edited here.
+      if (!before || !sameValue(mine, before)) merged.push(mine);
+    } else if (theirs) {
+      if (!before || !sameValue(theirs, before)) merged.push(theirs);
+    }
+  }
+  return merged;
+}
+
+function mergeIdSets(base: string[], local: string[], remote: string[]): string[] {
+  const before = new Set(base);
+  const mine = new Set(local);
+  const theirs = new Set(remote);
+  return [...new Set([...local, ...remote])].filter(
+    (id) => (mine.has(id) && theirs.has(id)) || !before.has(id),
+  );
+}

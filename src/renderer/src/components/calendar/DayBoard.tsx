@@ -5,9 +5,10 @@ import { effectiveTimeZone, endOfDay, startOfDay } from "@shared/platform";
 import { combineSessionBlocks, formatClock, hourLabelWithPeriod } from "@shared/timeline";
 import { useClockFormat } from "../../clock-format";
 import { useSessionTitle } from "../../session-title";
-import type { CalendarOverlayEvent, ForegroundContext, ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
+import type { ForegroundContext, ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { SessionHoverCard } from "../timeline/SessionHoverCard";
+import { allDayEventsOn, eventColor, eventTooltip, layoutOverlaps, timedEventsBetween } from "./events";
 
 export const DAY_HOUR_HEIGHT = 48;
 export const DAY_BOARD_HEIGHT = DAY_HOUR_HEIGHT * 24;
@@ -25,8 +26,8 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
   const timelines = state.timelines.length ? state.timelines : [emptyTimeline(dayStart, dayEnd)];
   const manyDevices = timelines.length > 1;
   const blocks = timelines.flatMap((timeline) => timeline.blocks);
-  const events = layoutOverlaps(state.calendarEvents.filter((event) => !event.isAllDay));
-  const allDay = state.calendarEvents.filter((event) => event.isAllDay);
+  const events = layoutOverlaps(timedEventsBetween(state.calendarEvents, dayStart, dayEnd));
+  const allDay = allDayEventsOn(state.calendarEvents, dayStart, timeZone);
   const now = Date.now();
   const isToday = now >= dayStart.getTime() && now < dayEnd.getTime();
   const nowY = ((now - dayStart.getTime()) / (dayEnd.getTime() - dayStart.getTime())) * DAY_BOARD_HEIGHT;
@@ -86,8 +87,8 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
                 <span
                   key={event.id}
                   className="calendar-allday-chip"
-                  style={{ ["--block-color" as string]: event.colorHex || "#1fb894" }}
-                  title={`${event.title} · ${event.calendarName}`}
+                  style={{ ["--block-color" as string]: eventColor(event) }}
+                  title={eventTooltip(event, clockFormat)}
                 >
                   {event.title}
                 </span>
@@ -152,20 +153,19 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
           );
         })}
         <div className="day-board-col day-board-calendar">
-          {events.map(({ event, column, columns }, index) => {
+          {events.map(({ event, column, columns }) => {
             const style = {
               ...placeDayBlock(event.start, event.end, dayStart, dayEnd),
               left: `calc(${(column / columns) * 100}% + 6px)`,
               width: `calc(${100 / columns}% - ${columns > 1 ? 8 : 12}px)`,
               right: "auto",
             };
-            const color = event.colorHex || (index % 2 === 0 ? "#1fb894" : "#2de2e2");
             return (
               <div
                 key={event.id}
                 className="day-block day-block-event is-solid"
-                style={{ ...style, ["--block-color" as string]: color }}
-                title={`${event.title}\n${formatClock(event.start, clockFormat)} – ${formatClock(event.end, clockFormat)}`}
+                style={{ ...style, ["--block-color" as string]: eventColor(event) }}
+                title={eventTooltip(event, clockFormat)}
               >
                 <strong>{event.title}</strong>
                 {style.height > 34 ? (
@@ -184,34 +184,6 @@ export function DayBoard({ state }: { state: AppSnapshot }) {
 
 function emptyTop(isToday: boolean, nowY: number, firstEntryTop: number | null) {
   return isToday ? Math.max(8, nowY - 40) : firstEntryTop ?? DAY_HOUR_HEIGHT * 9;
-}
-
-export function layoutOverlaps(events: CalendarOverlayEvent[]) {
-  const sorted = [...events].sort((a, b) => (
-    new Date(a.start).getTime() - new Date(b.start).getTime() || new Date(b.end).getTime() - new Date(a.end).getTime()
-  ));
-  const placed: Array<{ event: CalendarOverlayEvent; column: number; columns: number }> = [];
-  let cluster: typeof placed = [];
-  let columnEnds: number[] = [];
-  let clusterEnd = -Infinity;
-  const flush = () => {
-    for (const item of cluster) item.columns = columnEnds.length;
-    placed.push(...cluster);
-    cluster = [];
-    columnEnds = [];
-  };
-  for (const event of sorted) {
-    const start = new Date(event.start).getTime();
-    const end = new Date(event.end).getTime();
-    if (start >= clusterEnd) flush();
-    let column = columnEnds.findIndex((columnEnd) => columnEnd <= start);
-    if (column === -1) column = columnEnds.push(end) - 1;
-    else columnEnds[column] = end;
-    cluster.push({ event, column, columns: 1 });
-    clusterEnd = Math.max(clusterEnd, end);
-  }
-  flush();
-  return placed;
 }
 
 function deviceLabel(timeline: ScreenTimeDeviceTimeline, devices: AppSnapshot["devices"]) {

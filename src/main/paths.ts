@@ -19,6 +19,10 @@ export function calendarWorkspacePath() {
   return join(userDataDir(), "calendar-workspace.json");
 }
 
+export function calendarWorkspaceSyncPath() {
+  return join(userDataDir(), "calendar-workspace.sync.json");
+}
+
 export function timesheetSummariesPath() {
   return join(userDataDir(), "timesheet-summaries.json");
 }
@@ -63,7 +67,8 @@ export function localDeviceIdPath() {
   return join(userDataDir(), "local-device-id.txt");
 }
 
-export function googleTokensPath() {
+/** Google tokens older versions kept on this device; Google Calendar now links through the server. */
+export function legacyGoogleTokensPath() {
   return join(userDataDir(), "google-calendar.dat");
 }
 

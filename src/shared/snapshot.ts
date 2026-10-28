@@ -6,6 +6,7 @@ import type {
   AppSettings,
   AuthenticatedUser,
   AuthFormMode,
+  CalendarIntegrationState,
   CalendarOverlayEvent,
   DeviceListEntry,
   ForegroundContext,
@@ -137,8 +138,7 @@ export interface AppSnapshot {
   inspector: InspectorState;
   capabilities: TrackingCapabilities;
   calendarEvents: CalendarOverlayEvent[];
-  googleCalendarConnected: boolean;
-  googleCalendarStatus: string;
+  calendarIntegration: CalendarIntegrationState;
   gameAccounts: GameAccountView;
   gameAccountsStatus: string;
   logs: {

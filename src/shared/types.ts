@@ -333,14 +333,100 @@ export interface TrackingCapabilities {
   waylandLimited: boolean;
 }
 
+export type CalendarProvider = "google" | "apple";
+
+/**
+ * An event from a linked calendar. Timed events use ISO times; all-day events use YYYY-MM-DD dates
+ * with an exclusive end, read in the viewer's own zone.
+ */
 export interface CalendarOverlayEvent {
   id: string;
   title: string;
   start: string;
   end: string;
+  calendarId: string;
   calendarName: string;
   isAllDay: boolean;
   colorHex: string | null;
+  provider: CalendarProvider;
+  icalUid?: string | null;
+}
+
+/** Calendar access on this Mac, as EventKit reports it; `unsupported` off macOS. */
+export type AppleCalendarAccess = "notDetermined" | "denied" | "restricted" | "fullAccess" | "writeOnly" | "unsupported";
+
+export interface CalendarSourceOption {
+  /** Server id for Google calendars, EventKit identifier for Apple ones. */
+  id: string;
+  provider: CalendarProvider;
+  name: string;
+  /** The Google account, or the account the calendar belongs to in Calendar.app. */
+  accountLabel: string;
+  colorHex: string | null;
+  selected: boolean;
+  /** An Apple calendar that comes from a Google account already linked here, so it's shown once. */
+  coveredByGoogle: boolean;
+}
+
+export interface CalendarAccount {
+  id: number;
+  email: string;
+  needsReauth: boolean;
+}
+
+export interface CalendarIntegrationState {
+  google: {
+    /** Linking Google happens on the server, so it needs a signed-in account. */
+    available: boolean;
+    connecting: boolean;
+    accounts: CalendarAccount[];
+  };
+  apple: { access: AppleCalendarAccess };
+  calendars: CalendarSourceOption[];
+  /** Short messages about calendars that couldn't be read. */
+  errors: string[];
+}
+
+// Google rows as the server sends them (snake_case).
+export interface CalendarConnectionRow {
+  id: number;
+  provider: "google";
+  account_email: string;
+  status: "active" | "needs_reauth";
+  last_error: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CalendarSourceRow {
+  id: number;
+  connection_id: number;
+  account_email: string;
+  provider: "google";
+  name: string;
+  color_hex: string;
+  is_primary: boolean;
+  selected: boolean;
+}
+
+export interface CalendarErrorRow {
+  connection_id: number;
+  account_email: string;
+  calendar_name: string | null;
+  needs_reauth: boolean;
+  detail: string;
+}
+
+export interface CalendarEventRow {
+  id: string;
+  ical_uid: string | null;
+  title: string;
+  start: string;
+  end: string;
+  is_all_day: boolean;
+  calendar_id: string;
+  calendar_name: string;
+  color_hex: string | null;
   provider: "google";
 }
 
@@ -353,8 +439,9 @@ export interface AppSettings {
   clockFormat: ClockFormat;
   apiBaseUrl: string;
   syncEnabled: boolean;
-  showGoogleCalendarEvents: boolean;
-  googleClientId: string;
+  showCalendarEvents: boolean;
+  /** Apple calendars to show; null shows every calendar not already covered by a Google link. */
+  appleCalendarIds: string[] | null;
   dailyWorkTargetSeconds: number;
   timerBonusSeconds: number;
   timerBonusDay: string;

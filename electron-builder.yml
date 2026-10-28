@@ -31,10 +31,14 @@ mac:
       to: PlugIns/StopScrollingWidget.appex
     - from: native/macos/.derivedData/widget-pack/StopScrollingWidgetReload.dylib
       to: Frameworks/StopScrollingWidgetReload.dylib
+    - from: native/macos/.derivedData/widget-pack/StopScrollingCalendar.dylib
+      to: Frameworks/StopScrollingCalendar.dylib
   extendInfo:
     CFBundleName: Stop Scrolling
     CFBundleDisplayName: Stop Scrolling
     NSAppleEventsUsageDescription: Stop Scrolling reads the frontmost app and browser tab so it can record screen time.
+    NSCalendarsUsageDescription: Stop Scrolling shows your calendar events next to your screen time. It never changes your calendars.
+    NSCalendarsFullAccessUsageDescription: Stop Scrolling shows your calendar events next to your screen time. It never changes your calendars.
 win:
   target:
     - nsis

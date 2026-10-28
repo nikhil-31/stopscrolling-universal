@@ -25,7 +25,12 @@ import type {
   EndNormalOccurrenceResponse,
   BypassRedeemInput,
   BypassIssueInput,
+  CalendarConnectionRow,
+  CalendarErrorRow,
+  CalendarEventRow,
+  CalendarSourceRow,
 } from "@shared/types";
+import type { CalendarWorkspace } from "@shared/calendar-workspace";
 import type { TimesheetEntryPayload, TimesheetSummaryStatus } from "@shared/timesheet";
 import type { JevRatingKind, JevRatingRequestItem, JevRatingsResponse, JevServerRating } from "./jev-ratings";
 import { logNetwork } from "./logger";
@@ -39,6 +44,12 @@ export class APIError extends Error {
     super(message);
     this.name = "APIError";
   }
+}
+
+export interface RemoteCalendarWorkspace {
+  version: number;
+  data: CalendarWorkspace | null;
+  updated_at: string | null;
 }
 
 function isMfa(body: LoginResponse): body is MFAPendingResponse {
@@ -288,6 +299,50 @@ export class StopScrollingAPI {
       { method: "POST", body: JSON.stringify({ entries }) },
     );
     return body.summaries ?? [];
+  }
+
+  async calendarConnections() {
+    return asList(await this.request<CalendarConnectionRow[]>("api/calendars/connections/"));
+  }
+
+  /** Returns the Google consent page to open in the browser; Google sends the user back to the server. */
+  async startGoogleCalendarConnect() {
+    return this.request<{ authorization_url: string }>("api/calendars/google/connect/", { method: "POST" });
+  }
+
+  async deleteCalendarConnection(id: number) {
+    await this.request<null>(`api/calendars/connections/${id}/`, { method: "DELETE" });
+  }
+
+  async calendarSources(refresh = false) {
+    const query = refresh ? "?refresh=1" : "";
+    return this.request<{ calendars: CalendarSourceRow[]; errors: CalendarErrorRow[] }>(`api/calendars/calendars/${query}`);
+  }
+
+  async setCalendarSourceSelected(id: number, selected: boolean) {
+    return this.request<CalendarSourceRow>(`api/calendars/calendars/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ selected }),
+    });
+  }
+
+  async calendarEvents(params: { start: string; end: string; tz: string }) {
+    const search = new URLSearchParams(params);
+    return this.request<{ events: CalendarEventRow[]; errors: CalendarErrorRow[] }>(
+      `api/calendars/events/?${search.toString()}`,
+    );
+  }
+
+  async calendarWorkspace() {
+    return this.request<RemoteCalendarWorkspace>("api/calendars/workspace/");
+  }
+
+  /** Fails with a 409 APIError whose body is the newer server copy when `baseVersion` is stale. */
+  async putCalendarWorkspace(baseVersion: number, data: CalendarWorkspace, deviceKey: string) {
+    return this.request<RemoteCalendarWorkspace>("api/calendars/workspace/", {
+      method: "PUT",
+      body: JSON.stringify({ base_version: baseVersion, data, device_key: deviceKey }),
+    });
   }
 
   async jevRatings(since?: string | null) {

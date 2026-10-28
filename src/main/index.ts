@@ -37,6 +37,8 @@ if (process.platform === "darwin") {
   app.on("open-url", (event, url) => {
     event.preventDefault();
     if (!url.startsWith(`${WIDGET_URL_SCHEME}:`)) return;
+    // The server's Google Calendar page sends the browser back here once the account is linked.
+    if (url.startsWith(`${WIDGET_URL_SCHEME}://calendar/`)) controller.calendars.checkConnectionNow();
     if (!app.isReady()) {
       openFromWidget = true;
       return;
@@ -68,6 +70,9 @@ app.whenReady().then(async () => {
     controller.broadcast();
   });
   app.on("browser-window-focus", () => {
+    // Coming back from the browser after linking Google Calendar, or from another device.
+    controller.calendars.checkConnectionNow();
+    controller.refreshCalendars({ throttle: true });
     controller.broadcast();
   });
   if (process.platform === "darwin") {

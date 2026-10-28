@@ -1791,6 +1791,25 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
   text-align: center;
   text-overflow: ellipsis;
 }
+/* Calendar events sit behind tracked entries, across all of a day's device columns. */
+.week-event-layer { position: relative; pointer-events: none; }
+.week-event {
+  position: absolute;
+  z-index: 0;
+  overflow: hidden;
+  padding: 2px 6px;
+  border: 1px dashed color-mix(in srgb, var(--block-color) 70%, transparent);
+  background: color-mix(in srgb, var(--block-color) 12%, transparent);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 650;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.week-board-allday { min-width: 0; }
+.week-board-allday .calendar-allday-chip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .week-board .day-board-col.is-day-start,
 .week-board-head .week-device-name.is-day-start { border-left-color: var(--line-strong); }
 .week-day-head.is-today .week-day-number {
@@ -2437,6 +2456,25 @@ button.data-row:hover, button.data-row.is-selected { background: var(--surface-h
   background: var(--text);
   color: var(--surface-solid);
 }
+.calendar-month-event {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 6px;
+  border: 1px dashed color-mix(in srgb, var(--block-color) 70%, transparent);
+  background: color-mix(in srgb, var(--block-color) 12%, transparent);
+  color: var(--text);
+  font-size: 11px;
+}
+.calendar-month-event strong {
+  flex: 1;
+  overflow: hidden;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calendar-month-event span { color: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; }
 .calendar-month-chip {
   display: flex;
   align-items: center;

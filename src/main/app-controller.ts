@@ -1,4 +1,4 @@
-import { BrowserWindow } from "electron";
+import { BrowserWindow, shell } from "electron";
 import { hideDesktopWidget, sendDesktopWidgetState, showDesktopWidget } from "./desktop-widget-window";
 import { publishNativeWidget, publishTrendWidget, type TrendWidgetSummary } from "./native-widget-store";
 import { hideFreedomScreen, showFreedomScreen } from "./freedom-window";
@@ -21,7 +21,7 @@ import { freedomPageUrl, setBlockScreenMediaRoot, setFreedomContent } from "./bl
 import { readFocusedBrowserContext } from "./collectors/ax-browser";
 import { isAccessibilityGranted, requestAccessibilityAccess } from "./collectors/macos-accessibility";
 import type { ActivitySnapshot } from "./collectors/types";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { normalizedEmail, signInError, signUpError } from "@shared/auth-validation";
 import { looksLikeBrowser, websiteHostname } from "@shared/browser";
@@ -96,6 +96,7 @@ import type { TrendComparisons } from "@shared/timeline";
 import type {
   AppSettings,
   CalendarOverlayEvent,
+  CalendarProvider,
   DeviceListEntry,
   DeviceRow,
   DistractionResponse,
@@ -118,13 +119,15 @@ import { isMfa, StopScrollingAPI } from "./api-client";
 import { BlockingHelperBridge } from "./blocking/bridge";
 import { LocalEnforcer } from "./blocking/local-enforcer";
 import { loadCalendarWorkspace, saveCalendarWorkspace } from "./calendar-workspace-store";
-import { GoogleCalendarService } from "./google-calendar";
+import { AppleCalendarBridge } from "./apple-calendar";
+import { CalendarEventsService } from "./calendar-events";
+import { CalendarWorkspaceSync } from "./calendar-workspace-sync";
 import { syncLaunchAtLogin } from "./lifecycle";
 import { GameAssetCache } from "./game-asset-cache";
 import { GameMatchSync } from "./game-match-sync";
 import { closeBlockedWebsite, quitBlockedApp } from "./blocking/local-actions";
 import { logObservability } from "./logger";
-import { deviceName as localDeviceName, gameAssetPath, gameMatchPath, hiddenDevicesPath, localComputerName, networkLogPath, observabilityLogPath, userDataDir } from "./paths";
+import { deviceName as localDeviceName, legacyGoogleTokensPath, gameAssetPath, gameMatchPath, hiddenDevicesPath, localComputerName, networkLogPath, observabilityLogPath, userDataDir } from "./paths";
 import { loadSettings, saveSettings } from "./settings-store";
 import { loadTimesheetSummaries, saveTimesheetSummaries } from "./timesheet-summary-store";
 import { clearTokens, loadSessionUser, loadTokens, saveSessionUser, saveTokens } from "./token-store";
@@ -325,10 +328,26 @@ export class AppController {
   private trendComparisonMiss: { key: string; totals: Record<string, number> } | null = null;
   private observedDevices: DeviceRow[] = [];
   private deviceIndexStarted = false;
-  google = new GoogleCalendarService();
   api = new StopScrollingAPI(this.settings.apiBaseUrl, null, (tokens) => {
     if (tokens) saveTokens(tokens);
     else clearTokens();
+  });
+  calendars = new CalendarEventsService(this.api, new AppleCalendarBridge(), {
+    signedIn: () => Boolean(this.auth.user && this.api.getTokens()),
+    appleCalendarIds: () => this.settings.appleCalendarIds,
+    setAppleCalendarIds: (appleCalendarIds) => this.updateSettings({ appleCalendarIds }),
+    openExternal: (url) => shell.openExternal(url),
+    changed: () => this.broadcast(),
+  });
+  workspaceSync = new CalendarWorkspaceSync(this.api, {
+    userId: () => (this.auth.user && this.api.getTokens() && this.settings.syncEnabled ? this.auth.user.id : null),
+    deviceKey: () => deviceKey(currentDevicePlatform(), localDeviceName()),
+    local: () => this.calendarWorkspace,
+    apply: (workspace) => {
+      this.calendarWorkspace = workspace;
+      saveCalendarWorkspace(workspace);
+      this.broadcast();
+    },
   });
   gameAssets = new GameAssetCache(gameAssetPath(), () => this.broadcast());
   gameSync = (() => {
@@ -486,7 +505,10 @@ export class AppController {
         this.setAuthStatus(`Signed in as ${user.email}`);
       }
     }
+    this.removeLegacyGoogleTokens();
     await this.restoreSession();
+    // Signed out, Apple calendars still show; signed in, restoreSession already refreshed them.
+    if (!this.auth.user) void this.calendars.refresh();
     void this.prefetchBlockingLists();
     await this.helper.initialize();
     const setup = await this.helper.activateNativeSetup();
@@ -565,7 +587,6 @@ export class AppController {
     if (this.navigation === "leaderboard" || this.navigation === "timer" || this.navigation === "timesheet") this.navigation = "today";
     const view = this.dataView();
     const ratingAvailable = Boolean(this.auth.user && this.settings.syncEnabled && this.tracker.jevSync.enabled);
-    const googleConnected = this.google.connected();
     return {
       navigation: this.navigation,
       statusMessage: this.statusMessage,
@@ -603,11 +624,8 @@ export class AppController {
       hiddenDeviceKeys: [...this.hiddenDeviceKeys],
       inspector: this.inspector,
       capabilities: this.tracker.capabilities(),
-      calendarEvents: this.settings.showGoogleCalendarEvents ? this.calendarEvents : [],
-      googleCalendarConnected: googleConnected,
-      googleCalendarStatus: googleConnected
-        ? "Showing Google Calendar events"
-        : "Google Calendar not connected",
+      calendarEvents: this.settings.showCalendarEvents ? this.calendarEvents : [],
+      calendarIntegration: this.calendars.state(),
       gameAccounts: this.gameSync.accountView(),
       gameAccountsStatus: this.gameSync.status,
       logs: {
@@ -1122,6 +1140,7 @@ export class AppController {
     this.insightsOpenedAt = item === "insights" ? performance.now() : null;
     if (item === "blocking") void this.refreshBlocking();
     else void this.refreshVisibleRange();
+    if (usesCalendarRange(item)) void this.workspaceSync.pull({ throttle: true });
     this.broadcast();
     this.scheduleTimesheetSummaries();
   }
@@ -1173,16 +1192,82 @@ export class AppController {
     }
     await devicesPromise;
     if (generation !== this.refreshGeneration) return;
-    if (this.navigation === "calendar" && this.settings.showGoogleCalendarEvents) {
-      try {
-        this.calendarEvents = await this.google.eventsForDay(this.calendarAnchor, this.settings.googleClientId);
-      } catch {
-        this.calendarEvents = [];
-      }
+    if (this.navigation === "calendar" && this.settings.showCalendarEvents) {
+      const range = this.calendarEventRange(bounds, zone);
+      const events = await this.calendars.events(range.start, range.end, zone);
       if (generation !== this.refreshGeneration) return;
+      this.calendarEvents = events;
     }
     this.broadcast();
     this.scheduleTimesheetSummaries();
+  }
+
+  /** The visible range, widened to the anchor's whole week so the week view has every day's events. */
+  private calendarEventRange(bounds: { start: Date; end: Date }, zone: string) {
+    const week = mondayWeekBounds(this.calendarAnchor, zone);
+    return {
+      start: new Date(Math.min(bounds.start.getTime(), week.start.getTime())),
+      end: new Date(Math.max(bounds.end.getTime(), week.end.getTime())),
+    };
+  }
+
+  /** Called after sign-in, on startup and on window focus: pick up calendar changes from other devices. */
+  refreshCalendars(options: { throttle?: boolean } = {}) {
+    void this.workspaceSync.pull(options);
+    if (options.throttle) return;
+    void this.calendars.refresh().then(() => this.refreshCalendarEvents());
+  }
+
+  private removeLegacyGoogleTokens() {
+    if (!existsSync(legacyGoogleTokensPath())) return;
+    rmSync(legacyGoogleTokensPath(), { force: true });
+    this.statusMessage = "Google Calendar now links through your Stop Scrolling account. Reconnect it in Settings › Calendar.";
+  }
+
+  async connectGoogleCalendar() {
+    try {
+      const linked = await this.calendars.connectGoogle();
+      if (linked) {
+        this.statusMessage = "Google Calendar connected.";
+        this.updateSettings({ showCalendarEvents: true });
+        this.refreshCalendarEvents();
+      }
+    } catch (error) {
+      this.statusMessage = error instanceof Error ? error.message : "Couldn't connect Google Calendar.";
+      this.broadcast();
+    }
+  }
+
+  async disconnectGoogleCalendar(id: number) {
+    try {
+      await this.calendars.disconnectGoogle(id);
+      this.refreshCalendarEvents();
+    } catch (error) {
+      this.statusMessage = error instanceof Error ? error.message : "Couldn't disconnect Google Calendar.";
+      this.broadcast();
+    }
+  }
+
+  async requestAppleCalendarAccess() {
+    const access = await this.calendars.requestAppleAccess();
+    if (access === "fullAccess") this.updateSettings({ showCalendarEvents: true });
+    return access;
+  }
+
+  async setCalendarSelected(payload: { provider: CalendarProvider; id: string; selected: boolean }) {
+    try {
+      await this.calendars.setSelected(payload.provider, payload.id, payload.selected);
+      // Apple choices are settings, which refresh events on their own.
+      if (payload.provider === "google") this.refreshCalendarEvents();
+    } catch (error) {
+      this.statusMessage = error instanceof Error ? error.message : "Couldn't update that calendar.";
+      this.broadcast();
+    }
+  }
+
+  /** Re-read events after the calendar choices changed. */
+  refreshCalendarEvents() {
+    if (this.navigation === "calendar") void this.refreshVisibleRange();
   }
 
   /** Requests AI titles for the visible finished sessions, polling while any are queued. */
@@ -1228,6 +1313,8 @@ export class AppController {
     if (waiting) this.scheduleTimesheetSummaries(TIMESHEET_SUMMARY_POLL_MS);
   }
 
+  private timelineTicks = 0;
+
   startTimelineRefresh() {
     if (this.timelineTimer) clearInterval(this.timelineTimer);
     this.timelineTimer = setInterval(() => {
@@ -1235,6 +1322,8 @@ export class AppController {
       if (this.auth.user && !this.tracker.isTracking) void this.tracker.heartbeat();
       // Picks up ratings the server finished in the background or made on other devices.
       if (this.auth.user && this.settings.syncEnabled) void this.loadJevRatings();
+      // Every five minutes, pick up workspace edits made on other devices.
+      if (++this.timelineTicks % 5 === 0) void this.workspaceSync.pull();
       if (!["today", "timer", "calendar", "timesheet", "insights", "trend", "agent"].includes(this.navigation)) return;
       if (this.anyWindowVisible()) void this.refreshVisibleRange();
       else this.timelineRefreshDeferred = true;
@@ -1261,6 +1350,7 @@ export class AppController {
       this.setAuthStatus(`Signed in as ${this.auth.user.email}`);
       this.auth.mfaChallenge = null;
       void this.loadJevRatings();
+      this.refreshCalendars();
     } catch {
       if (!this.api.getTokens()) {
         this.auth.user = null;
@@ -1350,6 +1440,7 @@ export class AppController {
       saveSessionUser(this.auth.user);
       this.setAuthStatus(`Signed in as ${this.auth.user.email}`);
       void this.loadJevRatings();
+      this.refreshCalendars();
       await this.syncPending();
       await this.refreshVisibleRange();
       await this.refreshBlockingHelper(true);
@@ -1380,6 +1471,9 @@ export class AppController {
     this.summaryCache.clear();
     this.tracker.clearRangeCache();
     this.tracker.jevSync.reset();
+    this.workspaceSync.reset();
+    this.calendars.reset();
+    this.calendarEvents = [];
     this.broadcast();
   }
 
@@ -1401,6 +1495,7 @@ export class AppController {
     this.api.setBaseUrl(this.settings.apiBaseUrl);
     if (patch.launchAtLogin !== undefined) syncLaunchAtLogin(this.settings.launchAtLogin);
     if (patch.desktopWidgetVisible !== undefined) this.syncDesktopWidget();
+    if (patch.showCalendarEvents !== undefined || patch.appleCalendarIds !== undefined) this.refreshCalendarEvents();
     if (patch.distractionResponse !== undefined) {
       this.syncClassifierWatch();
       if (this.latestForeground) this.considerDistractionNudge(this.latestForeground);
@@ -1469,6 +1564,7 @@ export class AppController {
 
   persistWorkspace() {
     saveCalendarWorkspace(this.calendarWorkspace);
+    this.workspaceSync.markChanged();
     this.broadcast();
   }
 
@@ -2184,6 +2280,7 @@ export class AppController {
     this.auth.mfaChallenge = null;
     this.setAuthStatus(`${success} as ${this.auth.user.email}`);
     void this.loadJevRatings();
+    this.refreshCalendars();
     await this.syncPending();
     await this.refreshVisibleRange();
     await this.refreshBlockingHelper(true);

@@ -15,6 +15,7 @@ import {
   isLocalLiveBlock,
   placeDayBlock,
 } from "./DayBoard";
+import { allDayEventsOn, eventColor, eventTooltip, layoutOverlaps, timedEventsBetween } from "./events";
 import { openDay } from "./navigation";
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
@@ -59,6 +60,18 @@ export function WeekBoard({
     dayDeviceColumn(day, timeline, timeZone, state, now, index === 0)
   )));
   const firstEntryTop = earliestTop(columns);
+  const dayEvents = days.map((day) => {
+    const dayStart = startOfDay(day, timeZone);
+    const dayEnd = endOfDay(day, timeZone);
+    return {
+      key: toDateInput(day, timeZone),
+      dayStart,
+      dayEnd,
+      allDay: allDayEventsOn(state.calendarEvents, day, timeZone),
+      timed: layoutOverlaps(timedEventsBetween(state.calendarEvents, dayStart, dayEnd)),
+    };
+  });
+  const hasAllDay = dayEvents.some((day) => day.allDay.length > 0);
   const columnCount = days.length * timelines.length;
   const gridTemplateColumns = `${HOUR_COL}px repeat(${columnCount}, minmax(${DAY_MIN}px, 1fr))`;
   const gridMinWidth = HOUR_COL + columnCount * DAY_MIN;
@@ -133,19 +146,40 @@ export function WeekBoard({
             </span>
           ));
         }) : null}
+        {hasAllDay ? <span className="day-board-allday-label">All day</span> : null}
+        {hasAllDay ? dayEvents.map((day) => (
+          <div
+            key={`allday-${day.key}`}
+            className="day-board-allday week-board-allday"
+            style={{ gridColumn: `span ${timelines.length}` }}
+          >
+            {day.allDay.map((event) => (
+              <span
+                key={event.id}
+                className="calendar-allday-chip"
+                style={{ ["--block-color" as string]: eventColor(event) }}
+                title={eventTooltip(event, clockFormat)}
+              >
+                {event.title}
+              </span>
+            ))}
+          </div>
+        )) : null}
       </div>
       <div className="day-board-body" style={{ height: DAY_BOARD_HEIGHT, gridTemplateColumns, minWidth: gridMinWidth }}>
-        <div className="day-board-hours" aria-hidden="true">
+        {/* Placed explicitly: the event layers below share row 1, and auto-placement would push these aside. */}
+        <div className="day-board-hours" aria-hidden="true" style={{ gridColumn: 1, gridRow: 1 }}>
           {HOURS.map((hour) => (
             <div key={hour} style={{ height: DAY_HOUR_HEIGHT }}>
               {clockFormat === "24" ? hourLabel24(hour) : hourLabelWithPeriod(hour)}
             </div>
           ))}
         </div>
-        {columns.map((column) => (
+        {columns.map((column, index) => (
           <div
             key={column.key}
             className={`day-board-col ${column.dayStartColumn ? "is-day-start" : ""}`}
+            style={{ gridColumn: index + 2, gridRow: 1 }}
             data-testid={`calendar-week-day-${column.key}`}
           >
             {column.items.map((item) => {
@@ -192,6 +226,34 @@ export function WeekBoard({
                     </>
                   )}
                 </button>
+              );
+            })}
+          </div>
+        ))}
+        {dayEvents.map((day, index) => (
+          <div
+            key={`events-${day.key}`}
+            className="week-event-layer"
+            style={{ gridColumn: `${2 + index * timelines.length} / span ${timelines.length}`, gridRow: 1 }}
+            data-testid={`calendar-week-events-${day.key}`}
+          >
+            {day.timed.map(({ event, column, columns: lanes }) => {
+              const placed = placeDayBlock(event.start, event.end, day.dayStart, day.dayEnd);
+              return (
+                <div
+                  key={event.id}
+                  className="week-event"
+                  style={{
+                    top: placed.top,
+                    height: placed.height,
+                    left: `${(column / lanes) * 100}%`,
+                    width: `${100 / lanes}%`,
+                    ["--block-color" as string]: eventColor(event),
+                  }}
+                  title={eventTooltip(event, clockFormat)}
+                >
+                  {event.title}
+                </div>
               );
             })}
           </div>

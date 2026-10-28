@@ -3,11 +3,15 @@ import { clipInterval, formatFullDate, formatHourMinute, mondayMonthGridDays } f
 import { deviceColor, deviceKey } from "@shared/device";
 import { effectiveTimeZone, endOfDay, startOfDay, startOfMonth, toDateInput } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
-import { formatMonthLabel, itemBreakdownKey } from "@shared/timeline";
+import { formatClock, formatMonthLabel, itemBreakdownKey } from "@shared/timeline";
 import type { ScreenTimeSessionBlock } from "@shared/types";
+import { useClockFormat } from "../../clock-format";
+import { eventColor, eventsOnDay, eventTooltip } from "./events";
 import { openDay } from "./navigation";
 
 const VISIBLE_CHIPS = 4;
+/** Calendar events shown in a cell before tracked apps; the rest count toward "more". */
+const VISIBLE_EVENTS = 2;
 
 type DayChip = {
   key: string;
@@ -18,6 +22,7 @@ type DayChip = {
 };
 
 export function MonthBoard({ state }: { state: AppSnapshot }) {
+  const clockFormat = useClockFormat();
   const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
   const month = new Date(state.calendarMonth);
   const days = mondayMonthGridDays(month, timeZone);
@@ -26,7 +31,8 @@ export function MonthBoard({ state }: { state: AppSnapshot }) {
   const weekdays = days.slice(0, 7).map((day) => weekdayName(day, timeZone));
   const cells = days.map((day) => {
     const chips = chipsForDay(day, state, timeZone);
-    return { day, chips, seconds: chips.reduce((sum, chip) => sum + chip.seconds, 0) };
+    const events = eventsOnDay(state.calendarEvents, startOfDay(day, timeZone), endOfDay(day, timeZone), timeZone);
+    return { day, chips, events, seconds: chips.reduce((sum, chip) => sum + chip.seconds, 0) };
   });
   const busiest = Math.max(0, ...cells.map((cell) => cell.seconds));
 
@@ -36,11 +42,12 @@ export function MonthBoard({ state }: { state: AppSnapshot }) {
         {weekdays.map((label) => (
           <div key={label} className="calendar-month-weekday">{label}</div>
         ))}
-        {cells.map(({ day, chips, seconds }) => {
+        {cells.map(({ day, chips, events, seconds }) => {
           const key = toDateInput(day, timeZone);
           const intensity = busiest > 0 ? Math.round((seconds / busiest) * 14) : 0;
-          const visible = chips.slice(0, VISIBLE_CHIPS);
-          const hidden = chips.length - visible.length;
+          const visibleEvents = events.slice(0, VISIBLE_EVENTS);
+          const visible = chips.slice(0, VISIBLE_CHIPS - visibleEvents.length);
+          const hidden = events.length - visibleEvents.length + chips.length - visible.length;
           return (
             <div
               key={key}
@@ -59,6 +66,17 @@ export function MonthBoard({ state }: { state: AppSnapshot }) {
                 </button>
                 {seconds > 0 ? <span className="calendar-month-total">{formatHourMinute(seconds)}</span> : null}
               </div>
+              {visibleEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="calendar-month-event"
+                  style={{ ["--block-color" as string]: eventColor(event) }}
+                  title={eventTooltip(event, clockFormat)}
+                >
+                  {event.isAllDay ? null : <span>{formatClock(event.start, clockFormat)}</span>}
+                  <strong>{event.title}</strong>
+                </div>
+              ))}
               {visible.map((chip) => (
                 <button
                   key={chip.key}

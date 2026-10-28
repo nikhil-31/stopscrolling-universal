@@ -16,15 +16,17 @@ function bundlePaths(context) {
     appPath,
     appex: join(appPath, "Contents", "PlugIns", "StopScrollingWidget.appex"),
     reload: join(appPath, "Contents", "Frameworks", "StopScrollingWidgetReload.dylib"),
+    calendar: join(appPath, "Contents", "Frameworks", "StopScrollingCalendar.dylib"),
   };
 }
 
 /** Signs the widget before electron-builder seals the app. An unsigned appex makes that signature fail. */
 export async function afterPack(context) {
   if (context.electronPlatformName !== "darwin") return;
-  const { appex, reload } = bundlePaths(context);
-  if (!existsSync(appex)) return;
+  const { appex, reload, calendar } = bundlePaths(context);
   const identity = developmentIdentity();
+  if (existsSync(calendar)) codesign(identity, calendar, null);
+  if (!existsSync(appex)) return;
   codesign(identity, appex, widgetEntitlements);
   if (existsSync(reload)) codesign(identity, reload, null);
 }

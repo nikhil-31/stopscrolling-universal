@@ -2,7 +2,7 @@ import { BrowserWindow, Menu, app, dialog, ipcMain, shell } from "electron";
 import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { IPC } from "@shared/ipc";
-import type { AppSettings, InsightsPeriod, LeaderboardPeriod, NavigationItem, TodayPeriod, TodayTab, BlocklistWritePayload, BlocklistUpdatePayload, BlockingScheduleUpdatePayload, BlockingScheduleWritePayload } from "@shared/types";
+import type { AppSettings, CalendarProvider, InsightsPeriod, LeaderboardPeriod, NavigationItem, TodayPeriod, TodayTab, BlocklistWritePayload, BlocklistUpdatePayload, BlockingScheduleUpdatePayload, BlockingScheduleWritePayload } from "@shared/types";
 import type { CalendarView } from "@shared/calendar-workspace";
 import type { AppController } from "./app-controller";
 import { refreshTray } from "./tray";
@@ -24,6 +24,16 @@ function assertTrustedRenderer(event: { senderFrame: Electron.WebFrameMain | nul
     : null;
   if (!developmentOrigin || url.origin !== developmentOrigin) {
     throw new Error("Untrusted renderer IPC caller");
+  }
+}
+
+/** For fire-and-forget channels, where throwing would surface as an uncaught main-process error. */
+function fromTrustedRenderer(event: { senderFrame: Electron.WebFrameMain | null }) {
+  try {
+    assertTrustedRenderer(event);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -289,19 +299,29 @@ export function installIpc(controller: AppController) {
     assertTrustedRenderer(event);
     return controller.redeemBlockingBypass(input);
   });
-  ipcMain.on(IPC.googleConnect, () => {
-    void controller.google.connect(controller.settings.googleClientId).then(() => {
-      controller.settings.showGoogleCalendarEvents = true;
-      void controller.refreshVisibleRange();
-    }).catch((error: Error) => {
-      controller.statusMessage = error.message;
-      controller.broadcast();
-    });
+  ipcMain.handle(IPC.googleConnect, (event) => {
+    assertTrustedRenderer(event);
+    return controller.connectGoogleCalendar();
   });
-  ipcMain.on(IPC.googleDisconnect, () => {
-    controller.google.disconnect();
-    controller.updateSettings({ showGoogleCalendarEvents: false });
+  ipcMain.handle(IPC.googleDisconnect, (event, connectionId: number) => {
+    assertTrustedRenderer(event);
+    return controller.disconnectGoogleCalendar(Number(connectionId));
   });
+  ipcMain.handle(IPC.appleCalendarRequestAccess, (event) => {
+    assertTrustedRenderer(event);
+    return controller.requestAppleCalendarAccess();
+  });
+  ipcMain.handle(IPC.refreshCalendarSources, (event) => {
+    assertTrustedRenderer(event);
+    return controller.calendars.refresh({ fromGoogle: true }).then(() => controller.refreshCalendarEvents());
+  });
+  ipcMain.handle(
+    IPC.setCalendarSelected,
+    (event, payload: { provider: CalendarProvider; id: string; selected: boolean }) => {
+      assertTrustedRenderer(event);
+      return controller.setCalendarSelected(payload);
+    },
+  );
   ipcMain.on(IPC.linkRiot, (_event, riotId: string) => {
     void controller.gameSync.linkRiot(riotId);
   });
@@ -314,43 +334,56 @@ export function installIpc(controller: AppController) {
   ipcMain.on(IPC.disconnectSteam, () => {
     void controller.gameSync.disconnectSteam();
   });
-  ipcMain.on(IPC.setCalendarView, (_event, view: CalendarView) => {
+  ipcMain.on(IPC.setCalendarView, (event, view: CalendarView) => {
+    if (!fromTrustedRenderer(event)) return;
     controller.setCalendarView(view);
   });
-  ipcMain.on(IPC.upsertCalendarLabel, (_event, patch) => {
+  ipcMain.on(IPC.upsertCalendarLabel, (event, patch) => {
+    if (!fromTrustedRenderer(event)) return;
     controller.upsertCalendarLabel(patch);
   });
-  ipcMain.on(IPC.deleteCalendarLabel, (_event, id: string) => {
+  ipcMain.on(IPC.deleteCalendarLabel, (event, id: string) => {
+    if (!fromTrustedRenderer(event)) return;
     controller.deleteCalendarLabel(id);
   });
-  ipcMain.on(IPC.upsertCalendarTask, (_event, patch) => {
+  ipcMain.on(IPC.upsertCalendarTask, (event, patch) => {
+    if (!fromTrustedRenderer(event)) return;
     controller.upsertCalendarTask(patch);
   });
-  ipcMain.on(IPC.deleteCalendarTask, (_event, id: string) => {
+  ipcMain.on(IPC.deleteCalendarTask, (event, id: string) => {
+    if (!fromTrustedRenderer(event)) return;
     controller.deleteCalendarTask(id);
   });
-  ipcMain.on(IPC.assignCalendarLabel, (_event, patch) => {
+  ipcMain.on(IPC.assignCalendarLabel, (event, patch) => {
+    if (!fromTrustedRenderer(event)) return;
     controller.assignCalendarLabel(patch);
   });
-  ipcMain.on(IPC.clearCalendarAssignment, (_event, id: string) => {
+  ipcMain.on(IPC.clearCalendarAssignment, (event, id: string) => {
+    if (!fromTrustedRenderer(event)) return;
     controller.clearCalendarAssignment(id);
   });
-  ipcMain.on(IPC.reviewCalendarBlock, (_event, payload) => {
+  ipcMain.on(IPC.reviewCalendarBlock, (event, payload) => {
+    if (!fromTrustedRenderer(event)) return;
     controller.reviewCalendarBlock(payload);
   });
-  ipcMain.on(IPC.skipCalendarBlock, (_event, blockId: string) => {
+  ipcMain.on(IPC.skipCalendarBlock, (event, blockId: string) => {
+    if (!fromTrustedRenderer(event)) return;
     controller.skipCalendarBlock(blockId);
   });
-  ipcMain.on(IPC.dismissCalendarReview, (_event, unlabeledIds: string[]) => {
+  ipcMain.on(IPC.dismissCalendarReview, (event, unlabeledIds: string[]) => {
+    if (!fromTrustedRenderer(event)) return;
     controller.dismissCalendarReview(unlabeledIds);
   });
-  ipcMain.on(IPC.assignCalendarLabelToApp, (_event, payload: { appKey: string; labelId: string }) => {
+  ipcMain.on(IPC.assignCalendarLabelToApp, (event, payload: { appKey: string; labelId: string }) => {
+    if (!fromTrustedRenderer(event)) return;
     controller.assignCalendarLabelToApp(payload);
   });
-  ipcMain.on(IPC.approveTimesheetEntries, (_event, blocks) => {
+  ipcMain.on(IPC.approveTimesheetEntries, (event, blocks) => {
+    if (!fromTrustedRenderer(event)) return;
     controller.approveTimesheetEntries(blocks);
   });
-  ipcMain.on(IPC.unapproveTimesheetEntry, (_event, blockId: string) => {
+  ipcMain.on(IPC.unapproveTimesheetEntry, (event, blockId: string) => {
+    if (!fromTrustedRenderer(event)) return;
     controller.unapproveTimesheetEntry(blockId);
   });
 }

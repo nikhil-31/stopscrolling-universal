@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { effectiveTimeZone, localTimeZoneLabel } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
+import type { AppleCalendarAccess, CalendarSourceOption } from "@shared/types";
 import {
   CalendarDays,
   Cloud,
@@ -399,44 +400,125 @@ function AppearancePane({ state }: { state: AppSnapshot }) {
   );
 }
 
+const APPLE_ACCESS_TEXT: Record<AppleCalendarAccess, string> = {
+  notDetermined: "Allow access to show events from Calendar.app.",
+  fullAccess: "Reading calendars from Calendar.app on this Mac.",
+  writeOnly: "Stop Scrolling needs full access to read events. Change it in System Settings › Privacy & Security › Calendars.",
+  denied: "Access is off. Turn it on in System Settings › Privacy & Security › Calendars.",
+  restricted: "Calendar access is restricted on this Mac.",
+  unsupported: "",
+};
+
+function CalendarToggle({ calendar }: { calendar: CalendarSourceOption }) {
+  return (
+    <Toggle
+      label={calendar.name}
+      description={calendar.coveredByGoogle ? "Shown through your linked Google account" : calendar.accountLabel}
+      checked={calendar.selected}
+      disabled={calendar.coveredByGoogle}
+      onChange={(selected) => void window.stopscrolling.setCalendarSelected({
+        provider: calendar.provider,
+        id: calendar.id,
+        selected,
+      })}
+      testId={`settings-calendar-${calendar.provider}-${calendar.id}`}
+    />
+  );
+}
+
 function CalendarPane({ state }: { state: AppSnapshot }) {
   const settings = state.settings;
+  const { google, apple, calendars, errors } = state.calendarIntegration;
+  const googleCalendars = calendars.filter((calendar) => calendar.provider === "google");
+  const appleCalendars = calendars.filter((calendar) => calendar.provider === "apple");
+  const linked = google.accounts.length > 0;
   return (
     <>
+      <SettingsGroup title="Events" description="Place commitments alongside tracked activity.">
+        <Toggle
+          label="Show calendar events"
+          description="Overlay events from the calendars below on Calendar."
+          checked={settings.showCalendarEvents}
+          onChange={(showCalendarEvents) => window.stopscrolling.updateSettings({ showCalendarEvents })}
+          testId="settings-show-calendar-events"
+        />
+        {errors.length ? <Banner tone="warning">{errors.join(" ")}</Banner> : null}
+      </SettingsGroup>
       <SettingsGroup
         title="Google Calendar"
-        description="Place commitments alongside tracked activity."
-        action={<Badge tone={state.googleCalendarConnected ? "success" : "neutral"} dot>{state.googleCalendarConnected ? "Connected" : "Not connected"}</Badge>}
+        description="Linked to your Stop Scrolling account, so it shows on every device you sign in to. Read-only."
+        action={<Badge tone={linked ? "success" : "neutral"} dot>{linked ? "Connected" : "Not connected"}</Badge>}
       >
+        {google.accounts.map((account) => (
+          <SettingRow
+            key={account.id}
+            label={account.email}
+            description={account.needsReauth ? "Google access expired. Reconnect to keep seeing events." : "Connected"}
+            icon={<CalendarDays size={16} aria-hidden="true" />}
+          >
+            {account.needsReauth ? (
+              <Button size="sm" variant="primary" disabled={google.connecting} onClick={() => void window.stopscrolling.googleConnect()}>
+                Reconnect
+              </Button>
+            ) : null}
+            <Button size="sm" variant="ghost" onClick={() => void window.stopscrolling.googleDisconnect(account.id)}>Disconnect</Button>
+          </SettingRow>
+        ))}
+        {googleCalendars.map((calendar) => <CalendarToggle key={`google-${calendar.id}`} calendar={calendar} />)}
         <SettingRow
-          label="Google Calendar"
-          description={state.googleCalendarStatus}
-          icon={<CalendarDays size={16} aria-hidden="true" />}
+          label={linked ? "Add another Google account" : "Google Calendar"}
+          description={
+            !google.available
+              ? "Sign in to link Google Calendar."
+              : google.connecting
+                ? "Finish signing in with Google in your browser."
+                : "Opens Google in your browser."
+          }
+          icon={linked ? undefined : <CalendarDays size={16} aria-hidden="true" />}
         >
-          {state.googleCalendarConnected ? (
-            <Button size="sm" variant="ghost" onClick={() => window.stopscrolling.googleDisconnect()}>Disconnect</Button>
-          ) : (
-            <Button size="sm" variant="primary" onClick={() => window.stopscrolling.googleConnect()}>Connect</Button>
-          )}
+          <Button
+            size="sm"
+            variant={linked ? "ghost" : "primary"}
+            disabled={!google.available || google.connecting}
+            onClick={() => void window.stopscrolling.googleConnect()}
+            data-testid="settings-google-calendar-connect"
+          >
+            {google.connecting ? "Waiting…" : "Connect"}
+          </Button>
         </SettingRow>
-        <Toggle
-          label="Show Google Calendar events"
-          description="Overlay timed events on the Calendar day view."
-          checked={settings.showGoogleCalendarEvents}
-          onChange={(showGoogleCalendarEvents) => window.stopscrolling.updateSettings({ showGoogleCalendarEvents })}
-          testId="settings-show-google-calendar-events"
-        />
-        <div className="settings-row settings-row-stacked">
-          <TextField
-            label="Google OAuth client ID"
-            placeholder="Client ID from Google Cloud Console"
-            value={settings.googleClientId}
-            onChange={(event) => window.stopscrolling.updateSettings({ googleClientId: event.target.value })}
-            hint="Stored locally and used only for calendar authorization."
-          />
-        </div>
-        <p className="settings-footnote">Apple Calendar / EventKit is not available in the cross-platform Electron client.</p>
+        {linked ? (
+          <div className="form-actions">
+            <Button size="sm" variant="ghost" icon={RefreshCw} onClick={() => void window.stopscrolling.refreshCalendarSources()}>
+              Refresh calendar list
+            </Button>
+          </div>
+        ) : null}
       </SettingsGroup>
+      {apple.access === "unsupported" ? null : (
+        <SettingsGroup
+          title="Apple Calendar"
+          description="Calendars from Calendar.app, read on this Mac only."
+          action={<Badge tone={apple.access === "fullAccess" ? "success" : "neutral"} dot>{apple.access === "fullAccess" ? "Allowed" : "Not allowed"}</Badge>}
+        >
+          <SettingRow
+            label="Calendar access"
+            description={APPLE_ACCESS_TEXT[apple.access]}
+            icon={<CalendarDays size={16} aria-hidden="true" />}
+          >
+            {apple.access === "notDetermined" ? (
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => void window.stopscrolling.appleCalendarRequestAccess()}
+                data-testid="settings-apple-calendar-allow"
+              >
+                Allow access
+              </Button>
+            ) : null}
+          </SettingRow>
+          {appleCalendars.map((calendar) => <CalendarToggle key={`apple-${calendar.id}`} calendar={calendar} />)}
+        </SettingsGroup>
+      )}
       <SettingsGroup title="Labels" description="Names and colors applied to reviewed time on Calendar.">
         {state.calendarWorkspace.labels.map((label) => (
           <SettingRow

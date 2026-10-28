@@ -78,8 +78,11 @@ interface StopScrollingDesktop {
     Promise<import("@shared/types").EndNormalOccurrenceResponse>;
   redeemBlockingBypass: (input: import("@shared/types").BypassRedeemInput) =>
     Promise<{ redeemed: boolean; nonce: string; redeemed_at: string }>;
-  googleConnect: () => void;
-  googleDisconnect: () => void;
+  googleConnect: () => Promise<void>;
+  googleDisconnect: (connectionId: number) => Promise<void>;
+  appleCalendarRequestAccess: () => Promise<import("@shared/types").AppleCalendarAccess>;
+  refreshCalendarSources: () => Promise<void>;
+  setCalendarSelected: (payload: { provider: import("@shared/types").CalendarProvider; id: string; selected: boolean }) => Promise<void>;
   linkRiot: (riotId: string) => void;
   disconnectRiot: () => void;
   connectSteam: () => void;

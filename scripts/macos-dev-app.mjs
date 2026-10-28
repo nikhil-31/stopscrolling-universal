@@ -7,6 +7,13 @@ const require = createRequire(import.meta.url);
 const APP_NAME = "StopScrolling";
 const DISPLAY_NAME = "Stop Scrolling";
 const BUNDLE_ID = "com.stopscrolling.desktop";
+const CALENDAR_USAGE = "Stop Scrolling shows your calendar events next to your screen time. It never changes your calendars.";
+// macOS ends the process instead of prompting when one of these is missing.
+const USAGE_DESCRIPTIONS = {
+  NSAppleEventsUsageDescription: "Stop Scrolling reads the frontmost app and browser tab so it can record screen time.",
+  NSCalendarsUsageDescription: CALENDAR_USAGE,
+  NSCalendarsFullAccessUsageDescription: CALENDAR_USAGE,
+};
 
 function readPlist(plistPath) {
   return JSON.parse(execFileSync("plutil", ["-convert", "json", "-o", "-", plistPath], { encoding: "utf8" }));
@@ -52,16 +59,15 @@ export function ensureMacosDevApp() {
     plist.CFBundleName = DISPLAY_NAME;
     plist.CFBundleDisplayName = DISPLAY_NAME;
     plist.CFBundleIdentifier = BUNDLE_ID;
-    plist.NSAppleEventsUsageDescription =
-      "Stop Scrolling reads the frontmost app and browser tab so it can record screen time.";
+    Object.assign(plist, USAGE_DESCRIPTIONS);
     writePlist(destPlistPath, plist);
   } else {
     const plist = readPlist(destPlistPath);
-    if (plist.CFBundleName !== DISPLAY_NAME || plist.CFBundleDisplayName !== DISPLAY_NAME) {
+    const missingUsage = Object.entries(USAGE_DESCRIPTIONS).some(([key, value]) => plist[key] !== value);
+    if (plist.CFBundleName !== DISPLAY_NAME || plist.CFBundleDisplayName !== DISPLAY_NAME || missingUsage) {
       plist.CFBundleName = DISPLAY_NAME;
       plist.CFBundleDisplayName = DISPLAY_NAME;
-      plist.NSAppleEventsUsageDescription =
-        "Stop Scrolling reads the frontmost app and browser tab so it can record screen time.";
+      Object.assign(plist, USAGE_DESCRIPTIONS);
       writePlist(destPlistPath, plist);
     }
   }

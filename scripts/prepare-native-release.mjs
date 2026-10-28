@@ -88,6 +88,8 @@ function stageMacNativeDirectory(root) {
     "  <true/>",
     "  <key>com.apple.security.automation.apple-events</key>",
     "  <true/>",
+    "  <key>com.apple.security.personal-information.calendars</key>",
+    "  <true/>",
     "  <key>com.apple.developer.system-extension.install</key>",
     "  <true/>",
     "  <key>com.apple.security.application-groups</key>",

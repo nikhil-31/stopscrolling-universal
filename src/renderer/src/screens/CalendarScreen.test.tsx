@@ -5,8 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultWorkspace } from "@shared/calendar-workspace";
 import { toDateInput } from "@shared/platform";
 import type { AppSnapshot } from "@shared/snapshot";
-import type { ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
-import { dayBoardScrollTop, layoutOverlaps } from "../components/calendar/DayBoard";
+import type { CalendarOverlayEvent, ScreenTimeDeviceTimeline, ScreenTimeSessionBlock } from "@shared/types";
+import { dayBoardScrollTop } from "../components/calendar/DayBoard";
+import { layoutOverlaps } from "../components/calendar/events";
 import { SessionTitleProvider } from "../session-title";
 import { CalendarScreen } from "./CalendarScreen";
 
@@ -19,6 +20,19 @@ const desktop = {
 };
 
 const noon = new Date(2026, 8, 12, 12);
+
+function calendarEvent(patch: Partial<CalendarOverlayEvent> & Pick<CalendarOverlayEvent, "id" | "title">): CalendarOverlayEvent {
+  return {
+    start: new Date(2026, 8, 12, 9).toISOString(),
+    end: new Date(2026, 8, 12, 10).toISOString(),
+    calendarId: "work",
+    calendarName: "Work",
+    isAllDay: false,
+    colorHex: null,
+    provider: "google",
+    ...patch,
+  };
+}
 
 function block(patch: Partial<ScreenTimeSessionBlock> & Pick<ScreenTimeSessionBlock, "id" | "title" | "deviceName" | "devicePlatform">): ScreenTimeSessionBlock {
   const start = patch.start ?? new Date(2026, 8, 12, 9).toISOString();
@@ -67,7 +81,13 @@ function snapshot(patch: Partial<AppSnapshot> = {}): AppSnapshot {
     calendarEvents: [],
     calendarReviewVisible: true,
     timelines: [],
-    settings: { showGoogleCalendarEvents: true },
+    settings: { showCalendarEvents: true },
+    calendarIntegration: {
+      google: { available: true, connecting: false, accounts: [] },
+      apple: { access: "unsupported" },
+      calendars: [],
+      errors: [],
+    },
     calendarDayStats: {
       workSeconds: 3600,
       pendingSeconds: 600,
@@ -645,19 +665,64 @@ describe("CalendarScreen navigation and scanning", () => {
 
   it("shows all-day events in a strip above the day grid", () => {
     render(<CalendarScreen state={snapshot({
-      calendarEvents: [{
-        id: "holiday",
-        title: "Company offsite",
-        start: new Date(2026, 8, 12).toISOString(),
-        end: new Date(2026, 8, 13).toISOString(),
-        calendarName: "Work",
-        isAllDay: true,
-        colorHex: null,
-        provider: "google",
-      }],
+      calendarEvents: [
+        calendarEvent({ id: "holiday", title: "Company offsite", start: "2026-09-12", end: "2026-09-13", isAllDay: true }),
+        calendarEvent({ id: "tomorrow", title: "Next day trip", start: "2026-09-13", end: "2026-09-14", isAllDay: true }),
+      ],
     })} />);
     expect(screen.getByText("All day")).toBeVisible();
     expect(document.querySelector(".day-board-allday")).toHaveTextContent("Company offsite");
+    expect(document.querySelector(".day-board-allday")).not.toHaveTextContent("Next day trip");
+  });
+
+  it("shows only the anchor day's timed events in the day view", () => {
+    render(<CalendarScreen state={snapshot({
+      calendarEvents: [
+        calendarEvent({ id: "standup", title: "Standup" }),
+        calendarEvent({
+          id: "later",
+          title: "Retro",
+          start: new Date(2026, 8, 14, 9).toISOString(),
+          end: new Date(2026, 8, 14, 10).toISOString(),
+        }),
+      ],
+    })} />);
+    const column = document.querySelector(".day-board-calendar")!;
+    expect(column).toHaveTextContent("Standup");
+    expect(column).not.toHaveTextContent("Retro");
+    expect(within(column as HTMLElement).getByTitle(/Work \(Google\)/)).toBeVisible();
+  });
+
+  it("puts week events under the day they happen and keeps multi-day all-day events on each day", () => {
+    render(<CalendarScreen state={snapshot({
+      calendarView: "week",
+      calendarEvents: [
+        calendarEvent({ id: "standup", title: "Standup", provider: "apple", calendarName: "Home" }),
+        calendarEvent({ id: "trip", title: "Trip", start: "2026-09-10", end: "2026-09-12", isAllDay: true }),
+      ],
+    })} />);
+    expect(screen.getByTestId("calendar-week-events-2026-09-12")).toHaveTextContent("Standup");
+    expect(screen.getByTestId("calendar-week-events-2026-09-11")).not.toHaveTextContent("Standup");
+    expect(screen.getByTitle(/Standup[\s\S]*Home \(Apple\)/)).toBeVisible();
+    const allDay = document.querySelectorAll(".week-board-allday");
+    // Monday 7 Sept is the first column; the trip covers Thursday and Friday (end date excluded).
+    expect([...allDay].map((cell) => cell.textContent)).toEqual(["", "", "", "Trip", "Trip", "", ""]);
+  });
+
+  it("lists a day's events first in the month view and counts the rest as more", () => {
+    render(<CalendarScreen state={snapshot({
+      calendarView: "month",
+      timelines: [studio],
+      calendarEvents: [
+        calendarEvent({ id: "a", title: "Standup" }),
+        calendarEvent({ id: "b", title: "Design review", start: new Date(2026, 8, 12, 14).toISOString(), end: new Date(2026, 8, 12, 15).toISOString() }),
+        calendarEvent({ id: "c", title: "Dinner", start: new Date(2026, 8, 12, 19).toISOString(), end: new Date(2026, 8, 12, 20).toISOString() }),
+      ],
+    })} />);
+    const saturday = screen.getByTestId("calendar-month-day-2026-09-12");
+    const events = saturday.querySelectorAll(".calendar-month-event");
+    expect([...events].map((event) => event.querySelector("strong")?.textContent)).toEqual(["Standup", "Design review"]);
+    expect(within(saturday).getByRole("button", { name: /1 more/ })).toBeVisible();
   });
 
   it("says when a day has no tracked activity", () => {
@@ -697,15 +762,11 @@ describe("CalendarScreen navigation and scanning", () => {
 });
 
 describe("layoutOverlaps", () => {
-  const event = (id: string, startHour: number, endHour: number) => ({
+  const event = (id: string, startHour: number, endHour: number) => calendarEvent({
     id,
     title: id,
     start: new Date(2026, 8, 12, startHour).toISOString(),
     end: new Date(2026, 8, 12, endHour).toISOString(),
-    calendarName: "Work",
-    isAllDay: false,
-    colorHex: null,
-    provider: "google" as const,
   });
 
   it("puts overlapping events side by side and leaves separate ones full width", () => {
