@@ -409,8 +409,9 @@ export class AppController {
   private latestForeground: ActivitySnapshot | null = null;
   private blockingRefreshGeneration = 0;
   private blockingListsTask: Promise<{
-    blocklists: BlockingUiState["blocklists"];
-    schedules: BlockingUiState["schedules"];
+    blocklists: BlockingUiState["blocklists"] | null;
+    schedules: BlockingUiState["schedules"] | null;
+    error: string | null;
   }> | null = null;
   readonly helper: BlockingHelperBridge;
   readonly localEnforcer = new LocalEnforcer(
@@ -2041,14 +2042,14 @@ export class AppController {
       this.broadcast();
     }
     try {
-      const { blocklists, schedules } = await this.fetchBlockingLists();
+      const { blocklists, schedules, error } = await this.fetchBlockingLists();
       if (generation !== this.blockingRefreshGeneration) return;
-      this.publishBlockingLists(blocklists, schedules);
+      this.publishBlockingLists(blocklists, schedules, error);
       this.blocking.loading = false;
       this.broadcast();
-      logObservability(
-        `Blocking sessions ready in ${(performance.now() - started).toFixed(0)}ms (${schedules.length} sessions)`,
-      );
+      logObservability(error
+        ? `Blocking lists failed to load: ${error}`
+        : `Blocking sessions ready in ${(performance.now() - started).toFixed(0)}ms (${schedules?.length ?? 0} sessions)`);
       await this.refreshBlockingDevices();
       if (generation !== this.blockingRefreshGeneration) return;
       await this.refreshBlockingHelper(true);
@@ -2065,11 +2066,12 @@ export class AppController {
     if (!this.auth.user) return;
     const generation = ++this.blockingRefreshGeneration;
     try {
-      const { blocklists, schedules } = await this.fetchBlockingLists();
+      const { blocklists, schedules, error } = await this.fetchBlockingLists();
       if (generation !== this.blockingRefreshGeneration) return;
-      this.publishBlockingLists(blocklists, schedules);
+      this.publishBlockingLists(blocklists, schedules, error);
       this.blocking.loading = false;
       this.broadcast();
+      if (error) logObservability(`Blocking sessions prefetch failed: ${error}`);
     } catch (error) {
       if (generation !== this.blockingRefreshGeneration) return;
       logObservability(`Blocking sessions prefetch failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -2078,10 +2080,25 @@ export class AppController {
 
   private fetchBlockingLists() {
     if (this.blockingListsTask) return this.blockingListsTask;
-    const task = Promise.all([
+    const reason = (result: PromiseSettledResult<unknown>) => (
+      result.status === "rejected"
+        ? result.reason instanceof Error ? result.reason.message : String(result.reason)
+        : null
+    );
+    const task = Promise.allSettled([
       this.api.blocklists(),
       this.api.blockingSchedules(),
-    ]).then(([blocklists, schedules]) => ({ blocklists, schedules })).finally(() => {
+    ]).then(([blocklists, schedules]) => {
+      const failures = [
+        reason(schedules) ? `Sessions: ${reason(schedules)}` : "",
+        reason(blocklists) ? `Blocklists: ${reason(blocklists)}` : "",
+      ].filter(Boolean);
+      return {
+        blocklists: blocklists.status === "fulfilled" ? blocklists.value : null,
+        schedules: schedules.status === "fulfilled" ? schedules.value : null,
+        error: failures.length ? failures.join(" · ") : null,
+      };
+    }).finally(() => {
       if (this.blockingListsTask === task) this.blockingListsTask = null;
     });
     this.blockingListsTask = task;
@@ -2089,13 +2106,21 @@ export class AppController {
   }
 
   private publishBlockingLists(
-    blocklists: BlockingUiState["blocklists"],
-    schedules: BlockingUiState["schedules"],
+    blocklists: BlockingUiState["blocklists"] | null,
+    schedules: BlockingUiState["schedules"] | null,
+    error: string | null = null,
   ) {
-    this.blocking.blocklists = blocklists;
-    this.blocking.schedules = schedules;
-    this.blocking.statusMessage = `${schedules.length} sessions · ${blocklists.length} blocklists`;
-    if (this.inspector.kind === "schedule" && this.inspector.schedule) {
+    if (blocklists) this.blocking.blocklists = blocklists;
+    if (schedules) this.blocking.schedules = schedules;
+    this.blocking.loadError = error;
+    this.blocking.failedLists = [
+      ...(schedules ? [] : ["schedules" as const]),
+      ...(blocklists ? [] : ["blocklists" as const]),
+    ];
+    this.blocking.statusMessage = error
+      ? ""
+      : `${this.blocking.schedules.length} sessions · ${this.blocking.blocklists.length} blocklists`;
+    if (schedules && this.inspector.kind === "schedule" && this.inspector.schedule) {
       const next = schedules.find((item) => item.schedule_id === this.inspector.schedule?.schedule_id);
       this.inspector = next
         ? inspectorFromSelection({ kind: "schedule", schedule: next })

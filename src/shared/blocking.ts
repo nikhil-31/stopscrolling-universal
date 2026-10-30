@@ -263,6 +263,27 @@ export function formatRemaining(totalMinutes: number) {
   return `${hourLabel} ${minuteLabel} left`;
 }
 
+/** The next start of an active schedule after `now`, looking up to a week ahead. */
+export function nextScheduleStart<T extends Pick<BlockingSchedule, "is_active" | "days_of_week" | "start_time">>(
+  schedules: readonly T[],
+  now = new Date(),
+): { schedule: T; at: Date } | null {
+  let next: { schedule: T; at: Date } | null = null;
+  for (const schedule of schedules) {
+    if (!schedule.is_active || !schedule.days_of_week.length) continue;
+    const startMinutes = parseMinutes(schedule.start_time);
+    for (let offset = 0; offset <= 7; offset += 1) {
+      const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset, 0, startMinutes);
+      const jsDay = at.getDay();
+      const mondayBased = jsDay === 0 ? 6 : jsDay - 1;
+      if (at <= now || !schedule.days_of_week.includes(mondayBased)) continue;
+      if (!next || at < next.at) next = { schedule, at };
+      break;
+    }
+  }
+  return next;
+}
+
 export function formatWeekdays(days: number[]) {
   const labels = new Map<number, string>(WEEKDAYS.map((day) => [day.value, day.label]));
   return [...days]

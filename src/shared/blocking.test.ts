@@ -6,6 +6,7 @@ import {
   formatRemaining,
   isAlwaysActive,
   isScheduleRunningNow,
+  nextScheduleStart,
   normalizeWebsite,
   parseWebsiteList,
   remainingUntilEnd,
@@ -164,5 +165,18 @@ describe("blocking helpers", () => {
       device_name: "Studio Mac",
       label: "",
     })).toBe("Studio Mac");
+  });
+
+  it("finds the next active schedule start", () => {
+    // Wednesday 2026-09-16 10:00 local.
+    const now = new Date(2026, 8, 16, 10, 0);
+    const later = schedule({ schedule_id: "later", start_time: "14:00:00", days_of_week: [2] });
+    const tomorrow = schedule({ schedule_id: "tomorrow", start_time: "08:00:00", days_of_week: [3] });
+    const paused = schedule({ schedule_id: "paused", start_time: "11:00:00", days_of_week: [2], is_active: false });
+    expect(nextScheduleStart([tomorrow, later, paused], now)).toEqual({ schedule: later, at: new Date(2026, 8, 16, 14, 0) });
+    expect(nextScheduleStart([tomorrow, paused], now)?.at).toEqual(new Date(2026, 8, 17, 8, 0));
+    const earlierToday = schedule({ start_time: "09:00:00", days_of_week: [2] });
+    expect(nextScheduleStart([earlierToday], now)?.at).toEqual(new Date(2026, 8, 23, 9, 0));
+    expect(nextScheduleStart([paused], now)).toBeNull();
   });
 });

@@ -58,6 +58,7 @@ export const IPC = {
   updateBlockingSchedule: "app:update-blocking-schedule",
   deleteBlockingSchedule: "app:delete-blocking-schedule",
   refreshBlockingStatus: "app:refresh-blocking-status",
+  refreshBlocking: "app:refresh-blocking",
   refreshBlockingInventory: "app:refresh-blocking-inventory",
   activateNativeBlocking: "app:activate-native-blocking",
   cancelNormalSession: "app:cancel-normal-session",

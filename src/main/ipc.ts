@@ -281,6 +281,10 @@ export function installIpc(controller: AppController) {
     assertTrustedRenderer(event);
     return controller.refreshBlockingHelper(true);
   });
+  ipcMain.handle(IPC.refreshBlocking, (event) => {
+    assertTrustedRenderer(event);
+    return controller.refreshBlocking();
+  });
   ipcMain.handle(IPC.refreshBlockingInventory, (event) => {
     assertTrustedRenderer(event);
     return controller.refreshBlockingInventory();

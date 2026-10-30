@@ -72,6 +72,7 @@ interface StopScrollingDesktop {
   updateBlockingSchedule: (input: import("@shared/types").BlockingScheduleUpdatePayload) => void;
   deleteBlockingSchedule: (scheduleId: string) => void;
   refreshBlockingStatus: () => Promise<void>;
+  refreshBlocking: () => Promise<void>;
   refreshBlockingInventory: () => Promise<void>;
   activateNativeBlocking: () => Promise<import("@shared/types").BlockingHostSetup>;
   cancelNormalSession: (payload: { scheduleID: string; occurrenceID: string }) =>

@@ -113,6 +113,7 @@ const api = {
   updateBlockingSchedule: (input: import("@shared/types").BlockingScheduleUpdatePayload) => ipcRenderer.send(IPC.updateBlockingSchedule, input),
   deleteBlockingSchedule: (scheduleId: string) => ipcRenderer.send(IPC.deleteBlockingSchedule, scheduleId),
   refreshBlockingStatus: () => ipcRenderer.invoke(IPC.refreshBlockingStatus),
+  refreshBlocking: () => ipcRenderer.invoke(IPC.refreshBlocking),
   refreshBlockingInventory: () => ipcRenderer.invoke(IPC.refreshBlockingInventory),
   activateNativeBlocking: () => ipcRenderer.invoke(IPC.activateNativeBlocking),
   cancelNormalSession: (payload: { scheduleID: string; occurrenceID: string }) =>

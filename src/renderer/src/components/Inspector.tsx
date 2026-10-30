@@ -3,12 +3,10 @@ import { createPortal } from "react-dom";
 import {
   clockLabel,
   formatRemaining,
-  formatWeekdays,
   remainingUntilEnd,
   scheduleDeviceLabel,
   scheduleRowKind,
   scheduleStatusLabel,
-  WEEKDAYS,
 } from "@shared/blocking";
 import { formatFullDate } from "@shared/calendar-workspace";
 import {
@@ -30,25 +28,11 @@ import { Check, Clock3, Copy, ExternalLink, Globe2, Laptop2, Shield, X } from "l
 import { useClockFormat } from "../clock-format";
 import { useSessionTitle } from "../session-title";
 import { SessionModal, SessionModalBody } from "./blocking/SessionModal";
+import { WeekStrip } from "./blocking/WeekStrip";
 import { Badge, Button, IconButton } from "./ui";
 
 function closeInspector() {
   window.stopscrolling.selectInspector({ kind: "none" });
-}
-
-function WeekStrip({ days }: { days: number[] }) {
-  return (
-    <div className="blocking-week-strip" aria-label={`Repeats ${formatWeekdays(days) || "no days"}`}>
-      {WEEKDAYS.map((day) => (
-        <span
-          className={`blocking-week-chip ${days.includes(day.value) ? "is-on" : ""}`}
-          key={day.value}
-        >
-          {day.label[0]}
-        </span>
-      ))}
-    </div>
-  );
 }
 
 function sessionScreenOverride(

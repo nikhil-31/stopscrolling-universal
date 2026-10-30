@@ -100,6 +100,10 @@ export interface BlockingUiState {
   hostSetup?: BlockingHostSetup;
   statusMessage: string;
   loading: boolean;
+  /** Why the last session or blocklist load failed, cleared on the next successful load. */
+  loadError?: string | null;
+  /** Lists the last load could not fetch; their contents may be stale or empty. */
+  failedLists?: Array<"schedules" | "blocklists">;
 }
 
 export interface AppSnapshot {

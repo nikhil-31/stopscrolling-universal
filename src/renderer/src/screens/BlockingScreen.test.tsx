@@ -19,6 +19,7 @@ const desktop = {
   deleteBlockingSchedule: vi.fn(),
   selectInspector: vi.fn(),
   refreshBlockingInventory: vi.fn().mockResolvedValue(undefined),
+  refreshBlocking: vi.fn().mockResolvedValue(undefined),
   cancelNormalSession: vi.fn().mockResolvedValue({}),
 };
 
@@ -177,8 +178,8 @@ describe("BlockingScreen", () => {
     );
     expect(screen.getByRole("alert")).toHaveTextContent(/blocking helper unavailable/i);
     expect(screen.queryByText("Blocking Status")).toBeNull();
-    expect(screen.getByText(/Deep work/)).toBeVisible();
-    expect(screen.getByText("Social")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Deep work session" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Social.*2 websites · 1 app · Used by Deep work/ })).toBeVisible();
     expect(screen.queryByText("My Devices")).toBeNull();
     expect(screen.queryByText("Studio Mac")).toBeNull();
     await userEvent.setup().click(screen.getByRole("button", { name: "Deep work session" }));
@@ -287,27 +288,6 @@ describe("BlockingScreen", () => {
     expect(screen.queryByRole("dialog", { name: "New session" })).toBeNull();
   });
 
-  it("shows an empty history tab", async () => {
-    const user = userEvent.setup();
-    render(
-      <BlockingScreen
-        state={snapshot({
-          isAuthenticated: true,
-          blocking: {
-            schedules: [namedSchedule],
-            blocklists: [blocklist],
-            statusMessage: "",
-            loading: false,
-          },
-        })}
-      />,
-    );
-    expect(screen.getByText(/Deep work/)).toBeVisible();
-    await user.click(screen.getByRole("tab", { name: "Session History" }));
-    expect(screen.queryByText(/Deep work/)).toBeNull();
-    expect(screen.getByText("Completed sessions aren’t stored yet.")).toBeVisible();
-  });
-
   it("opens blocklist details and closes them", async () => {
     const user = userEvent.setup();
     render(
@@ -325,7 +305,7 @@ describe("BlockingScreen", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /Social.*custom filters/ }));
+    await user.click(screen.getByRole("button", { name: /Social.*2 websites/ }));
     const dialog = screen.getByRole("dialog", { name: "Social" });
     expect(dialog).toBeVisible();
     expect(screen.getByText("3 entries")).toBeVisible();
@@ -343,7 +323,7 @@ describe("BlockingScreen", () => {
     await user.click(screen.getByRole("button", { name: "Close blocklist details" }));
     expect(screen.queryByRole("dialog")).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: /Social.*custom filters/ }));
+    await user.click(screen.getByRole("button", { name: /Social.*2 websites/ }));
     expect(screen.getByRole("dialog", { name: "Social" })).toBeVisible();
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -365,7 +345,7 @@ describe("BlockingScreen", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /Social.*custom filters/ }));
+    await user.click(screen.getByRole("button", { name: /Social.*2 websites/ }));
     await user.click(screen.getByRole("button", { name: "Edit blocklist" }));
     expect(screen.getByText("Your custom websites")).toBeVisible();
     expect(screen.getByText("Common filters")).toBeVisible();
@@ -408,7 +388,7 @@ describe("BlockingScreen", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /Social.*custom filters/ }));
+    await user.click(screen.getByRole("button", { name: /Social.*2 websites/ }));
     await user.click(screen.getByRole("button", { name: "Edit blocklist" }));
     await user.type(screen.getByPlaceholderText("Name your blocklist"), " night");
     await user.click(screen.getByRole("button", { name: "Cancel" }));
@@ -672,7 +652,7 @@ describe("BlockingScreen", () => {
     expect(screen.getByRole("button", { name: "Edit session" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Delete session" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Delete Deep work" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: /Social.*custom filters/ }));
+    await user.click(screen.getByRole("button", { name: /Social.*2 websites/ }));
     expect(screen.getByRole("button", { name: "Edit blocklist" })).toBeDisabled();
     unmount();
 
@@ -704,4 +684,96 @@ describe("BlockingScreen", () => {
     });
   });
 
+
+  it("shows the running session with time left and progress", () => {
+    vi.useFakeTimers({ now: new Date("2026-09-15T17:00:00Z"), toFake: ["Date"] });
+    try {
+      render(
+        <BlockingScreen
+          state={snapshot({
+            isAuthenticated: true,
+            blocking: {
+              schedules: [namedSchedule],
+              blocklists: [blocklist],
+              enforcement: { ...connectedEnforcement, strictOccurrenceIDs: ["occurrence-1"] },
+              activeOccurrence,
+              statusMessage: "",
+              loading: false,
+            },
+          })}
+        />,
+      );
+      const hero = screen.getByTestId("blocking-hero");
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(within(hero).getByText("Blocking now")).toBeVisible();
+      expect(within(hero).getByText("Deep work")).toBeVisible();
+      expect(within(hero).getByText("1h 00m")).toBeVisible();
+      expect(within(hero).getByText("Strict Mode")).toBeVisible();
+      expect(within(hero).getByText("1 site or app blocked")).toBeVisible();
+      expect(within(hero).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "96");
+      const row = screen.getByRole("button", { name: "Deep work session" });
+      expect(within(row).getByText("Running")).toBeVisible();
+      expect(within(row).getByText("1h 00m left")).toBeVisible();
+      expect(screen.getByRole("button", { name: "Delete Deep work" })).toBeDisabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows the next session when idle and marks paused sessions", () => {
+    vi.useFakeTimers({ now: new Date(2026, 8, 16, 10, 0), toFake: ["Date"] });
+    try {
+      const paused = { ...namedSchedule, schedule_id: "sched-2", name: "Evenings", is_active: false };
+      render(
+        <BlockingScreen
+          state={snapshot({
+            isAuthenticated: true,
+            blocking: {
+              schedules: [paused, namedSchedule],
+              blocklists: [blocklist],
+              enforcement: { ...connectedEnforcement, activeOccurrenceIDs: [], activeOccurrenceID: null },
+              statusMessage: "",
+              loading: false,
+            },
+          })}
+        />,
+      );
+      const hero = screen.getByTestId("blocking-hero");
+      expect(within(hero).getByText("Nothing is blocked right now")).toBeVisible();
+      expect(within(hero).getByText(/Next: Deep work starts today at/)).toBeVisible();
+      expect(within(hero).getByText("6h 00m")).toBeVisible();
+      const rows = screen.getAllByRole("button", { name: /session$/ });
+      expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual(["Deep work session", "Evenings session"]);
+      expect(within(rows[1]).getByText("Paused")).toBeVisible();
+      expect(screen.getByRole("button", { name: /Used by Evenings, Deep work/ })).toBeVisible();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows a load failure with retry instead of empty states", async () => {
+    render(
+      <BlockingScreen
+        state={snapshot({
+          isAuthenticated: true,
+          blocking: {
+            schedules: [],
+            blocklists: [blocklist],
+            enforcement: { ...connectedEnforcement, activeOccurrenceIDs: [], activeOccurrenceID: null },
+            loadError: "Sessions: Request failed (500).",
+            failedLists: ["schedules"],
+            statusMessage: "",
+            loading: false,
+          },
+        })}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Couldn’t load your sessions. Sessions: Request failed (500).");
+    expect(screen.queryByText("No sessions yet")).toBeNull();
+    expect(screen.getByText("Session status unavailable")).toBeVisible();
+    expect(screen.queryByText("Nothing is blocked right now")).toBeNull();
+    expect(screen.getByRole("button", { name: /Social.*1 app/ })).toBeVisible();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
+    expect(desktop.refreshBlocking).toHaveBeenCalled();
+  });
 });
