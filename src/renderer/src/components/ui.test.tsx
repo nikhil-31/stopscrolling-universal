@@ -418,7 +418,7 @@ describe("account states", () => {
     );
     expect(screen.getByText("focus@example.com")).toBeVisible();
     expect(screen.getByText("Studio Mac")).toBeVisible();
-    expect(screen.getByRole("checkbox", { name: "Show in timelines" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /^Show in timelines/ })).toBeChecked();
   });
 
   it("shows a nickname and saves edits from the device card", async () => {

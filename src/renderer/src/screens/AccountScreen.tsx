@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { deviceDisplayName } from "@shared/device";
+import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
+import { deviceColor, deviceDisplayName } from "@shared/device";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { DeviceListEntry } from "@shared/types";
 import {
@@ -35,7 +35,7 @@ export function AccountScreen({ state }: { state: AppSnapshot }) {
   if (!auth.user) return <SignInCard auth={auth} />;
 
   const user = auth.user;
-  const devices = sortedDevices(state.devices);
+  const devices = sortedDevices(state.devices, state.hiddenDeviceKeys);
   return (
     <div>
       <header className="page-header">
@@ -90,6 +90,7 @@ export function AccountScreen({ state }: { state: AppSnapshot }) {
                 <DeviceNicknameCard
                   key={device.visibilityKey}
                   device={device}
+                  color={deviceColor(device.visibilityKey, state.devices)}
                   visible={!state.hiddenDeviceKeys.includes(device.visibilityKey)}
                 />
               ))}
@@ -266,9 +267,12 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 
 function DeviceNicknameCard({
   device,
+  color,
   visible,
 }: {
   device: DeviceListEntry;
+  /** The device's timeline color, so the card matches its line in Today and Calendar. */
+  color: string;
   visible: boolean;
 }) {
   const displayName = deviceDisplayName(device.devicePlatform, device.deviceName, device.nickname);
@@ -295,10 +299,13 @@ function DeviceNicknameCard({
     .join(" · ");
 
   return (
-    <div className={["device-card", visible ? "" : "is-hidden", confirmingDelete ? "is-confirming" : ""].filter(Boolean).join(" ")}>
+    <div
+      className={["device-card", visible ? "" : "is-hidden", confirmingDelete ? "is-confirming" : ""].filter(Boolean).join(" ")}
+      style={{ "--device-tint": color } as CSSProperties}
+    >
       <div className="device-card-top">
         <span className="device-icon">
-          {device.devicePlatform === "windows" ? <MonitorSmartphone size={15} /> : <Laptop2 size={15} />}
+          {device.devicePlatform === "windows" ? <MonitorSmartphone size={16} /> : <Laptop2 size={16} />}
         </span>
         {editing ? (
           <TextField
@@ -327,8 +334,13 @@ function DeviceNicknameCard({
               <span className="device-card-title-row">
                 <span className="row-title">{displayName}</span>
                 {device.isLocal ? <Badge tone="accent">This device</Badge> : null}
+                {visible ? null : <Badge>Hidden</Badge>}
               </span>
               <span className="row-subtitle">{subtitle}</span>
+              <span className="device-status">
+                <span className={`dot ${device.isOnline ? "online" : ""}`} aria-hidden="true" />
+                <span>{device.isOnline ? "Online now" : lastSeenLabel(device.lastSeenAt)}</span>
+              </span>
             </span>
             <span className="device-card-actions">
               {device.deviceID ? (
@@ -351,10 +363,6 @@ function DeviceNicknameCard({
           </>
         )}
       </div>
-      <div className="device-status">
-        <span className={`dot ${device.isOnline ? "online" : ""}`} aria-hidden="true" />
-        <span>{device.isOnline ? "Online now" : lastSeenLabel(device.lastSeenAt)}</span>
-      </div>
       {confirmingDelete ? (
         <div className="device-delete-confirm" role="alertdialog" aria-label={`Remove ${displayName}`}>
           <p>Remove {displayName} from this account? Its timeline disappears. Recorded screen time stays in your totals.</p>
@@ -375,6 +383,7 @@ function DeviceNicknameCard({
       ) : (
         <Toggle
           label="Show in timelines"
+          description={visible ? "Appears in Today and Calendar" : "Hidden from timelines"}
           checked={visible}
           onChange={(nextVisible) => window.stopscrolling.setDeviceVisible(device.visibilityKey, nextVisible)}
         />
@@ -383,10 +392,12 @@ function DeviceNicknameCard({
   );
 }
 
-/** This computer first, then devices that are online, then by name. */
-function sortedDevices(devices: DeviceListEntry[]) {
+/** Devices shown in timelines first, then this computer, then devices that are online, then by name. */
+function sortedDevices(devices: DeviceListEntry[], hiddenKeys: string[]) {
+  const shown = (device: DeviceListEntry) => Number(!hiddenKeys.includes(device.visibilityKey));
   return [...devices].sort((a, b) =>
-    Number(Boolean(b.isLocal)) - Number(Boolean(a.isLocal))
+    shown(b) - shown(a)
+    || Number(Boolean(b.isLocal)) - Number(Boolean(a.isLocal))
     || Number(b.isOnline) - Number(a.isOnline)
     || deviceDisplayName(a.devicePlatform, a.deviceName, a.nickname)
       .localeCompare(deviceDisplayName(b.devicePlatform, b.deviceName, b.nickname)));
