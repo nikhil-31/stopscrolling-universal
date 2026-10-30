@@ -5,7 +5,7 @@ import { logRendererProcessGone, logRendererUnresponsive } from "./crash-reporti
 import { shouldHideWindowOnClose } from "./lifecycle";
 
 function windowBackground() {
-  return nativeTheme.shouldUseDarkColors ? "#121212" : "#f4f5fb";
+  return nativeTheme.shouldUseDarkColors ? "#141414" : "#fcfcfc";
 }
 
 function integratedWindowChrome(): Electron.BrowserWindowConstructorOptions {
