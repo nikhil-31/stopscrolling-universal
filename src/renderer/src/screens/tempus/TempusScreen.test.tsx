@@ -85,6 +85,15 @@ describe("TempusScreen", () => {
     expect(screen.queryByText("Tempus is thinking…")).not.toBeInTheDocument();
   });
 
+  it("offers lettered starting points and focuses the composer for something else", async () => {
+    const user = userEvent.setup();
+    render(<TempusScreen state={signedIn} />);
+    const choices = await screen.findByRole("region", { name: "Where should we start?" });
+    expect(choices).toHaveTextContent("APlan my dayBHow did I spend this week?");
+    await user.click(screen.getByRole("button", { name: "Something else" }));
+    expect(screen.getByRole("textbox", { name: "Message Tempus" })).toHaveFocus();
+  });
+
   it("confirms a proposed change and reloads the conversation", async () => {
     bridge.tempusConversations.mockReturnValue(ok([conversation]));
     bridge.tempusConversation.mockReturnValue(

@@ -1,42 +1,127 @@
 .tempus-screen {
+  --tempus-card: var(--surface-solid);
+  --tempus-card-line: color-mix(in srgb, var(--line) 60%, transparent);
+  --tempus-user: color-mix(in srgb, var(--text) 10%, var(--surface-solid));
+  --tempus-key: color-mix(in srgb, var(--text) 5%, var(--surface-solid));
   display: flex;
   flex-direction: column;
   gap: 14px;
   width: min(100%, 760px);
   margin: 0 auto;
 }
+/* The chat fills the window (minus the toolbar and content padding) so the composer sits at the bottom. */
+.tempus-screen.is-chat { min-height: calc(100vh - 102px); margin-bottom: -36px; }
+.tempus-screen.is-chat .tempus-timeline { flex: 1; }
 .tempus-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .tempus-header .tabs { margin: 0; }
 .tempus-header-actions { display: flex; gap: 4px; }
 .tempus-muted { color: var(--text-secondary); font-size: 12px; }
 .tempus-error { margin: 0; color: var(--danger); font-size: 13px; }
 
-.tempus-timeline { display: flex; flex-direction: column; gap: 10px; min-height: 240px; }
-.tempus-bubble {
-  max-width: 85%;
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
+.tempus-title {
+  position: sticky;
+  top: -12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 9px;
+  margin-bottom: -6px;
+  padding: 6px 16px 6px 6px;
+  border: 1px solid var(--tempus-card-line);
+  border-radius: var(--radius-pill);
+  background: var(--tempus-card);
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
   font-size: 14px;
+  font-weight: 550;
+}
+.tempus-avatar {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--canvas);
+}
+
+.tempus-timeline { display: flex; flex-direction: column; gap: 14px; min-height: 240px; }
+.tempus-bubble {
+  font-size: 15px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 .tempus-bubble-user {
   align-self: flex-end;
+  max-width: 75%;
+  padding: 9px 16px;
+  border-radius: 22px;
+  background: var(--tempus-user);
+  color: var(--text);
   white-space: pre-wrap;
-  color: var(--on-brand);
-  background: var(--brand);
-  border-bottom-right-radius: var(--radius-xs);
 }
 .tempus-bubble-assistant {
   align-self: flex-start;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-bottom-left-radius: var(--radius-xs);
+  max-width: 88%;
+  padding: 12px 16px;
+  border: 1px solid var(--tempus-card-line);
+  border-radius: var(--radius-lg);
+  background: var(--tempus-card);
 }
+.tempus-bubble-assistant .tempus-markdown { gap: 10px; }
+.tempus-intro { margin: 0; }
 .tempus-tool { align-self: flex-start; }
 .tempus-event { align-self: center; margin: 0; color: var(--text-tertiary); font-size: 12px; text-align: center; }
-.tempus-thinking { display: flex; align-items: center; gap: 8px; align-self: flex-start; color: var(--text-secondary); font-size: 13px; }
+.tempus-thinking { display: flex; align-items: center; gap: 8px; align-self: flex-start; padding-left: 4px; color: var(--text-secondary); font-size: 13px; }
 .tempus-thinking .spinner { width: 14px; height: 14px; }
+
+.tempus-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-self: flex-start;
+  width: min(100%, 88%);
+  box-sizing: border-box;
+  padding: 16px 16px 10px;
+  border: 1px solid var(--tempus-card-line);
+  border-radius: var(--radius-lg);
+  background: var(--tempus-card);
+}
+.tempus-choices-title { font-size: 15px; font-weight: 650; }
+.tempus-choices-list { display: flex; flex-direction: column; }
+.tempus-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 -8px;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+.tempus-choice:hover:not(:disabled) { background: var(--surface-hover); }
+.tempus-choice:focus-visible { outline: none; box-shadow: var(--focus); }
+.tempus-choice:disabled { cursor: default; opacity: 0.5; }
+.tempus-choice.is-other { color: var(--text-tertiary); }
+.tempus-choice-key {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--tempus-card-line);
+  border-radius: 7px;
+  background: var(--tempus-key);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
 
 .tempus-chip {
   display: inline-flex;
@@ -49,28 +134,24 @@
   color: var(--text-secondary);
   font-size: 12px;
 }
-.tempus-chip-button { cursor: pointer; font: inherit; font-size: 13px; color: var(--text); }
-.tempus-chip-button:hover:not(:disabled) { background: var(--surface-hover); }
-.tempus-chip-button:disabled { cursor: default; opacity: 0.5; }
-.tempus-suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; }
 
 .tempus-composer {
   position: sticky;
-  bottom: -48px;
+  bottom: -36px;
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 8px 8px 8px 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-sm);
+  padding: 6px;
+  border: 1px solid var(--tempus-card-line);
+  border-radius: 26px;
+  background: var(--tempus-card);
+  box-shadow: var(--shadow-md);
 }
 .tempus-composer textarea {
   flex: 1;
   min-height: 22px;
   max-height: 160px;
-  padding: 6px 0;
+  padding: 7px 4px;
   border: 0;
   outline: none;
   resize: none;
@@ -78,9 +159,22 @@
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.45;
 }
-.tempus-send { flex: 0 0 auto; }
+.tempus-composer textarea::placeholder { color: var(--text-tertiary); }
+.tempus-composer .icon-button {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-color: transparent;
+  border-radius: 50%;
+}
+.tempus-composer .tempus-composer-plan { background: var(--tempus-key); color: var(--text-secondary); }
+.tempus-composer .tempus-composer-plan:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+.tempus-composer .tempus-send { background: var(--text); color: var(--canvas); }
+.tempus-composer .tempus-send:hover:not(:disabled) { background: var(--text); color: var(--canvas); opacity: 0.85; }
+.tempus-composer .tempus-send:disabled { background: var(--tempus-user); color: var(--text-tertiary); opacity: 1; }
 
 .tempus-markdown { display: flex; flex-direction: column; gap: 6px; }
 .tempus-markdown p { margin: 0; }
@@ -100,10 +194,10 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface);
+  padding: 16px;
+  border: 1px solid var(--tempus-card-line);
+  border-radius: var(--radius-lg);
+  background: var(--tempus-card);
 }
 .tempus-usage { align-self: stretch; }
 .tempus-digest .tempus-usage { background: var(--surface-subtle); }
@@ -127,7 +221,7 @@
 .tempus-usage-app-time { min-width: 64px; font-variant-numeric: tabular-nums; color: var(--text); text-align: right; }
 .tempus-usage-app-share { min-width: 36px; text-align: right; }
 
-.tempus-action { align-self: stretch; border-color: var(--line-strong); }
+.tempus-action { align-self: flex-start; box-sizing: border-box; width: min(100%, 88%); }
 .tempus-action p { margin: 0; font-size: 14px; }
 .tempus-action-header { display: flex; align-items: center; gap: 8px; }
 .tempus-action-header strong { flex: 1; font-size: 13px; }

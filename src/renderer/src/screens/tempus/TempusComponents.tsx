@@ -161,3 +161,39 @@ export function TempusActionCard({
     </section>
   );
 }
+
+const CHOICE_KEYS = "ABCDEFGHIJ";
+
+export function TempusChoices({
+  title,
+  options,
+  otherLabel,
+  onOther,
+  disabled = false,
+}: {
+  title: string;
+  options: Array<{ label: string; onSelect: () => void }>;
+  otherLabel?: string;
+  onOther?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <section className="tempus-choices" aria-label={title}>
+      <strong className="tempus-choices-title">{title}</strong>
+      <div className="tempus-choices-list">
+        {options.map((option, index) => (
+          <button key={option.label} type="button" className="tempus-choice" disabled={disabled} onClick={option.onSelect}>
+            <span className="tempus-choice-key" aria-hidden="true">{CHOICE_KEYS[index]}</span>
+            {option.label}
+          </button>
+        ))}
+        {otherLabel && onOther ? (
+          <button type="button" className="tempus-choice is-other" disabled={disabled} onClick={onOther}>
+            <span className="tempus-choice-key" aria-hidden="true">{CHOICE_KEYS[options.length]}</span>
+            {otherLabel}
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}

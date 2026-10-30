@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { CalendarClock, History, Hourglass, MessageSquare, SendHorizontal, SquarePen, X } from "lucide-react";
+import { ArrowUp, CalendarClock, History, Hourglass, MessageSquare, SquarePen, X } from "lucide-react";
 import type { AppSnapshot } from "@shared/snapshot";
 import type { TempusConversation, TempusDigest, TempusPeriod } from "@shared/tempus";
 import { Banner, Button, EmptyState, IconButton, LoadingState, Tabs } from "../../components/ui";
-import { TempusActionCard, TempusMarkdown, TempusUsageCardView } from "./TempusComponents";
+import { TempusActionCard, TempusChoices, TempusMarkdown, TempusUsageCardView } from "./TempusComponents";
 import { timelineRows } from "./timeline";
 import { TEMPUS_PERIODS, useTempus } from "./useTempus";
 import "./tempus.css";
@@ -125,6 +125,7 @@ export function TempusScreen({ state }: { state: AppSnapshot }) {
   const [draft, setDraft] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const rows = useMemo(() => timelineRows(tempus.messages, tempus.actions), [tempus.messages, tempus.actions]);
   const available = !tempus.unavailable;
   const empty = !rows.length && !tempus.pendingText;
@@ -164,13 +165,12 @@ export function TempusScreen({ state }: { state: AppSnapshot }) {
   }
 
   return (
-    <div className="tempus-screen">
+    <div className={`tempus-screen ${tab === "chat" ? "is-chat" : ""}`}>
       <header className="tempus-header">
         <Tabs items={TABS} value={tab} onChange={setTab} ariaLabel="Tempus view" />
         {tab === "chat" && available ? (
           <div className="tempus-header-actions">
             <IconButton label="History" icon={History} disabled={tempus.thinking} onClick={openHistory} />
-            <IconButton label="Plan my day" icon={CalendarClock} disabled={tempus.thinking} onClick={() => void tempus.planDay()} />
             <IconButton label="New chat" icon={SquarePen} disabled={tempus.thinking} onClick={tempus.newChat} />
           </div>
         ) : null}
@@ -198,27 +198,32 @@ export function TempusScreen({ state }: { state: AppSnapshot }) {
         </div>
       ) : (
         <>
+          <div className="tempus-title" aria-hidden="true">
+            <span className="tempus-avatar"><Hourglass size={13} /></span>
+            Tempus
+          </div>
           <div className="tempus-timeline" aria-live="polite">
             {tempus.loading && empty ? (
               <LoadingState label="Loading Tempus…" />
             ) : empty ? (
-              <EmptyState
-                icon={Hourglass}
-                title="Ask Tempus where your time goes"
-                body="Tempus can read your screen time, calendar and blocking setup. Nothing changes until you confirm it."
-                action={
-                  <div className="tempus-suggestions">
-                    <button type="button" className="tempus-chip tempus-chip-button" disabled={!available} onClick={() => void tempus.planDay()}>
-                      <CalendarClock size={14} aria-hidden="true" /> Plan my day
-                    </button>
-                    {SUGGESTIONS.map((suggestion) => (
-                      <button key={suggestion} type="button" className="tempus-chip tempus-chip-button" disabled={!available} onClick={() => void send(suggestion)}>
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                }
-              />
+              <>
+                <div className="tempus-bubble tempus-bubble-assistant">
+                  <p className="tempus-intro">
+                    I can read your screen time, calendar and blocking setup, then help you plan focus time
+                    or cut back on what distracts you. Nothing changes until you confirm it.
+                  </p>
+                </div>
+                <TempusChoices
+                  title="Where should we start?"
+                  disabled={!available}
+                  options={[
+                    { label: "Plan my day", onSelect: () => void tempus.planDay() },
+                    ...SUGGESTIONS.map((suggestion) => ({ label: suggestion, onSelect: () => void send(suggestion) })),
+                  ]}
+                  otherLabel="Something else"
+                  onOther={() => composerRef.current?.focus()}
+                />
+              </>
             ) : (
               rows.map((row) => {
                 switch (row.kind) {
@@ -256,9 +261,17 @@ export function TempusScreen({ state }: { state: AppSnapshot }) {
               void send(draft);
             }}
           >
+            <IconButton
+              label="Plan my day"
+              icon={CalendarClock}
+              className="tempus-composer-plan"
+              disabled={!available || tempus.thinking}
+              onClick={() => void tempus.planDay()}
+            />
             <textarea
+              ref={composerRef}
               aria-label="Message Tempus"
-              placeholder="Ask Tempus…"
+              placeholder={empty ? "Pick one, or ask Tempus anything" : "Reply to Tempus"}
               rows={1}
               maxLength={4000}
               value={draft}
@@ -269,7 +282,7 @@ export function TempusScreen({ state }: { state: AppSnapshot }) {
             <IconButton
               type="submit"
               label="Send"
-              icon={SendHorizontal}
+              icon={ArrowUp}
               className="tempus-send"
               disabled={!available || tempus.thinking || !draft.trim()}
             />
