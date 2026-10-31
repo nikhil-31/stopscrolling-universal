@@ -1,19 +1,11 @@
 import { effectiveTimeZone, toDateInput } from "@shared/platform";
 import { ALL_DEVICES, formatTodayPeriod, shiftTodayAnchor } from "@shared/timeline";
 import type { AppSnapshot } from "@shared/snapshot";
-import { CalendarClock, ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
-import { useState } from "react";
+import { CalendarClock, ChevronLeft, ChevronRight } from "lucide-react";
 import { DevicePicker } from "../DevicePicker";
 import { IconButton, Tooltip } from "../ui";
 
-export function TodayChrome({
-  state,
-  onOpenMore,
-}: {
-  state: AppSnapshot;
-  onOpenMore: () => void;
-}) {
-  const [menuOpen, setMenuOpen] = useState(false);
+export function TodayChrome({ state }: { state: AppSnapshot }) {
   const anchor = new Date(state.todayDay);
   const timeZone = effectiveTimeZone(state.auth?.user?.time_zone);
   const awayFromToday = toDateInput(anchor, timeZone) !== toDateInput(new Date(), timeZone);
@@ -53,22 +45,6 @@ export function TodayChrome({
           onChange={(key) => window.stopscrolling.setTodayDevice(key)}
           ariaLabel="Today devices"
         />
-        <div className="calendar-more">
-          <IconButton label="More activity options" icon={Ellipsis} onClick={() => setMenuOpen((open) => !open)} />
-          {menuOpen ? (
-            <div className="calendar-more-menu" role="menu">
-              <button type="button" className="calendar-more-action" onClick={() => { setMenuOpen(false); onOpenMore(); }}>
-                Manage labels
-              </button>
-              <button type="button" className="calendar-more-action" onClick={() => { setMenuOpen(false); window.stopscrolling.navigate("account"); }}>
-                Sign in & sync
-              </button>
-              <button type="button" className="calendar-more-action" onClick={() => { setMenuOpen(false); window.stopscrolling.requestAccessibility(); }}>
-                {state.capabilities.accessibilityGranted ? "Accessibility granted" : "Grant Accessibility"}
-              </button>
-            </div>
-          ) : null}
-        </div>
       </div>
     </header>
   );

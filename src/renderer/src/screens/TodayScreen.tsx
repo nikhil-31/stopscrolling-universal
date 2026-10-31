@@ -83,7 +83,7 @@ export function TodayScreen({ state }: { state: AppSnapshot }) {
 
   return (
     <div className="today-page" data-testid="today-page">
-      <TodayChrome state={state} onOpenMore={() => setPrompt({ kind: "labels" })} />
+      <TodayChrome state={state} />
 
       <div className="alert-stack">
         {!state.isAuthenticated ? (

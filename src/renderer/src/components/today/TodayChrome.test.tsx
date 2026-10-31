@@ -49,12 +49,12 @@ beforeEach(() => {
 
 describe("TodayChrome jump to today", () => {
   it("shows a dot when the selected day is not today", () => {
-    render(<TodayChrome state={snapshot({ todayDay: "2020-01-15T12:00:00.000Z" })} onOpenMore={() => undefined} />);
+    render(<TodayChrome state={snapshot({ todayDay: "2020-01-15T12:00:00.000Z" })} />);
     expect(screen.getByRole("button", { name: "Jump to today" }).querySelector(".icon-button-dot")).not.toBeNull();
   });
 
   it("hides the dot when the selected day is today", () => {
-    render(<TodayChrome state={snapshot({ todayDay: new Date().toISOString() })} onOpenMore={() => undefined} />);
+    render(<TodayChrome state={snapshot({ todayDay: new Date().toISOString() })} />);
     expect(screen.getByRole("button", { name: "Jump to today" }).querySelector(".icon-button-dot")).toBeNull();
   });
 });
@@ -63,7 +63,7 @@ describe("TodayChrome device picker", () => {
   it("hides the device picker when fewer than two devices are visible", () => {
     render(<TodayChrome state={snapshot({
       devices: [device({ visibilityKey: "macos|Studio Mac", deviceName: "Studio Mac", devicePlatform: "macos" })],
-    })} onOpenMore={() => undefined} />);
+    })} />);
     expect(screen.queryByRole("tablist", { name: "Today devices" })).toBeNull();
     expect(screen.queryByRole("tab", { name: "All devices" })).toBeNull();
   });
@@ -75,7 +75,7 @@ describe("TodayChrome device picker", () => {
         device({ visibilityKey: "macos|Studio Mac", deviceName: "Studio Mac", devicePlatform: "macos", nickname: "Work Mac", colorIndex: 0 }),
         device({ visibilityKey: "ios|iPhone", deviceName: "iPhone", devicePlatform: "ios", colorIndex: 1 }),
       ],
-    })} onOpenMore={() => undefined} />);
+    })} />);
     expect(screen.getByRole("tab", { name: "All devices" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Work Mac" })).toBeVisible();
     expect(screen.getByRole("tab", { name: "Work Mac" }).querySelector(".device-picker-dot")).toHaveStyle({ background: "var(--device-0)" });
@@ -94,7 +94,7 @@ describe("TodayChrome device picker", () => {
         device({ visibilityKey: "ios|iPhone", deviceName: "iPhone", devicePlatform: "ios" }),
         device({ visibilityKey: "windows|PC", deviceName: "PC", devicePlatform: "windows" }),
       ],
-    })} onOpenMore={() => undefined} />);
+    })} />);
     expect(screen.getByRole("tab", { name: "Studio Mac" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "PC" })).toBeVisible();
     expect(screen.queryByRole("tab", { name: "iPhone" })).toBeNull();
