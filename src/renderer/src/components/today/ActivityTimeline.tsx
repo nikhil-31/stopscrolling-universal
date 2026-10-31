@@ -1,6 +1,7 @@
 import type { AppSnapshot } from "@shared/snapshot";
 import type { ScreenTimeDeviceTimeline } from "@shared/types";
 import { TimelineGroup } from "../timeline";
+import { PanelHeader } from "./PanelHeader";
 
 export function ActivityTimeline({
   state,
@@ -11,7 +12,7 @@ export function ActivityTimeline({
 }) {
   return (
     <section className="activity-panel activity-timeline-panel" aria-label="Timeline">
-      <div className="activity-panel-label">Timeline</div>
+      <PanelHeader title="Timeline" subtitle="Activity across your visible devices" />
       <TimelineGroup
         timelines={timelines}
         devices={state.devices}

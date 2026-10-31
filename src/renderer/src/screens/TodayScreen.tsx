@@ -22,6 +22,7 @@ import { ActivityPie } from "../components/today/ActivityPie";
 import { ActivityTimeline } from "../components/today/ActivityTimeline";
 import { AppsWebsitesList, FocusList } from "../components/today/AppsWebsitesList";
 import { TodayChrome } from "../components/today/TodayChrome";
+import { PanelHeader } from "../components/today/PanelHeader";
 
 export function TodayScreen({ state }: { state: AppSnapshot }) {
   const [prompt, setPrompt] = useState<CalendarPrompt>(null);
@@ -156,7 +157,7 @@ export function TodayScreen({ state }: { state: AppSnapshot }) {
       ) : (
         <div className="activity-board">
           <section className="activity-panel" aria-label="Event log">
-            <div className="activity-panel-label">Event Log</div>
+            <PanelHeader title="Event Log" subtitle={`${filteredSegments.length} recorded sessions`} />
             <EventLog segments={filteredSegments} />
           </section>
         </div>

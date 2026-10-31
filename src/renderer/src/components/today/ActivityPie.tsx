@@ -1,6 +1,7 @@
 import type { AppSnapshot } from "@shared/snapshot";
 import type { ScreenTimeCategoryBreakdown } from "@shared/types";
 import { PieChart } from "../timeline";
+import { PanelHeader } from "./PanelHeader";
 
 export function ActivityPie({
   state,
@@ -11,7 +12,7 @@ export function ActivityPie({
 }) {
   return (
     <section className="activity-panel activity-pie-panel" aria-label="Time by category">
-      <div className="activity-panel-label">Time by category</div>
+      <PanelHeader title="Time by category" subtitle="Your activity mix" />
       <PieChart categories={categories} />
     </section>
   );

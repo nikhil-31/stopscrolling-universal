@@ -5,6 +5,7 @@ import { gameAssetUrl } from "@shared/game-assets";
 import { useState, type CSSProperties } from "react";
 import { ChevronDown, ChevronUp, SquarePen } from "lucide-react";
 import { IconButton } from "../ui";
+import { PanelHeader } from "./PanelHeader";
 
 /** Rows shown before "Show all", sized to match the Focus and category column beside it. */
 export const COLLAPSED_APP_ROWS = 8;
@@ -62,7 +63,7 @@ export function FocusList({
 }) {
   return (
     <section className="activity-panel" aria-label="Focus">
-      <div className="activity-panel-label">Focus</div>
+      <PanelHeader title="Focus" subtitle="Productive, neutral, and distracting time" />
       {rows.length ? (
         <div className="activity-app-list">
           {rows.map((row) => {
@@ -104,7 +105,7 @@ export function AppsWebsitesList({
 
   return (
     <section className="activity-panel" aria-label="Apps and websites">
-      <div className="activity-panel-label">Apps & Websites</div>
+      <PanelHeader title="Apps & Websites" subtitle="Your most-used destinations" />
       {apps.length ? (
         <div className="activity-app-list">
           {visible.map((app) => {
